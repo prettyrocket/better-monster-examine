@@ -1,0 +1,48 @@
+plugins {
+	id 'java'
+}
+
+repositories {
+	mavenLocal()
+	maven {
+		url = 'https://repo.runelite.net'
+	}
+	mavenCentral()
+}
+
+def runeLiteVersion = 'latest.release'
+
+dependencies {
+	compileOnly group: 'net.runelite', name:'client', version: runeLiteVersion
+
+	compileOnly 'org.projectlombok:lombok:1.18.30'
+	annotationProcessor 'org.projectlombok:lombok:1.18.30'
+
+	testImplementation 'junit:junit:4.12'
+	testImplementation group: 'net.runelite', name:'client', version: runeLiteVersion
+	testImplementation group: 'net.runelite', name:'jshell', version: runeLiteVersion
+}
+
+group = 'com.bettermonsterexamine'
+version = '1.0'
+
+tasks.withType(JavaCompile) {
+	options.encoding = 'UTF-8'
+	options.release.set(11)
+}
+
+// Dev-only: render the panel layouts to PNGs for review.
+tasks.register('previewPanels', JavaExec) {
+	group = 'verification'
+	classpath = sourceSets.test.runtimeClasspath
+	getMainClass().set('com.bettermonsterexamine.PanelPreview')
+	systemProperty 'java.awt.headless', 'false'
+}
+
+// Launch a dev RuneLite client with this plugin loaded (via the test main()).
+tasks.register('runClient', JavaExec) {
+	group = 'application'
+	classpath = sourceSets.test.runtimeClasspath
+	getMainClass().set('com.bettermonsterexamine.BetterMonsterExaminePluginTest')
+	jvmArgs = ['-ea']
+}
