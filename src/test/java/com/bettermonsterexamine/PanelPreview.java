@@ -8,6 +8,8 @@ import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import javax.imageio.ImageIO;
 import javax.swing.JFrame;
@@ -24,7 +26,13 @@ public class PanelPreview
 	public static void main(String[] args) throws Exception
 	{
 		System.setProperty("java.awt.headless", "false");
-		MonsterDataService ds = new MonsterDataService(new Gson());
+		ScheduledExecutorService exec = Executors.newSingleThreadScheduledExecutor();
+		MonsterDataService ds = new MonsterDataService(new Gson(), exec);
+		// dataset now loads on a background thread; wait for it before rendering
+		for (int i = 0; i < 100 && ds.searchNames("a", 1).isEmpty(); i++)
+		{
+			Thread.sleep(50);
+		}
 		WikiInfoboxService wiki = new WikiInfoboxService(new OkHttpClient());
 		File outDir = new File(System.getProperty("java.io.tmpdir"));
 
