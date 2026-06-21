@@ -1,5 +1,6 @@
 plugins {
 	id 'java'
+	id 'checkstyle'
 }
 
 repositories {
@@ -32,6 +33,13 @@ version = '1.0'
 tasks.withType(JavaCompile).configureEach {
 	options.encoding = 'UTF-8'
 	options.release.set(11)
+}
+
+checkstyle {
+	maxWarnings = 0
+	toolVersion = '8.36'
+	configDirectory = file("$rootDir")
+	configFile = file('checkstyle.xml')
 }
 
 // Launch a dev RuneLite client with this plugin loaded (via the test main()).

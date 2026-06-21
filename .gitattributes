@@ -1,0 +1,13 @@
+# Normalize line endings on checkin; check out with native endings.
+* text=auto
+
+# Scripts must keep a fixed line ending regardless of platform.
+gradlew      text eol=lf
+*.sh         text eol=lf
+*.bat        text eol=crlf
+
+# Binary assets — never normalize or diff as text.
+*.png  binary
+*.jpg  binary
+*.jar  binary
+icon.png binary
