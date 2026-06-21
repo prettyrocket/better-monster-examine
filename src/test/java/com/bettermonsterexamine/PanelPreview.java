@@ -36,10 +36,13 @@ public class PanelPreview
 			Thread.sleep(50);
 		}
 		WikiInfoboxService wiki = new WikiInfoboxService(httpClient);
-		File outDir = new File(System.getProperty("java.io.tmpdir"));
+		// The committed README gallery lives in previews/; regenerate those three images.
+		File outDir = new File("previews");
+		outDir.mkdirs();
 
-		render(ds, wiki, "Vorkath", new File(outDir, "preview_WIKI.png"));
-		render(ds, wiki, "King Black Dragon", new File(outDir, "preview_WIKI_burn.png"));
+		render(ds, wiki, "Vorkath", new File(outDir, "vorkath.png"));
+		render(ds, wiki, "Blue Moon", new File(outDir, "blue_moon.png"));
+		render(ds, wiki, "Goblin", new File(outDir, "goblin.png"));
 
 		System.out.println("PREVIEWS WRITTEN TO " + outDir.getAbsolutePath());
 		System.exit(0); // OkHttp's dispatcher keeps non-daemon threads alive

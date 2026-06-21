@@ -44,6 +44,9 @@ public class BetterMonsterExaminePanel extends PluginPanel
 	/** Uniform on-screen size every stat-grid icon is scaled to. */
 	private static final int ICON_BOX = 22;
 
+	/** Red for player-dangerous values: aggressive, positive flat armour, over-HP max hits. */
+	private static final Color DANGER_RED = new Color(0xFF4040);
+
 	private final MonsterIcons overlay;
 	private final MonsterDataService data;
 	private final WikiInfoboxService wiki;
@@ -366,15 +369,15 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		JPanel props = block();
 		props.add(header("Attributes"));
 		boolean anyProp = false;
-		if (m.getAttributes() != null && !m.getAttributes().isEmpty())
+		// Size and attributes share one line, size first: e.g. "7x7, Draconic, Undead, Fiery".
+		// The box header already says "Attributes", so the names need no label of their own.
+		String sizeText = m.getSize() > 0 ? m.getSize() + "x" + m.getSize() : null;
+		String attrText = (m.getAttributes() != null && !m.getAttributes().isEmpty())
+			? attributeNames(m.getAttributes()) : null;
+		String sizeAttr = join(", ", sizeText, attrText);
+		if (sizeAttr != null)
 		{
-			// No "Attribute" label — the box header already says it; just list the names.
-			props.add(wrappedLabel(attributeNames(m.getAttributes()), Color.WHITE, false));
-			anyProp = true;
-		}
-		if (m.getSize() > 0)
-		{
-			props.add(kv("Size", m.getSize() + " x " + m.getSize(), Color.WHITE));
+			props.add(wrappedLabel(sizeAttr, Color.WHITE, false));
 			anyProp = true;
 		}
 		if (m.isSlayerMonster())
@@ -386,7 +389,12 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		// monsters — show whenever non-zero, signed so negatives like Naguas' -4 read right.
 		if (d != null && d.getFlatArmour() != 0)
 		{
-			props.add(kv("Flat armour", String.valueOf(d.getFlatArmour()), Color.WHITE));
+			int fa = d.getFlatArmour();
+			// Negative flat armour means the monster takes extra damage (good for you) → green;
+			// positive means it shrugs damage off (bad for you) → red.
+			props.add(kv("Flat armour", String.valueOf(fa),
+				fa < 0 ? ColorScheme.PROGRESS_COMPLETE_COLOR : DANGER_RED,
+				fa < 0 ? "Takes extra flat damage per hit." : "Reduces damage taken per hit."));
 			anyProp = true;
 		}
 		String xp = wi != null ? wi.get("xpbonus", ver) : null;
@@ -398,14 +406,17 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		String aggr = wi != null ? wi.get("aggressive", ver) : null;
 		if (aggr != null)
 		{
-			props.add(kv("Aggressive", aggr.trim(), Color.WHITE));
+			boolean yes = aggr.trim().toLowerCase(Locale.ROOT).startsWith("yes");
+			props.add(kv("Aggressive", aggr.trim(), yes ? DANGER_RED : Color.WHITE,
+				yes ? "Attacks on sight." : null));
 			anyProp = true;
 		}
 		String pois = wi != null ? wi.get("poisonous", ver) : null;
 		if (pois != null)
 		{
 			boolean yes = pois.trim().toLowerCase(Locale.ROOT).startsWith("yes");
-			props.add(kv("Poisonous", pois.trim(), yes ? ColorScheme.PROGRESS_COMPLETE_COLOR : Color.WHITE));
+			props.add(kv("Poisonous", pois.trim(), yes ? DANGER_RED : Color.WHITE,
+				yes ? "Can poison you." : null));
 			anyProp = true;
 		}
 		if (wi == null)
@@ -642,6 +653,25 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		return s == null || s.isEmpty() ? "—" : s;
 	}
 
+	/** Join the non-null, non-empty parts with {@code sep}; null when nothing remains. */
+	private static String join(String sep, String... parts)
+	{
+		StringBuilder sb = new StringBuilder();
+		for (String p : parts)
+		{
+			if (p == null || p.isEmpty())
+			{
+				continue;
+			}
+			if (sb.length() > 0)
+			{
+				sb.append(sep);
+			}
+			sb.append(p);
+		}
+		return sb.length() == 0 ? null : sb.toString();
+	}
+
 	private static String burnImmunity(MonsterData m)
 	{
 		return m.getImmunities() != null ? m.getImmunities().getBurn() : null;
@@ -750,6 +780,11 @@ public class BetterMonsterExaminePanel extends PluginPanel
 
 	private JPanel kv(String k, String v, Color valueColor)
 	{
+		return kv(k, v, valueColor, null);
+	}
+
+	private JPanel kv(String k, String v, Color valueColor, String tooltip)
+	{
 		JPanel r = rowX();
 		JLabel kl = new JLabel(k);
 		kl.setFont(FontManager.getRunescapeSmallFont());
@@ -757,6 +792,13 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		JLabel vl = new JLabel(v);
 		vl.setFont(FontManager.getRunescapeSmallFont());
 		vl.setForeground(valueColor);
+		// Tooltip on both labels (not just the row) so it shows wherever you hover the line.
+		if (tooltip != null)
+		{
+			r.setToolTipText(tooltip);
+			kl.setToolTipText(tooltip);
+			vl.setToolTipText(tooltip);
+		}
 		r.add(kl);
 		r.add(Box.createHorizontalGlue());
 		r.add(vl);
@@ -797,6 +839,7 @@ public class BetterMonsterExaminePanel extends PluginPanel
 	{
 		StringBuilder sb = new StringBuilder("<html><body style='width:200px'>");
 		String[] lines = text.split("\n");
+		boolean anyOver = false;
 		for (int i = 0; i < lines.length; i++)
 		{
 			if (i > 0)
@@ -805,6 +848,7 @@ public class BetterMonsterExaminePanel extends PluginPanel
 			}
 			if (hpLevel > 0 && maxValue(lines[i]) > hpLevel)
 			{
+				anyOver = true;
 				sb.append("<span style='color:#ff4040'>").append(esc(lines[i])).append("</span>");
 			}
 			else
@@ -818,6 +862,11 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		l.setFont(FontManager.getRunescapeSmallFont());
 		l.setForeground(Color.WHITE);
 		l.setAlignmentX(LEFT_ALIGNMENT);
+		// Red marks a hit larger than your Hitpoints level.
+		if (anyOver)
+		{
+			l.setToolTipText("Red values exceed your Hitpoints level (" + hpLevel + ").");
+		}
 		return l;
 	}
 

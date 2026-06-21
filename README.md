@@ -6,10 +6,10 @@ max hits and more — without leaving the client.
 
 ## Screenshots
 
-| Boss showcase | Negative flat armour | Combat-level colour |
+| Boss showcase | Threat colour-coding | Combat-level colour |
 |:--:|:--:|:--:|
 | ![Vorkath](previews/vorkath.png) | ![Blue Moon](previews/blue_moon.png) | ![Goblin](previews/goblin.png) |
-| Variant dropdown, multi-line **max hit** with values above your Hitpoints level in red, and full immunities. | **Blue Moon** — the dataset's most-negative flat armour (−5), plus burn/poison/venom resistances. | Combat level coloured against yours like the in-game hover (green = far below), with examine text. |
+| **Vorkath** — size and attributes on one line (*7x7, Draconic, Undead, Fiery*), and a **max hit above your Hitpoints level flagged red** (hover it for why). | **Blue Moon** — negative **flat armour in green** (−5: it takes extra damage), and **Aggressive: Yes in red**. | Combat level coloured against yours like the in-game hover (green = far below), with examine text. |
 
 ## Features
 
@@ -20,11 +20,12 @@ max hits and more — without leaving the client.
 - **Wiki-style infobox layout** — mirroring the OSRS Wiki:
   - **Header** — name with the combat level beside it, **coloured like the in-game hover**
     (green when far below your level, yellow at parity, red above), plus the examine text.
-  - **Attributes** — attributes, size, slayer-monster flag, flat armour (incl. negative
-    values), XP bonus, aggressive, poisonous.
+  - **Attributes** — size and attributes on one line (e.g. *7x7, Draconic, Undead, Fiery*),
+    slayer-monster flag, flat armour (**green** when negative — it takes extra damage — and
+    **red** when positive), XP bonus, **aggressive** (red when *Yes*), poisonous.
   - **Combat info** — attack style and attack speed (ticks + seconds).
   - **Max hit** — its own box; multi-hit monsters list each value, and **any value above
-    your Hitpoints level is flagged red**.
+    your Hitpoints level is flagged red** (hover it for an explanation).
   - **Combat stats** (HP/Atk/Str/Def/Mag/Rng), **Aggressive stats**, and
     **Melee / Magic / Ranged defence** with elemental weakness, as icon-over-value rows.
   - **Immunities** — burn, poison, venom, cannon, thrall.
