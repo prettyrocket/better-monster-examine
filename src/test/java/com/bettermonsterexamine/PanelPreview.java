@@ -57,7 +57,8 @@ public class PanelPreview
 		};
 		BufferedImage icon = ImageUtil.loadImageResource(BetterMonsterExaminePanel.class, "/icon.png");
 		MonsterIcons icons = new MonsterIcons();
-		BetterMonsterExaminePanel panel = new BetterMonsterExaminePanel(icons, ds, wiki, cfg, icon);
+		// Pretend we're a maxed (126) player so the level colouring renders in previews.
+		BetterMonsterExaminePanel panel = new BetterMonsterExaminePanel(icons, ds, wiki, cfg, () -> 126, icon);
 		panel.search(monster, true, null);
 
 		JFrame frame = new JFrame();

@@ -10,6 +10,8 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.MenuAction;
 import net.runelite.api.NPC;
+import net.runelite.api.Player;
+import net.runelite.api.events.GameTick;
 import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
@@ -55,6 +57,8 @@ public class BetterMonsterExaminePlugin extends Plugin
 	// (panel open), so kept volatile for safe publication across those threads.
 	private volatile NavigationButton navButton;
 	private volatile BetterMonsterExaminePanel monsterStatsPanel;
+	// Cached on the client thread (GameTick) so the panel can read it safely off-thread (EDT).
+	private volatile int playerCombatLevel = -1;
 	private static final String STATS_OPTION = "Stats";
 
 	@Provides
@@ -84,7 +88,7 @@ public class BetterMonsterExaminePlugin extends Plugin
 	{
 		log.debug("Adding side panel navigation button");
 		BufferedImage icon = ImageUtil.loadImageResource(getClass(), "/icon.png");
-		monsterStatsPanel = new BetterMonsterExaminePanel(monsterIcons, dataService, wikiService, config, icon);
+		monsterStatsPanel = new BetterMonsterExaminePanel(monsterIcons, dataService, wikiService, config, () -> playerCombatLevel, icon);
 		navButton = NavigationButton.builder()
 				.tooltip("Better Monster Examine")
 				.icon(icon)
@@ -133,6 +137,15 @@ public class BetterMonsterExaminePlugin extends Plugin
 				removeNavBar();
 			}
 		}
+	}
+
+	@Subscribe
+	public void onGameTick(GameTick event)
+	{
+		// Keep the player's combat level current so the panel can colour monster levels
+		// relative to it; a single field read per tick is negligible.
+		Player p = client.getLocalPlayer();
+		playerCombatLevel = p != null ? p.getCombatLevel() : -1;
 	}
 
 	@Subscribe

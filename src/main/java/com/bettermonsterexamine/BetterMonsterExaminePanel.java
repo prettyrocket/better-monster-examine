@@ -10,6 +10,7 @@ import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.IntSupplier;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.ImageIcon;
@@ -45,6 +46,8 @@ public class BetterMonsterExaminePanel extends PluginPanel
 	private final MonsterDataService data;
 	private final WikiInfoboxService wiki;
 	private final BetterMonsterExamineConfig config;
+	/** Current player combat level (-1 when unknown, e.g. logged out), for tooltip-style colouring. */
+	private final IntSupplier playerCombatLevel;
 
 	private final IconTextField searchField = new IconTextField();
 	private final JPanel resultsPanel = new JPanel();
@@ -53,13 +56,14 @@ public class BetterMonsterExaminePanel extends PluginPanel
 	private List<MonsterData> currentVariants;
 	private MonsterData currentSelection;
 
-	public BetterMonsterExaminePanel(MonsterIcons overlay, MonsterDataService data, WikiInfoboxService wiki, BetterMonsterExamineConfig config, BufferedImage titleIcon)
+	public BetterMonsterExaminePanel(MonsterIcons overlay, MonsterDataService data, WikiInfoboxService wiki, BetterMonsterExamineConfig config, IntSupplier playerCombatLevel, BufferedImage titleIcon)
 	{
 		super(false);
 		this.overlay = overlay;
 		this.data = data;
 		this.wiki = wiki;
 		this.config = config;
+		this.playerCombatLevel = playerCombatLevel;
 
 		setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
 		setBorder(new EmptyBorder(8, 8, 8, 8));
@@ -254,13 +258,23 @@ public class BetterMonsterExaminePanel extends PluginPanel
 	{
 		JPanel block = block();
 
-		// Name + combat level on one line, like the in-game hover ("Vorkath (level-732)").
-		String title = m.getLevel() > 0 ? m.getName() + " (level-" + m.getLevel() + ")" : m.getName();
-		JLabel name = new JLabel(title);
+		// Name on the left, combat level on the right of the same row — smaller and colour-coded
+		// against the player's level like the in-game monster hover.
+		JPanel nameRow = rowX();
+		JLabel name = new JLabel(m.getName());
 		name.setFont(FontManager.getRunescapeBoldFont());
 		name.setForeground(Color.WHITE);
-		name.setAlignmentX(LEFT_ALIGNMENT);
-		block.add(name);
+		nameRow.add(name);
+		if (m.getLevel() > 0)
+		{
+			nameRow.add(Box.createHorizontalGlue());
+			JLabel lvl = new JLabel("(level-" + m.getLevel() + ")");
+			lvl.setFont(FontManager.getRunescapeSmallFont());
+			lvl.setForeground(combatLevelColor(playerCombatLevel.getAsInt(), m.getLevel()));
+			nameRow.add(lvl);
+		}
+		capHeight(nameRow);
+		block.add(nameRow);
 
 		// Examine text (wiki, async): subtle italic line directly under the name.
 		WikiInfo wi = wiki.getCached(m.getName());
@@ -770,6 +784,53 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		l.setForeground(color);
 		l.setAlignmentX(LEFT_ALIGNMENT);
 		return l;
+	}
+
+	/**
+	 * The in-game combat-level colour for the monster hover: green when it's well below the
+	 * player, yellow at parity, orange→red as it climbs above, matching RuneScape's bands by
+	 * the (player − monster) level difference. White when the player level is unknown.
+	 */
+	private static Color combatLevelColor(int playerLevel, int npcLevel)
+	{
+		if (playerLevel <= 0)
+		{
+			return Color.WHITE;
+		}
+		int d = playerLevel - npcLevel;
+		if (d < -9)
+		{
+			return new Color(0xFF0000);
+		}
+		if (d < -6)
+		{
+			return new Color(0xFF3000);
+		}
+		if (d < -3)
+		{
+			return new Color(0xFF7000);
+		}
+		if (d < 0)
+		{
+			return new Color(0xFFB000);
+		}
+		if (d > 9)
+		{
+			return new Color(0x00FF00);
+		}
+		if (d > 6)
+		{
+			return new Color(0x40FF00);
+		}
+		if (d > 3)
+		{
+			return new Color(0x80FF00);
+		}
+		if (d > 0)
+		{
+			return new Color(0xC0FF00);
+		}
+		return new Color(0xFFFF00);
 	}
 
 	/** True when a numeric wiki value (e.g. XP bonus) is zero, so it can be omitted. */
