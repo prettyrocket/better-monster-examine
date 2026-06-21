@@ -36,9 +36,6 @@ public class BetterMonsterExaminePlugin extends Plugin
 	private BetterMonsterExamineConfig config;
 
 	@Inject
-	private ConfigManager configManager;
-
-	@Inject
 	private ClientThread clientThread;
 
 	@Inject
@@ -72,8 +69,7 @@ public class BetterMonsterExaminePlugin extends Plugin
 	@Override
 	protected void shutDown() throws Exception
 	{
-		clientToolbar.removeNavigation(navButton);
-		monsterStatsPanel = null;
+		removeNavBar();
 	}
 
 	public void addNavBar()
@@ -109,14 +105,20 @@ public class BetterMonsterExaminePlugin extends Plugin
 		if (event.getKey().equals("enableSidePanel"))
 		{
 			boolean enableSidePanel = Boolean.parseBoolean(event.getNewValue());
-			if (enableSidePanel && navButton == null && monsterStatsPanel == null)
+			if (enableSidePanel)
 			{
-				addNavBar();
+				// Idempotent: only add when not already present.
+				if (navButton == null)
+				{
+					addNavBar();
+				}
 			}
 			else
 			{
+				// The right-click Stats option is independently gated on enableSidePanel()
+				// in onMenuEntryAdded, so simply dropping the panel is enough — no need to
+				// touch showStatsMenuOption (doing so left it stuck off after a re-enable).
 				removeNavBar();
-				configManager.setConfiguration("bettermonsterexamine", "showStatsMenuOption", false);
 			}
 		}
 	}
@@ -126,8 +128,11 @@ public class BetterMonsterExaminePlugin extends Plugin
 	{
 		NPC npc = event.getMenuEntry().getNpc();
 
+		// Anchor on the NPC's Examine entry: every NPC has exactly one, regardless of which
+		// other options (Attack, Talk-to, …) it carries, so the Stats option appears once for
+		// every monster we have data for — not just those whose second option is "Attack".
 		if (config.enableSidePanel() && config.showStatsMenuOption()
-			&& event.getType() == MenuAction.NPC_SECOND_OPTION.getId() && npc != null
+			&& event.getType() == MenuAction.EXAMINE_NPC.getId() && npc != null
 			&& dataService.getById(npc.getId()) != null)
 		{
 			client.createMenuEntry(client.getMenuEntries().length)

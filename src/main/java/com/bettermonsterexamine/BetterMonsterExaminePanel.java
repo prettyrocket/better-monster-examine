@@ -162,6 +162,9 @@ public class BetterMonsterExaminePanel extends PluginPanel
 			return;
 		}
 
+		// Picking a monster collapses the result list so only its card remains on screen.
+		resultsPanel.removeAll();
+
 		currentSelection = null;
 		if (preferredVersion != null)
 		{
