@@ -382,10 +382,11 @@ public class BetterMonsterExaminePanel extends PluginPanel
 			props.add(kv("Slayer monster", "Yes", Color.WHITE));
 			anyProp = true;
 		}
-		// Flat armour: a flat damage reduction, 0 for most monsters — only worth showing when set.
-		if (d != null && d.getFlatArmour() > 0)
+		// Flat armour: a flat damage adjustment (negative means it takes extra), 0 for most
+		// monsters — show whenever non-zero, signed so negatives like Naguas' -4 read right.
+		if (d != null && d.getFlatArmour() != 0)
 		{
-			props.add(kv("Flat armour", num(d.getFlatArmour()), Color.WHITE));
+			props.add(kv("Flat armour", String.valueOf(d.getFlatArmour()), Color.WHITE));
 			anyProp = true;
 		}
 		String xp = wi != null ? wi.get("xpbonus", ver) : null;
