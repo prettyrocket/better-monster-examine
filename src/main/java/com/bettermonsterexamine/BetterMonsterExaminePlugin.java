@@ -194,7 +194,7 @@ public class BetterMonsterExaminePlugin extends Plugin
 			return;
 		}
 
-		client.createMenuEntry(client.getMenuEntries().length)
+		client.getMenu().createMenuEntry(client.getMenu().getMenuEntries().length)
 				.setOption(STATS_OPTION)
 				.setTarget(event.getTarget())
 				.setIdentifier(event.getIdentifier())
