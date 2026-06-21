@@ -84,11 +84,11 @@ public class MonsterDataService
 		boolean fresh = haveCache && (System.currentTimeMillis() - CACHE_FILE.lastModified()) < MAX_AGE.toMillis();
 		if (fresh)
 		{
-			log.debug("Cached monster dataset is fresh; skipping fetch");
+			log.debug("Cache hit. Skipping monster data fetch.");
 		}
 		else
 		{
-			log.debug("{} monster dataset from {}", haveCache ? "Refreshing stale" : "Fetching", DATA_URL);
+			log.debug("{} Fetching monster data.", haveCache ? "Cache stale." : "Cache miss.");
 			fetch();
 		}
 	}
