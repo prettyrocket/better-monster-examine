@@ -71,7 +71,7 @@ public class MonsterDataService
 			{
 				index(gson.fromJson(r, LIST_TYPE));
 				haveCache = true;
-				log.debug("Loaded monster dataset from cache");
+				log.info("Loaded monster dataset from cache ({} entries)", byId.size());
 			}
 			catch (Exception e)
 			{
@@ -82,8 +82,13 @@ public class MonsterDataService
 		// Use the cache immediately if it's recent; otherwise (missing or stale) pull a fresh
 		// copy. A stale cache still serves until the refresh lands, so we stay usable offline.
 		boolean fresh = haveCache && (System.currentTimeMillis() - CACHE_FILE.lastModified()) < MAX_AGE.toMillis();
-		if (!fresh)
+		if (fresh)
 		{
+			log.debug("Cached monster dataset is fresh; skipping fetch");
+		}
+		else
+		{
+			log.debug("{} monster dataset from {}", haveCache ? "Refreshing stale" : "Fetching", DATA_URL);
 			fetch();
 		}
 	}
@@ -112,6 +117,7 @@ public class MonsterDataService
 					// Parse (and publish) before caching so a corrupt download never poisons the cache.
 					index(gson.fromJson(json, LIST_TYPE));
 					writeCache(json);
+					log.info("Fetched and cached monster dataset ({} entries)", byId.size());
 				}
 				catch (Exception e)
 				{

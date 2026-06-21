@@ -4,6 +4,7 @@ import javax.inject.Inject;
 import javax.swing.SwingUtilities;
 
 import com.google.inject.Provides;
+import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.MenuAction;
 import net.runelite.api.NPC;
@@ -19,6 +20,7 @@ import net.runelite.client.events.ConfigChanged;
 import net.runelite.api.events.MenuEntryAdded;
 import net.runelite.client.util.ImageUtil;
 
+@Slf4j
 @PluginDescriptor(
 		name = "Better Monster Examine",
 		description = "Search any monster and view its full wiki-style combat stats",
@@ -60,6 +62,7 @@ public class BetterMonsterExaminePlugin extends Plugin
 	@Override
 	protected void startUp() throws Exception
 	{
+		log.info("Better Monster Examine started");
 		if (config.enableSidePanel())
 		{
 			addNavBar();
@@ -70,10 +73,12 @@ public class BetterMonsterExaminePlugin extends Plugin
 	protected void shutDown() throws Exception
 	{
 		removeNavBar();
+		log.info("Better Monster Examine stopped");
 	}
 
 	public void addNavBar()
 	{
+		log.debug("Adding side panel navigation button");
 		monsterStatsPanel = new BetterMonsterExaminePanel(monsterIcons, dataService, wikiService, config, ImageUtil.loadImageResource(getClass(), "/icon.png"));
 		navButton = NavigationButton.builder()
 				.tooltip("Better Monster Examine")
@@ -88,6 +93,7 @@ public class BetterMonsterExaminePlugin extends Plugin
 	{
 		if (navButton != null && monsterStatsPanel != null)
 		{
+			log.debug("Removing side panel navigation button");
 			clientToolbar.removeNavigation(navButton);
 			navButton = null;
 			monsterStatsPanel = null;
@@ -105,6 +111,7 @@ public class BetterMonsterExaminePlugin extends Plugin
 		if (event.getKey().equals("enableSidePanel"))
 		{
 			boolean enableSidePanel = Boolean.parseBoolean(event.getNewValue());
+			log.debug("Side panel {}", enableSidePanel ? "enabled" : "disabled");
 			if (enableSidePanel)
 			{
 				// Idempotent: only add when not already present.
@@ -163,8 +170,10 @@ public class BetterMonsterExaminePlugin extends Plugin
 			MonsterData m = dataService.getById(clickedNPC.getId());
 			if (m == null)
 			{
+				log.debug("No dataset entry for clicked NPC id {}", clickedNPC.getId());
 				return;
 			}
+			log.debug("Opening stats for {} (npc id {})", m.getName(), clickedNPC.getId());
 			SwingUtilities.invokeLater(() ->
 			{
 				monsterStatsPanel.search(m.getName(), true, m.getVersion());

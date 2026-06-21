@@ -65,6 +65,7 @@ public class WikiInfoboxService
 			.header("User-Agent", USER_AGENT)
 			.build();
 
+		log.debug("Fetching wiki infobox for {}", name);
 		http.newCall(req).enqueue(new Callback()
 		{
 			@Override
@@ -82,6 +83,7 @@ public class WikiInfoboxService
 					if (r.isSuccessful() && r.body() != null)
 					{
 						cache.put(k, parse(r.body().string()));
+						log.debug("Cached wiki infobox for {}", name);
 					}
 				}
 				catch (Exception e)
