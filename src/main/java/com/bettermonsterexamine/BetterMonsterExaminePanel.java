@@ -364,7 +364,7 @@ public class BetterMonsterExaminePanel extends PluginPanel
 			anyProp = true;
 		}
 		String xp = wi != null ? wi.get("xpbonus", ver) : null;
-		if (xp != null && !isZero(xp))
+		if (xp != null && !xp.trim().isEmpty() && !isZero(xp))
 		{
 			props.add(kv("XP bonus", "+" + xp.trim() + "%", Color.WHITE));
 			anyProp = true;
