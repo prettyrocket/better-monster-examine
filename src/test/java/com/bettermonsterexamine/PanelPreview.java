@@ -59,7 +59,6 @@ public class PanelPreview
 		MonsterIcons icons = new MonsterIcons();
 		BetterMonsterExaminePanel panel = new BetterMonsterExaminePanel(icons, ds, wiki, cfg, icon);
 		panel.search(monster, true, null);
-		panel.expandAllForPreview();
 
 		JFrame frame = new JFrame();
 		frame.setUndecorated(true);

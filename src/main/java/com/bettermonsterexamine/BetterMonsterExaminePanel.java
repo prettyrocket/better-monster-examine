@@ -2,12 +2,12 @@ package com.bettermonsterexamine;
 
 import java.awt.Color;
 import java.awt.Dimension;
+import java.awt.Font;
 import java.awt.Graphics2D;
 import java.awt.GridLayout;
 import java.awt.Image;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import javax.swing.Box;
@@ -49,9 +49,6 @@ public class BetterMonsterExaminePanel extends PluginPanel
 	private final IconTextField searchField = new IconTextField();
 	private final JPanel resultsPanel = new JPanel();
 	private final JPanel cardPanel = new JPanel();
-
-	/** Expand actions for the current card's collapsible sections (preview/testing). */
-	private final List<Runnable> expanders = new ArrayList<>();
 
 	private List<MonsterData> currentVariants;
 	private MonsterData currentSelection;
@@ -224,23 +221,11 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		return variants.get(0);
 	}
 
-	/** Expand every collapsible section in the current card (used for previews/tests). */
-	public void expandAllForPreview()
-	{
-		for (Runnable r : expanders)
-		{
-			r.run();
-		}
-		revalidate();
-		repaint();
-	}
-
 	// ------------------------------------------------------------------ render
 
 	private void renderCard()
 	{
 		cardPanel.removeAll();
-		expanders.clear();
 		MonsterData m = currentSelection;
 
 		cardPanel.add(header(m));
@@ -269,13 +254,22 @@ public class BetterMonsterExaminePanel extends PluginPanel
 	{
 		JPanel block = block();
 
-		JLabel name = new JLabel(m.getName());
+		// Name + combat level on one line, like the in-game hover ("Vorkath (level-732)").
+		String title = m.getLevel() > 0 ? m.getName() + " (level-" + m.getLevel() + ")" : m.getName();
+		JLabel name = new JLabel(title);
 		name.setFont(FontManager.getRunescapeBoldFont());
 		name.setForeground(Color.WHITE);
 		name.setAlignmentX(LEFT_ALIGNMENT);
 		block.add(name);
 
-		block.add(kv("Combat level", num(m.getLevel()), Color.WHITE));
+		// Examine text (wiki, async): subtle italic line directly under the name.
+		WikiInfo wi = wiki.getCached(m.getName());
+		String examine = wi != null ? wi.get("examine", m.getVersion()) : null;
+		if (examine != null && !examine.trim().isEmpty())
+		{
+			block.add(Box.createRigidArea(new Dimension(0, 2)));
+			block.add(wrappedLabel(examine.trim(), ColorScheme.LIGHT_GRAY_COLOR, true));
+		}
 
 		// Variant selector (only when >1 form shares the name)
 		if (currentVariants != null && currentVariants.size() > 1)
@@ -340,41 +334,82 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		MonsterData.Offensive o = m.getOffensive();
 		MonsterData.Defensive d = m.getDefensive();
 
-		// Combat info — ordered like the wiki infobox. Collapsible (tallest text section).
-		// Aggressive / Poisonous / XP bonus / full max-hit come from the wiki (async).
+		// Wiki-only fields (xp bonus, aggressive, poisonous, full max hit, examine) load async.
 		WikiInfo wi = wiki.getCached(m.getName());
 		String ver = m.getVersion();
-		JPanel info = block();
+
+		// PROPERTIES — dataset attributes/size/slayer/flat armour + wiki xp/aggressive/poisonous.
+		JPanel props = block();
+		props.add(header("Properties"));
+		boolean anyProp = false;
 		if (m.getAttributes() != null && !m.getAttributes().isEmpty())
 		{
-			info.add(kvWrapped("Attribute", attributeNames(m.getAttributes())));
+			props.add(kvWrapped("Attribute", attributeNames(m.getAttributes())));
+			anyProp = true;
+		}
+		if (m.getSize() > 0)
+		{
+			props.add(kv("Size", m.getSize() + " x " + m.getSize(), Color.WHITE));
+			anyProp = true;
+		}
+		if (m.isSlayerMonster())
+		{
+			props.add(kv("Slayer monster", "Yes", Color.WHITE));
+			anyProp = true;
+		}
+		// Flat armour: a flat damage reduction, 0 for most monsters — only worth showing when set.
+		if (d != null && d.getFlatArmour() > 0)
+		{
+			props.add(kv("Flat armour", num(d.getFlatArmour()), Color.WHITE));
+			anyProp = true;
 		}
 		String xp = wi != null ? wi.get("xpbonus", ver) : null;
-		if (xp != null)
+		if (xp != null && !isZero(xp))
 		{
-			info.add(kv("XP bonus", "+" + xp.trim() + "%", Color.WHITE));
+			props.add(kv("XP bonus", "+" + xp.trim() + "%", Color.WHITE));
+			anyProp = true;
 		}
-		String wikiMax = wi != null ? wi.get("max hit", ver) : null;
-		info.add(kvWrapped("Max hit", wikiMax != null ? wikiMax.replace(", ", "\n") : nz(m.getMaxHit())));
 		String aggr = wi != null ? wi.get("aggressive", ver) : null;
 		if (aggr != null)
 		{
-			info.add(kv("Aggressive", aggr.trim(), Color.WHITE));
+			props.add(kv("Aggressive", aggr.trim(), Color.WHITE));
+			anyProp = true;
 		}
 		String pois = wi != null ? wi.get("poisonous", ver) : null;
 		if (pois != null)
 		{
 			boolean yes = pois.trim().toLowerCase(Locale.ROOT).startsWith("yes");
-			info.add(kv("Poisonous", pois.trim(), yes ? ColorScheme.PROGRESS_COMPLETE_COLOR : Color.WHITE));
+			props.add(kv("Poisonous", pois.trim(), yes ? ColorScheme.PROGRESS_COMPLETE_COLOR : Color.WHITE));
+			anyProp = true;
 		}
-		info.add(kvWrapped("Attack style", styleString(m)));
-		info.add(kv("Attack speed", attackSpeed(m), Color.WHITE));
 		if (wi == null)
 		{
-			info.add(kv("", "loading wiki data…", ColorScheme.LIGHT_GRAY_COLOR));
+			props.add(kv("", "loading wiki data…", ColorScheme.LIGHT_GRAY_COLOR));
+			anyProp = true;
 		}
-		capHeight(info);
-		cardPanel.add(collapsible("Combat info", info, true));
+		if (anyProp)
+		{
+			capHeight(props);
+			cardPanel.add(props);
+			cardPanel.add(Box.createRigidArea(new Dimension(0, 6)));
+		}
+
+		// COMBAT INFO — attack style + speed (dataset).
+		JPanel combatInfo = block();
+		combatInfo.add(header("Combat info"));
+		combatInfo.add(kvWrapped("Attack style", styleString(m)));
+		combatInfo.add(kv("Attack speed", attackSpeed(m), Color.WHITE));
+		capHeight(combatInfo);
+		cardPanel.add(combatInfo);
+		cardPanel.add(Box.createRigidArea(new Dimension(0, 6)));
+
+		// MAX HIT — its own box; multi-hit monsters list several values, one per line.
+		String wikiMax = wi != null ? wi.get("max hit", ver) : null;
+		JPanel maxHit = block();
+		maxHit.add(header("Max hit"));
+		maxHit.add(wrappedLabel(wikiMax != null ? wikiMax.replace(", ", "\n") : nz(m.getMaxHit()), Color.WHITE, false));
+		capHeight(maxHit);
+		cardPanel.add(maxHit);
 		cardPanel.add(Box.createRigidArea(new Dimension(0, 6)));
 
 		// Combat stats: the monster's six levels as an icon-over-value row
@@ -665,37 +700,6 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
 	}
 
-	private JComponent collapsible(String title, JComponent content, boolean startOpen)
-	{
-		JPanel wrap = new JPanel();
-		wrap.setLayout(new BoxLayout(wrap, BoxLayout.Y_AXIS));
-		wrap.setAlignmentX(LEFT_ALIGNMENT);
-
-		JButton head = new JButton((startOpen ? "▾  " : "▸  ") + title);
-		head.setHorizontalAlignment(JButton.LEFT);
-		head.setFont(FontManager.getRunescapeSmallFont());
-		head.setAlignmentX(LEFT_ALIGNMENT);
-		head.setMaximumSize(new Dimension(Integer.MAX_VALUE, head.getPreferredSize().height));
-		content.setVisible(startOpen);
-		head.addActionListener(e ->
-		{
-			boolean show = !content.isVisible();
-			content.setVisible(show);
-			head.setText((show ? "▾  " : "▸  ") + title);
-			revalidate();
-			repaint();
-		});
-		// allow previews/tests to force the section open
-		expanders.add(() ->
-		{
-			content.setVisible(true);
-			head.setText("▾  " + title);
-		});
-		wrap.add(head);
-		wrap.add(content);
-		return wrap;
-	}
-
 	private JPanel block()
 	{
 		JPanel p = new JPanel();
@@ -755,6 +759,30 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		col.add(vl);
 		capHeight(col);
 		return col;
+	}
+
+	/** A full-width, wrapping value label (used for examine text and the max-hit list). */
+	private JLabel wrappedLabel(String text, Color color, boolean italic)
+	{
+		JLabel l = new JLabel("<html><body style='width:200px'>" + esc(text).replace("\n", "<br>") + "</body></html>");
+		Font f = FontManager.getRunescapeSmallFont();
+		l.setFont(italic ? f.deriveFont(Font.ITALIC) : f);
+		l.setForeground(color);
+		l.setAlignmentX(LEFT_ALIGNMENT);
+		return l;
+	}
+
+	/** True when a numeric wiki value (e.g. XP bonus) is zero, so it can be omitted. */
+	private static boolean isZero(String v)
+	{
+		try
+		{
+			return Double.parseDouble(v.trim()) == 0;
+		}
+		catch (NumberFormatException e)
+		{
+			return false;
+		}
 	}
 
 	private JLabel header(String text)
