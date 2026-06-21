@@ -352,13 +352,14 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		WikiInfo wi = wiki.getCached(m.getName());
 		String ver = m.getVersion();
 
-		// PROPERTIES — dataset attributes/size/slayer/flat armour + wiki xp/aggressive/poisonous.
+		// ATTRIBUTES — dataset attributes/size/slayer/flat armour + wiki xp/aggressive/poisonous.
 		JPanel props = block();
-		props.add(header("Properties"));
+		props.add(header("Attributes"));
 		boolean anyProp = false;
 		if (m.getAttributes() != null && !m.getAttributes().isEmpty())
 		{
-			props.add(kvWrapped("Attribute", attributeNames(m.getAttributes())));
+			// No "Attribute" label — the box header already says it; just list the names.
+			props.add(wrappedLabel(attributeNames(m.getAttributes()), Color.WHITE, false));
 			anyProp = true;
 		}
 		if (m.getSize() > 0)
