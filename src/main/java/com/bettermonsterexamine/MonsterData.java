@@ -85,10 +85,4 @@ public class MonsterData
 	{
 		private String burn;
 	}
-
-	/** Display name including the variant suffix when present, e.g. "Vorkath (Post-quest)". */
-	public String displayName()
-	{
-		return (version == null || version.isEmpty()) ? name : name + " (" + version + ")";
-	}
 }

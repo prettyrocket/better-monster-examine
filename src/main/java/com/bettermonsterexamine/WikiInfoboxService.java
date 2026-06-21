@@ -78,12 +78,17 @@ public class WikiInfoboxService
 			@Override
 			public void onResponse(Call call, Response response)
 			{
+				WikiInfo info = null;
 				try (Response r = response)
 				{
 					if (r.isSuccessful() && r.body() != null)
 					{
-						cache.put(k, parse(r.body().string()));
+						info = parse(r.body().string());
 						log.debug("Cached wiki infobox for {}", name);
+					}
+					else
+					{
+						log.debug("Wiki infobox fetch for {} returned HTTP {}", name, r.code());
 					}
 				}
 				catch (Exception e)
@@ -92,6 +97,10 @@ public class WikiInfoboxService
 				}
 				finally
 				{
+					// Cache even an empty result on a completed response so a missing or
+					// unparseable page doesn't re-fetch on every re-render. Genuine network
+					// failures go through onFailure instead and stay retryable.
+					cache.put(k, info != null ? info : WikiInfo.empty());
 					inFlight.remove(k);
 					onReady.run();
 				}

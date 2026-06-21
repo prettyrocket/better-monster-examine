@@ -1,5 +1,7 @@
 package com.bettermonsterexamine;
 
+import java.util.Collections;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -19,10 +21,16 @@ public class WikiInfo
 		this.versionIdx = versionIdx;
 	}
 
+	/** A result carrying no infobox fields (page missing or unparseable). */
+	static WikiInfo empty()
+	{
+		return new WikiInfo(Collections.emptyMap(), Collections.emptyMap());
+	}
+
 	/** Version-aware lookup: tries {@code base+idx}, then {@code base+"1"}, then {@code base}. */
 	public String get(String base, String version)
 	{
-		String idx = version != null ? versionIdx.get(version.toLowerCase().trim()) : null;
+		String idx = version != null ? versionIdx.get(version.toLowerCase(Locale.ROOT).trim()) : null;
 		if (idx != null && params.containsKey(base + idx))
 		{
 			return WikiInfoboxService.stripMarkup(params.get(base + idx));

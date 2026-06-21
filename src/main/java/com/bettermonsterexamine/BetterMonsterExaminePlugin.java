@@ -3,6 +3,8 @@ package com.bettermonsterexamine;
 import javax.inject.Inject;
 import javax.swing.SwingUtilities;
 
+import java.awt.image.BufferedImage;
+
 import com.google.inject.Provides;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
@@ -79,10 +81,11 @@ public class BetterMonsterExaminePlugin extends Plugin
 	public void addNavBar()
 	{
 		log.debug("Adding side panel navigation button");
-		monsterStatsPanel = new BetterMonsterExaminePanel(monsterIcons, dataService, wikiService, config, ImageUtil.loadImageResource(getClass(), "/icon.png"));
+		BufferedImage icon = ImageUtil.loadImageResource(getClass(), "/icon.png");
+		monsterStatsPanel = new BetterMonsterExaminePanel(monsterIcons, dataService, wikiService, config, icon);
 		navButton = NavigationButton.builder()
 				.tooltip("Better Monster Examine")
-				.icon(ImageUtil.loadImageResource(getClass(), "/icon.png"))
+				.icon(icon)
 				.panel(monsterStatsPanel)
 				.build();
 

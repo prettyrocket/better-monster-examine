@@ -10,6 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -69,9 +70,15 @@ public class MonsterDataService
 		{
 			try (Reader r = Files.newBufferedReader(CACHE_FILE.toPath(), StandardCharsets.UTF_8))
 			{
-				index(gson.fromJson(r, LIST_TYPE));
-				haveCache = true;
-				log.info("Loaded monster dataset from cache ({} entries)", byId.size());
+				List<MonsterData> cached = gson.fromJson(r, LIST_TYPE);
+				// Only trust a cache that yielded entries; a truncated/empty file falls through
+				// to a fetch rather than masquerading as a valid (and "fresh") dataset.
+				if (cached != null && !cached.isEmpty())
+				{
+					index(cached);
+					haveCache = true;
+					log.info("Loaded monster dataset from cache ({} entries)", byId.size());
+				}
 			}
 			catch (Exception e)
 			{
@@ -190,9 +197,21 @@ public class MonsterDataService
 	/** Distinct base names matching the query, exact-match first, then alphabetical. */
 	public List<String> searchNames(String query, int limit)
 	{
-		String q = query.toLowerCase(Locale.ROOT).trim();
-		return byName.values().stream()
+		List<String> baseNames = byName.values().stream()
 			.map(v -> v.get(0).getName())
+			.collect(Collectors.toList());
+		return matchNames(baseNames, query, limit);
+	}
+
+	/**
+	 * Rank {@code names} against {@code query}: substring match (case-insensitive), an exact
+	 * match floated to the top, the rest alphabetical, capped at {@code limit}. Pure helper so
+	 * the ranking can be unit-tested without loading the dataset.
+	 */
+	static List<String> matchNames(Collection<String> names, String query, int limit)
+	{
+		String q = query.toLowerCase(Locale.ROOT).trim();
+		return names.stream()
 			.filter(n -> q.isEmpty() || n.toLowerCase(Locale.ROOT).contains(q))
 			.distinct()
 			.sorted((a, b) ->
