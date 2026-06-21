@@ -34,7 +34,7 @@ max hits and more — without leaving the client.
 ## Building / running
 
 ```
-./gradlew runClient      # launch a dev client with the plugin loaded
+./gradlew run            # launch a dev client with the plugin loaded
 ./gradlew build          # build
 ```
 

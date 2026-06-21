@@ -25,9 +25,6 @@ public class MonsterIcons
 	final BufferedImage waterIcon;
 	final BufferedImage airIcon;
 	final BufferedImage earthIcon;
-	final BufferedImage maxHitIcon;
-	final BufferedImage attackStyleIcon;
-	final BufferedImage flatArmourIcon;
 	final BufferedImage attackIcon;
 	final BufferedImage strengthIcon;
 	final BufferedImage defenceIcon;
@@ -52,9 +49,6 @@ public class MonsterIcons
 		waterIcon = ImageUtil.loadImageResource(getClass(), "/Water_rune.png");
 		airIcon = ImageUtil.loadImageResource(getClass(), "/Air_rune.png");
 		earthIcon = ImageUtil.loadImageResource(getClass(), "/Earth_rune.png");
-		maxHitIcon = ImageUtil.loadImageResource(getClass(), "/Damage_hitsplat_(max_hit).png");
-		attackStyleIcon = ImageUtil.loadImageResource(getClass(), "/Combat_icon.png");
-		flatArmourIcon = ImageUtil.loadImageResource(getClass(), "/Defence_icon.png");
 		attackIcon = ImageUtil.loadImageResource(getClass(), "/Attack_icon.png");
 		strengthIcon = ImageUtil.loadImageResource(getClass(), "/Strength_icon.png");
 		defenceIcon = ImageUtil.loadImageResource(getClass(), "/Defence_icon.png");

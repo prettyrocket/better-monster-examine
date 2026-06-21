@@ -30,7 +30,7 @@ public class WikiInfoboxService
 	private static final Pattern PARAM = Pattern.compile("^\\|\\s*([^=|{}]+?)\\s*=\\s*(.*)$");
 	private static final Pattern VERSION = Pattern.compile("^version(\\d+)$");
 	private static final Pattern LINK = Pattern.compile("\\[\\[(?:[^\\]|]*\\|)?([^\\]]*)\\]\\]");
-	private static final String USER_AGENT = "monster-stats-plus/0.1 (RuneLite plugin prototype)";
+	private static final String USER_AGENT = "better-monster-examine (RuneLite plugin)";
 
 	private final OkHttpClient http;
 	private final Map<String, WikiInfo> cache = new ConcurrentHashMap<>();
