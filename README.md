@@ -4,19 +4,29 @@ A RuneLite side-panel plugin to search any Old School RuneScape monster and view
 **full, wiki-style combat stats** — defences, offensive bonuses, weakness, immunities,
 max hits and more — without leaving the client.
 
-![Wiki card](previews/preview_WIKI.png)
+## Screenshots
+
+| Boss showcase | Negative flat armour | Combat-level colour |
+|:--:|:--:|:--:|
+| ![Vorkath](previews/vorkath.png) | ![Blue Moon](previews/blue_moon.png) | ![Goblin](previews/goblin.png) |
+| Variant dropdown, multi-line **max hit** with values above your Hitpoints level in red, and full immunities. | **Blue Moon** — the dataset's most-negative flat armour (−5), plus burn/poison/venom resistances. | Combat level coloured against yours like the in-game hover (green = far below), with examine text. |
 
 ## Features
 
-- **Searchable side panel** — type a monster name, or right-click a monster in game and
-  pick **Stats**. Variant forms (e.g. Vorkath's *Post-quest* vs *Dragon Slayer II*) are
-  selectable from a dropdown.
-- **Wiki-style infobox layout** — each stat group is an icon-over-value row, mirroring the
-  OSRS Wiki:
-  - **Combat info** (collapsible): attributes, XP bonus, full multi-line max hit,
-    aggressive, poisonous, attack style, attack speed (ticks + seconds).
+- **Searchable side panel** — type a monster name, or right-click any monster in game and
+  pick **Stats** (matched by id *or* name, so it works across every spawn — e.g. Hellhounds
+  in any dungeon). Variant forms (Vorkath's *Post-quest* vs *Dragon Slayer II*, or a
+  monster's combat-level variants) are selectable from a dropdown.
+- **Wiki-style infobox layout** — mirroring the OSRS Wiki:
+  - **Header** — name with the combat level beside it, **coloured like the in-game hover**
+    (green when far below your level, yellow at parity, red above), plus the examine text.
+  - **Attributes** — attributes, size, slayer-monster flag, flat armour (incl. negative
+    values), XP bonus, aggressive, poisonous.
+  - **Combat info** — attack style and attack speed (ticks + seconds).
+  - **Max hit** — its own box; multi-hit monsters list each value, and **any value above
+    your Hitpoints level is flagged red**.
   - **Combat stats** (HP/Atk/Str/Def/Mag/Rng), **Aggressive stats**, and
-    **Melee / Magic / Ranged defence** with elemental weakness.
+    **Melee / Magic / Ranged defence** with elemental weakness, as icon-over-value rows.
   - **Immunities** — burn, poison, venom, cannon, thrall.
 - **Quick links** — open the monster's **Wiki** page or the **DPS calculator**
   (deep-linked to the monster) in one click. The DPS link only sets the target
