@@ -318,6 +318,10 @@ public class BetterMonsterExaminePanel extends PluginPanel
 
 		JButton dpsBtn = new JButton("DPS Calc");
 		dpsBtn.setFont(FontManager.getRunescapeSmallFont());
+		// The link only sets the target monster; the player's gear is pre-filled by the
+		// separate WikiSync plugin (a local bridge the calc reads), not by us.
+		dpsBtn.setToolTipText("<html>Opens the DPS calculator for this monster.<br>"
+			+ "Install RuneLite's WikiSync plugin to also auto-load your current gear.</html>");
 		dpsBtn.addActionListener(e -> LinkBrowser.browse(DPS_CALC_URL + "?monster=" + m.getId()));
 
 		JPanel buttons = new JPanel(new GridLayout(1, 2, 4, 0));
