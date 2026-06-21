@@ -11,6 +11,8 @@ import java.awt.image.BufferedImage;
 import java.util.List;
 import java.util.Locale;
 import java.util.function.IntSupplier;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.ImageIcon;
@@ -48,6 +50,8 @@ public class BetterMonsterExaminePanel extends PluginPanel
 	private final BetterMonsterExamineConfig config;
 	/** Current player combat level (-1 when unknown, e.g. logged out), for tooltip-style colouring. */
 	private final IntSupplier playerCombatLevel;
+	/** Current player Hitpoints level (-1 when unknown), to flag max hits that exceed it. */
+	private final IntSupplier playerHpLevel;
 
 	private final IconTextField searchField = new IconTextField();
 	private final JPanel resultsPanel = new JPanel();
@@ -56,7 +60,7 @@ public class BetterMonsterExaminePanel extends PluginPanel
 	private List<MonsterData> currentVariants;
 	private MonsterData currentSelection;
 
-	public BetterMonsterExaminePanel(MonsterIcons overlay, MonsterDataService data, WikiInfoboxService wiki, BetterMonsterExamineConfig config, IntSupplier playerCombatLevel, BufferedImage titleIcon)
+	public BetterMonsterExaminePanel(MonsterIcons overlay, MonsterDataService data, WikiInfoboxService wiki, BetterMonsterExamineConfig config, IntSupplier playerCombatLevel, IntSupplier playerHpLevel, BufferedImage titleIcon)
 	{
 		super(false);
 		this.overlay = overlay;
@@ -64,6 +68,7 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		this.wiki = wiki;
 		this.config = config;
 		this.playerCombatLevel = playerCombatLevel;
+		this.playerHpLevel = playerHpLevel;
 
 		setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
 		setBorder(new EmptyBorder(8, 8, 8, 8));
@@ -423,11 +428,13 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		cardPanel.add(combatInfo);
 		cardPanel.add(Box.createRigidArea(new Dimension(0, 6)));
 
-		// MAX HIT — its own box; multi-hit monsters list several values, one per line.
+		// MAX HIT — its own box; multi-hit monsters list several values, one per line. Values
+		// above the player's Hitpoints level are flagged red (it could take more than your level).
 		String wikiMax = wi != null ? wi.get("max hit", ver) : null;
+		String maxHitText = wikiMax != null ? wikiMax.replace(", ", "\n") : nz(m.getMaxHit());
 		JPanel maxHit = block();
 		maxHit.add(header("Max hit"));
-		maxHit.add(wrappedLabel(wikiMax != null ? wikiMax.replace(", ", "\n") : nz(m.getMaxHit()), Color.WHITE, false));
+		maxHit.add(maxHitLabel(maxHitText, playerHpLevel.getAsInt()));
 		capHeight(maxHit);
 		cardPanel.add(maxHit);
 		cardPanel.add(Box.createRigidArea(new Dimension(0, 6)));
@@ -779,6 +786,54 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		col.add(vl);
 		capHeight(col);
 		return col;
+	}
+
+	/**
+	 * The max-hit list as a wrapping label, with any line whose value exceeds the player's
+	 * Hitpoints level flagged red. {@code hpLevel <= 0} (unknown) disables the highlight.
+	 */
+	private JLabel maxHitLabel(String text, int hpLevel)
+	{
+		StringBuilder sb = new StringBuilder("<html><body style='width:200px'>");
+		String[] lines = text.split("\n");
+		for (int i = 0; i < lines.length; i++)
+		{
+			if (i > 0)
+			{
+				sb.append("<br>");
+			}
+			if (hpLevel > 0 && maxValue(lines[i]) > hpLevel)
+			{
+				sb.append("<span style='color:#ff4040'>").append(esc(lines[i])).append("</span>");
+			}
+			else
+			{
+				sb.append(esc(lines[i]));
+			}
+		}
+		sb.append("</body></html>");
+
+		JLabel l = new JLabel(sb.toString());
+		l.setFont(FontManager.getRunescapeSmallFont());
+		l.setForeground(Color.WHITE);
+		l.setAlignmentX(LEFT_ALIGNMENT);
+		return l;
+	}
+
+	private static final Pattern DIGITS = Pattern.compile("\\d+");
+
+	/** The largest number in a max-hit line's value (the part before any "(label)"), or -1. */
+	static int maxValue(String line)
+	{
+		int paren = line.indexOf('(');
+		String value = paren >= 0 ? line.substring(0, paren) : line;
+		Matcher m = DIGITS.matcher(value);
+		int max = -1;
+		while (m.find())
+		{
+			max = Math.max(max, Integer.parseInt(m.group()));
+		}
+		return max;
 	}
 
 	/** A full-width, wrapping value label (used for examine text and the max-hit list). */

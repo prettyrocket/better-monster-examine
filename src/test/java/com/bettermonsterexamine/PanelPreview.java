@@ -57,8 +57,9 @@ public class PanelPreview
 		};
 		BufferedImage icon = ImageUtil.loadImageResource(BetterMonsterExaminePanel.class, "/icon.png");
 		MonsterIcons icons = new MonsterIcons();
-		// Pretend we're a maxed (126) player so the level colouring renders in previews.
-		BetterMonsterExaminePanel panel = new BetterMonsterExaminePanel(icons, ds, wiki, cfg, () -> 126, icon);
+		// Pretend we're a maxed player (126 combat, 99 hp) so the level colouring and the
+		// over-HP max-hit highlight both render in previews.
+		BetterMonsterExaminePanel panel = new BetterMonsterExaminePanel(icons, ds, wiki, cfg, () -> 126, () -> 99, icon);
 		panel.search(monster, true, null);
 
 		JFrame frame = new JFrame();
