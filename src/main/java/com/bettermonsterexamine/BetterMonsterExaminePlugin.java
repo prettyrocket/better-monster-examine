@@ -164,24 +164,31 @@ public class BetterMonsterExaminePlugin extends Plugin
 	@Subscribe
 	public void onMenuEntryAdded(MenuEntryAdded event)
 	{
-		NPC npc = event.getMenuEntry().getNpc();
-
-		// Anchor on the NPC's Examine entry: every NPC has exactly one, regardless of which
-		// other options (Attack, Talk-to, …) it carries, so the Stats option appears once for
-		// every monster we have data for — matched by id or name (covers variant ids the
-		// dataset lacks, like Hellhounds in different dungeons).
-		if (config.enableSidePanel() && config.showStatsMenuOption()
-			&& event.getType() == MenuAction.EXAMINE_NPC.getId() && npc != null
-			&& dataService.isKnownMonster(npc.getId(), npc.getName()))
+		// Anchor on the NPC's Examine entry — every NPC has exactly one, so the Stats option
+		// appears once per monster regardless of its other options (Attack, Talk-to, …).
+		if (!config.enableSidePanel() || !config.showStatsMenuOption()
+			|| event.getType() != MenuAction.EXAMINE_NPC.getId())
 		{
-			client.createMenuEntry(client.getMenuEntries().length)
-					.setOption(STATS_OPTION)
-					.setTarget(event.getTarget())
-					.setIdentifier(event.getIdentifier())
-					.setType(MenuAction.RUNELITE)
-					.setParam0(event.getActionParam0())
-					.setParam1(event.getActionParam1());
+			return;
 		}
+
+		// Resolve the NPC from the world view by the entry's identifier rather than
+		// getMenuEntry().getNpc(), which isn't reliably populated for examine entries — the
+		// approach the Loot Lookup plugin uses. Match by id or name so the option covers
+		// variant ids the dataset lacks (e.g. Hellhounds in different dungeons).
+		NPC npc = client.getTopLevelWorldView().npcs().byIndex(event.getIdentifier());
+		if (npc == null || !dataService.isKnownMonster(npc.getId(), npc.getName()))
+		{
+			return;
+		}
+
+		client.createMenuEntry(client.getMenuEntries().length)
+				.setOption(STATS_OPTION)
+				.setTarget(event.getTarget())
+				.setIdentifier(event.getIdentifier())
+				.setType(MenuAction.RUNELITE)
+				.setParam0(event.getActionParam0())
+				.setParam1(event.getActionParam1());
 	}
 
 	@Subscribe
