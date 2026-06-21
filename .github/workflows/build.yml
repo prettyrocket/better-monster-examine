@@ -26,7 +26,7 @@ jobs:
           java-version: 11
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@8379f6a1328ee0e06e2bb424dadb7b159856a326 # v4.4.0
+        uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
 
       - name: Execute Gradle build
         run: ./gradlew build --console=plain
