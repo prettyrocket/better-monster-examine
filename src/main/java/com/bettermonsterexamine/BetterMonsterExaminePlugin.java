@@ -51,8 +51,10 @@ public class BetterMonsterExaminePlugin extends Plugin
 	@Inject
 	private WikiInfoboxService wikiService;
 
-	private NavigationButton navButton;
-	private BetterMonsterExaminePanel monsterStatsPanel;
+	// Touched from the client thread (lifecycle/menu), the event bus (config), and the EDT
+	// (panel open), so kept volatile for safe publication across those threads.
+	private volatile NavigationButton navButton;
+	private volatile BetterMonsterExaminePanel monsterStatsPanel;
 	private static final String STATS_OPTION = "Stats";
 
 	@Provides
@@ -78,7 +80,7 @@ public class BetterMonsterExaminePlugin extends Plugin
 		log.info("Better Monster Examine stopped");
 	}
 
-	public void addNavBar()
+	private void addNavBar()
 	{
 		log.debug("Adding side panel navigation button");
 		BufferedImage icon = ImageUtil.loadImageResource(getClass(), "/icon.png");
@@ -92,7 +94,7 @@ public class BetterMonsterExaminePlugin extends Plugin
 		clientToolbar.addNavigation(navButton);
 	}
 
-	public void removeNavBar()
+	private void removeNavBar()
 	{
 		if (navButton != null && monsterStatsPanel != null)
 		{
