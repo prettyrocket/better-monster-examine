@@ -6,3 +6,8 @@ updates:
       interval: "weekly"
     commit-message:
       prefix: "ci"
+    # Bundle all GitHub Actions bumps into a single weekly PR instead of one each.
+    groups:
+      github-actions:
+        patterns:
+          - "*"
