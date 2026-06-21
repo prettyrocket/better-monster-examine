@@ -20,8 +20,9 @@ max hits and more — without leaving the client.
   - **Immunities** — burn, poison, venom, cannon, thrall.
 - **Quick links** — open the monster's **Wiki** page or the **DPS calculator**
   (deep-linked to the monster) in one click. The DPS link only sets the target
-  monster; install the [WikiSync][ws] plugin to have the calculator auto-load your
-  current gear and stats as well (it bridges your live loadout to the calculator).
+  monster. To pull in your current gear and stats, install the [WikiSync][ws] plugin
+  and click the **RuneLite** button inside the calculator — it bridges your live
+  loadout from the client (granting the browser's one-time access prompt).
 
 [ws]: https://oldschool.runescape.wiki/w/RuneScape:WikiSync
 
