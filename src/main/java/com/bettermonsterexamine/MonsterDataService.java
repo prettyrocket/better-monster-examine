@@ -2,10 +2,13 @@ package com.bettermonsterexamine;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
-import java.io.InputStream;
-import java.io.InputStreamReader;
+import java.io.File;
+import java.io.IOException;
+import java.io.Reader;
 import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -18,65 +21,143 @@ import java.util.stream.Collectors;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
+import net.runelite.client.RuneLite;
+import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
 
 /**
- * Loads the bundled Weirdgloop monster dataset and indexes it by NPC id and by name.
- * Loaded on a background thread so the ~2.3 MB parse never blocks the client thread; the
- * accessors safely return empty until it lands. Bundled for offline use; a future version
- * could fetch + cache it instead to keep the jar small and the data current.
+ * Provides the Weirdgloop monster dataset, indexed by NPC id and by name. The ~2.3 MB file
+ * is fetched on demand from the OSRS Wiki DPS-calc CDN (the same source the calculator uses)
+ * and cached under {@code .runelite/better-monster-examine/} so subsequent launches work
+ * offline; it is refreshed in the background once the cache ages past {@link #MAX_AGE}. All
+ * loading happens off the client thread, and accessors safely return empty until it lands.
  */
 @Slf4j
 @Singleton
 public class MonsterDataService
 {
-	private static final String RESOURCE = "/monsters.json";
+	private static final String DATA_URL = "https://tools.runescape.wiki/osrs-dps/cdn/json/monsters.json";
+	private static final File CACHE_DIR = new File(RuneLite.RUNELITE_DIR, "better-monster-examine");
+	private static final File CACHE_FILE = new File(CACHE_DIR, "monsters.json");
+	private static final Duration MAX_AGE = Duration.ofDays(7);
+	private static final Type LIST_TYPE = new TypeToken<List<MonsterData>>()
+	{
+	}.getType();
+
+	private final Gson gson;
+	private final OkHttpClient http;
 
 	private volatile Map<Integer, MonsterData> byId = Collections.emptyMap();
 	// lower-case base name -> variants, insertion-ordered
 	private volatile Map<String, List<MonsterData>> byName = Collections.emptyMap();
 
 	@Inject
-	MonsterDataService(Gson gson, ScheduledExecutorService executor)
+	MonsterDataService(Gson gson, OkHttpClient http, ScheduledExecutorService executor)
 	{
-		executor.execute(() -> load(gson));
+		this.gson = gson;
+		this.http = http;
+		executor.execute(this::init);
 	}
 
-	private void load(Gson gson)
+	private void init()
 	{
-		try (InputStream in = getClass().getResourceAsStream(RESOURCE))
+		boolean haveCache = false;
+		if (CACHE_FILE.isFile())
 		{
-			if (in == null)
+			try (Reader r = Files.newBufferedReader(CACHE_FILE.toPath(), StandardCharsets.UTF_8))
 			{
-				log.warn("Monster dataset {} not found on classpath", RESOURCE);
-				return;
+				index(gson.fromJson(r, LIST_TYPE));
+				haveCache = true;
+				log.debug("Loaded monster dataset from cache");
+			}
+			catch (Exception e)
+			{
+				log.debug("Failed to read cached monster dataset", e);
+			}
+		}
+
+		// Use the cache immediately if it's recent; otherwise (missing or stale) pull a fresh
+		// copy. A stale cache still serves until the refresh lands, so we stay usable offline.
+		boolean fresh = haveCache && (System.currentTimeMillis() - CACHE_FILE.lastModified()) < MAX_AGE.toMillis();
+		if (!fresh)
+		{
+			fetch();
+		}
+	}
+
+	private void fetch()
+	{
+		Request req = new Request.Builder().url(DATA_URL).build();
+		http.newCall(req).enqueue(new Callback()
+		{
+			@Override
+			public void onFailure(Call call, IOException e)
+			{
+				log.debug("Monster dataset fetch failed", e);
 			}
 
-			Type listType = new TypeToken<List<MonsterData>>()
+			@Override
+			public void onResponse(Call call, Response response)
 			{
-			}.getType();
-			List<MonsterData> all = gson.fromJson(new InputStreamReader(in, StandardCharsets.UTF_8), listType);
-
-			Map<Integer, MonsterData> id = new HashMap<>();
-			Map<String, List<MonsterData>> name = new LinkedHashMap<>();
-			for (MonsterData m : all)
-			{
-				if (m == null || m.getName() == null)
+				try (Response res = response)
 				{
-					continue;
+					if (!res.isSuccessful() || res.body() == null)
+					{
+						return;
+					}
+					String json = res.body().string();
+					// Parse (and publish) before caching so a corrupt download never poisons the cache.
+					index(gson.fromJson(json, LIST_TYPE));
+					writeCache(json);
 				}
-				id.put(m.getId(), m);
-				name.computeIfAbsent(m.getName().toLowerCase(Locale.ROOT), k -> new ArrayList<>()).add(m);
+				catch (Exception e)
+				{
+					log.debug("Monster dataset fetch/parse failed", e);
+				}
 			}
+		});
+	}
 
-			// Publish atomically once fully built.
-			this.byId = id;
-			this.byName = name;
-			log.debug("Loaded {} monster entries ({} unique names)", all.size(), name.size());
-		}
-		catch (Exception e)
+	private static void writeCache(String json)
+	{
+		try
 		{
-			log.warn("Failed to load monster dataset", e);
+			Files.createDirectories(CACHE_DIR.toPath());
+			Files.write(CACHE_FILE.toPath(), json.getBytes(StandardCharsets.UTF_8));
 		}
+		catch (IOException e)
+		{
+			log.debug("Failed to cache monster dataset", e);
+		}
+	}
+
+	/** Build the id/name indexes from a parsed dataset and publish them atomically. */
+	private void index(List<MonsterData> all)
+	{
+		if (all == null)
+		{
+			return;
+		}
+
+		Map<Integer, MonsterData> id = new HashMap<>();
+		Map<String, List<MonsterData>> name = new LinkedHashMap<>();
+		for (MonsterData m : all)
+		{
+			if (m == null || m.getName() == null)
+			{
+				continue;
+			}
+			id.put(m.getId(), m);
+			name.computeIfAbsent(m.getName().toLowerCase(Locale.ROOT), k -> new ArrayList<>()).add(m);
+		}
+
+		// Publish atomically once fully built.
+		this.byId = id;
+		this.byName = name;
+		log.debug("Indexed {} monster entries ({} unique names)", all.size(), name.size());
 	}
 
 	public MonsterData getById(int npcId)

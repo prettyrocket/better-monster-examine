@@ -24,7 +24,9 @@ max hits and more — without leaving the client.
 ## Data sources
 
 - The bulk of the stats come from the [Weirdgloop OSRS DPS-calc dataset][wg]
-  (`monsters.json`), keyed by NPC id.
+  (`monsters.json`), keyed by NPC id. It's fetched on first use from the OSRS Wiki
+  DPS-calc CDN — the same source the calculator itself uses — and cached under
+  `.runelite/better-monster-examine/`, refreshing weekly, so later launches work offline.
 - Fields the dataset doesn't carry (aggressive, poisonous, XP bonus, the full max-hit
   list, and poison/venom/cannon/thrall immunities) are fetched **on demand and cached**
   from the monster's OSRS Wiki infobox.

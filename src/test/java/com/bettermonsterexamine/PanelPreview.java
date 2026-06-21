@@ -27,13 +27,15 @@ public class PanelPreview
 	{
 		System.setProperty("java.awt.headless", "false");
 		ScheduledExecutorService exec = Executors.newSingleThreadScheduledExecutor();
-		MonsterDataService ds = new MonsterDataService(new Gson(), exec);
-		// dataset now loads on a background thread; wait for it before rendering
-		for (int i = 0; i < 100 && ds.searchNames("a", 1).isEmpty(); i++)
+		OkHttpClient httpClient = new OkHttpClient();
+		MonsterDataService ds = new MonsterDataService(new Gson(), httpClient, exec);
+		// dataset loads on a background thread (cache, else a network fetch on first run);
+		// wait up to ~30s before rendering
+		for (int i = 0; i < 600 && ds.searchNames("a", 1).isEmpty(); i++)
 		{
 			Thread.sleep(50);
 		}
-		WikiInfoboxService wiki = new WikiInfoboxService(new OkHttpClient());
+		WikiInfoboxService wiki = new WikiInfoboxService(httpClient);
 		File outDir = new File(System.getProperty("java.io.tmpdir"));
 
 		render(ds, wiki, "Vorkath", new File(outDir, "preview_WIKI.png"));
