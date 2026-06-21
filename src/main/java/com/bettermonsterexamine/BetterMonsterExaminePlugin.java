@@ -139,6 +139,19 @@ public class BetterMonsterExaminePlugin extends Plugin
 		}
 	}
 
+	/** When resolving a monster by name, pick the variant whose combat level matches the NPC. */
+	private String variantVersionForLevel(String name, int combatLevel)
+	{
+		for (MonsterData v : dataService.variantsForName(name))
+		{
+			if (v.getLevel() == combatLevel)
+			{
+				return v.getVersion();
+			}
+		}
+		return null;
+	}
+
 	@Subscribe
 	public void onGameTick(GameTick event)
 	{
@@ -155,10 +168,11 @@ public class BetterMonsterExaminePlugin extends Plugin
 
 		// Anchor on the NPC's Examine entry: every NPC has exactly one, regardless of which
 		// other options (Attack, Talk-to, …) it carries, so the Stats option appears once for
-		// every monster we have data for — not just those whose second option is "Attack".
+		// every monster we have data for — matched by id or name (covers variant ids the
+		// dataset lacks, like Hellhounds in different dungeons).
 		if (config.enableSidePanel() && config.showStatsMenuOption()
 			&& event.getType() == MenuAction.EXAMINE_NPC.getId() && npc != null
-			&& dataService.getById(npc.getId()) != null)
+			&& dataService.isKnownMonster(npc.getId(), npc.getName()))
 		{
 			client.createMenuEntry(client.getMenuEntries().length)
 					.setOption(STATS_OPTION)
@@ -185,16 +199,21 @@ public class BetterMonsterExaminePlugin extends Plugin
 			{
 				return;
 			}
-			MonsterData m = dataService.getById(clickedNPC.getId());
-			if (m == null)
+			// Resolve by id; if this spawn's id isn't in the dataset, fall back to the NPC's
+			// name and match its in-game combat level to the right variant.
+			MonsterData entry = dataService.getById(clickedNPC.getId());
+			String name = entry != null ? entry.getName() : clickedNPC.getName();
+			if (name == null || dataService.variantsForName(name).isEmpty())
 			{
-				log.debug("No dataset entry for clicked NPC id {}", clickedNPC.getId());
+				log.debug("No dataset entry for clicked NPC {} (id {})", clickedNPC.getName(), clickedNPC.getId());
 				return;
 			}
-			log.debug("Opening stats for {} (npc id {})", m.getName(), clickedNPC.getId());
+			String version = entry != null ? entry.getVersion() : variantVersionForLevel(name, clickedNPC.getCombatLevel());
+
+			log.debug("Opening stats for {} (npc id {})", name, clickedNPC.getId());
 			SwingUtilities.invokeLater(() ->
 			{
-				monsterStatsPanel.search(m.getName(), true, m.getVersion());
+				monsterStatsPanel.search(name, true, version);
 				clientToolbar.openPanel(navButton);
 			});
 		});

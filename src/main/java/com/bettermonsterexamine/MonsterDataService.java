@@ -178,6 +178,16 @@ public class MonsterDataService
 		return byId.get(npcId);
 	}
 
+	/**
+	 * True when the dataset has this NPC — by id, or (for the many variant ids the dataset
+	 * doesn't carry, e.g. Hellhounds across dungeons) by name.
+	 */
+	public boolean isKnownMonster(int npcId, String npcName)
+	{
+		return byId.containsKey(npcId)
+			|| (npcName != null && byName.containsKey(npcName.toLowerCase(Locale.ROOT)));
+	}
+
 	/** All variants sharing the given (live NPC's) base name, in dataset order. */
 	public List<MonsterData> variantsForId(int npcId)
 	{
