@@ -143,6 +143,15 @@ public class BetterMonsterExaminePlugin extends Plugin
 				removeNavBar();
 			}
 		}
+		else if (event.getKey().equals("statHighlighting"))
+		{
+			// Re-render the open card so the new palette/symbols apply immediately.
+			BetterMonsterExaminePanel panel = monsterStatsPanel;
+			if (panel != null)
+			{
+				SwingUtilities.invokeLater(panel::refresh);
+			}
+		}
 	}
 
 	/** When resolving a monster by name, pick the variant whose combat level matches the NPC. */

@@ -14,26 +14,12 @@ max hits and more — without leaving the client.
 ## Features
 
 - **Searchable side panel** — type a monster name, or right-click any monster in game and
-  pick **Stats** (matched by id *or* name, so it works across every spawn — e.g. Hellhounds
-  in any dungeon). Variant forms (Vorkath's *Post-quest* vs *Dragon Slayer II*, or a
-  monster's combat-level variants) are selectable from a dropdown.
-- **Wiki-style infobox layout** — mirroring the OSRS Wiki:
-  - **Header** — name with the combat level beside it, **coloured like the in-game hover**
-    (green when far below your level, yellow at parity, red above), plus the examine text.
-  - **Attributes** — size and attributes on one line (e.g. *7x7, Draconic, Undead, Fiery*),
-    slayer-monster flag, flat armour (**green** when negative — it takes extra damage — and
-    **red** when positive), XP bonus, **aggressive** (red when *Yes*), poisonous.
-  - **Combat info** — attack style and attack speed (ticks + seconds).
-  - **Max hit** — its own box; multi-hit monsters list each value, and **any value above
-    your Hitpoints level is flagged red** (hover it for an explanation).
-  - **Combat stats** (HP/Atk/Str/Def/Mag/Rng), **Aggressive stats**, and
-    **Melee / Magic / Ranged defence** with elemental weakness, as icon-over-value rows.
-  - **Immunities** — burn, poison, venom, cannon, thrall.
+  pick **Stats**. Variants are selectable from a dropdown.
+- **Wiki-style infobox layout** — mirroring the OSRS Wiki with important values highlighted.
 - **Quick links** — open the monster's **Wiki** page or the **DPS calculator**
-  (deep-linked to the monster) in one click. The DPS link only sets the target
-  monster. To pull in your current gear and stats, install the [WikiSync][ws] plugin
-  and click the **RuneLite** button inside the calculator — it bridges your live
-  loadout from the client (granting the browser's one-time access prompt).
+  in one click.
+- **Accessible highlighting** — colour coding is configurable: the default red/green palette, 
+  a **colour-blind-friendly** palette with redundant cues, or off entirely.
 
 [ws]: https://oldschool.runescape.wiki/w/RuneScape:WikiSync
 
