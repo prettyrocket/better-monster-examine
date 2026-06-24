@@ -26,4 +26,14 @@ public interface BetterMonsterExamineConfig extends Config
 	{
 		return true;
 	}
+
+	@ConfigItem(
+		keyName = "statHighlighting",
+		name = "Stat highlighting",
+		description = "Colour-code player-relevant stats. 'Colour-blind friendly' uses an orange/blue palette with warning symbols."
+	)
+	default HighlightMode statHighlighting()
+	{
+		return HighlightMode.STANDARD;
+	}
 }

@@ -47,6 +47,10 @@ public class BetterMonsterExaminePanel extends PluginPanel
 	/** Red for player-dangerous values: aggressive, positive flat armour, over-HP max hits. */
 	private static final Color DANGER_RED = new Color(0xFF4040);
 
+	/** Okabe-Ito orange/blue: colour-blind-distinguishable stand-ins for the red/green cues. */
+	private static final Color CB_DANGER = new Color(0xE69F00);
+	private static final Color CB_GOOD = new Color(0x56B4E9);
+
 	private final MonsterIcons overlay;
 	private final MonsterDataService data;
 	private final WikiInfoboxService wiki;
@@ -235,6 +239,15 @@ public class BetterMonsterExaminePanel extends PluginPanel
 
 	// ------------------------------------------------------------------ render
 
+	/** Re-render the current card in place (e.g. after the highlight mode changes). */
+	public void refresh()
+	{
+		if (currentSelection != null)
+		{
+			renderCard();
+		}
+	}
+
 	private void renderCard()
 	{
 		cardPanel.removeAll();
@@ -276,9 +289,18 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		if (m.getLevel() > 0)
 		{
 			nameRow.add(Box.createHorizontalGlue());
-			JLabel lvl = new JLabel("(level-" + m.getLevel() + ")");
+			int pl = playerCombatLevel.getAsInt();
+			// In colour-blind mode a level above yours also gets an up-triangle, since orange
+			// alone can't be told apart from blue.
+			boolean above = config.statHighlighting() == HighlightMode.COLOUR_BLIND
+				&& pl > 0 && m.getLevel() > pl;
+			JLabel lvl = new JLabel("(level-" + m.getLevel() + ")" + (above ? " ▲" : ""));
 			lvl.setFont(FontManager.getRunescapeSmallFont());
-			lvl.setForeground(combatLevelColor(playerCombatLevel.getAsInt(), m.getLevel()));
+			lvl.setForeground(levelColor(pl, m.getLevel()));
+			if (above)
+			{
+				lvl.setToolTipText("Combat level above yours (" + pl + ").");
+			}
 			nameRow.add(lvl);
 		}
 		capHeight(nameRow);
@@ -393,7 +415,7 @@ public class BetterMonsterExaminePanel extends PluginPanel
 			// Negative flat armour means the monster takes extra damage (good for you) → green;
 			// positive means it shrugs damage off (bad for you) → red.
 			props.add(kv("Flat armour", String.valueOf(fa),
-				fa < 0 ? ColorScheme.PROGRESS_COMPLETE_COLOR : DANGER_RED,
+				fa < 0 ? good() : danger(),
 				fa < 0 ? "Takes extra flat damage per hit." : "Reduces damage taken per hit."));
 			anyProp = true;
 		}
@@ -407,7 +429,7 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		if (aggr != null)
 		{
 			boolean yes = aggr.trim().toLowerCase(Locale.ROOT).startsWith("yes");
-			props.add(kv("Aggressive", aggr.trim(), yes ? DANGER_RED : Color.WHITE,
+			props.add(kv("Aggressive", aggr.trim(), yes ? danger() : Color.WHITE,
 				yes ? "Attacks on sight." : null));
 			anyProp = true;
 		}
@@ -415,7 +437,7 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		if (pois != null)
 		{
 			boolean yes = pois.trim().toLowerCase(Locale.ROOT).startsWith("yes");
-			props.add(kv("Poisonous", pois.trim(), yes ? DANGER_RED : Color.WHITE,
+			props.add(kv("Poisonous", pois.trim(), yes ? danger() : Color.WHITE,
 				yes ? "Can poison you." : null));
 			anyProp = true;
 		}
@@ -833,10 +855,16 @@ public class BetterMonsterExaminePanel extends PluginPanel
 
 	/**
 	 * The max-hit list as a wrapping label, with any line whose value exceeds the player's
-	 * Hitpoints level flagged red. {@code hpLevel <= 0} (unknown) disables the highlight.
+	 * Hitpoints level flagged (red in Standard, orange + a warning sign in colour-blind mode).
+	 * {@code hpLevel <= 0} (unknown) or the Off mode disables the highlight.
 	 */
 	private JLabel maxHitLabel(String text, int hpLevel)
 	{
+		HighlightMode mode = config.statHighlighting();
+		boolean cb = mode == HighlightMode.COLOUR_BLIND;
+		boolean highlight = mode != HighlightMode.OFF && hpLevel > 0;
+		String hex = cb ? "#e69f00" : "#ff4040";
+
 		StringBuilder sb = new StringBuilder("<html><body style='width:200px'>");
 		String[] lines = text.split("\n");
 		boolean anyOver = false;
@@ -846,10 +874,12 @@ public class BetterMonsterExaminePanel extends PluginPanel
 			{
 				sb.append("<br>");
 			}
-			if (hpLevel > 0 && maxValue(lines[i]) > hpLevel)
+			if (highlight && maxValue(lines[i]) > hpLevel)
 			{
 				anyOver = true;
-				sb.append("<span style='color:#ff4040'>").append(esc(lines[i])).append("</span>");
+				// In colour-blind mode add a warning sign so the cue survives without colour.
+				String line = esc(lines[i]) + (cb ? " ⚠" : "");
+				sb.append("<span style='color:").append(hex).append("'>").append(line).append("</span>");
 			}
 			else
 			{
@@ -862,10 +892,10 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		l.setFont(FontManager.getRunescapeSmallFont());
 		l.setForeground(Color.WHITE);
 		l.setAlignmentX(LEFT_ALIGNMENT);
-		// Red marks a hit larger than your Hitpoints level.
+		// The highlight marks a hit larger than your Hitpoints level.
 		if (anyOver)
 		{
-			l.setToolTipText("Red values exceed your Hitpoints level (" + hpLevel + ").");
+			l.setToolTipText("Max hit exceeds your hitpoints level (" + hpLevel + ").");
 		}
 		return l;
 	}
@@ -895,6 +925,52 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		l.setForeground(color);
 		l.setAlignmentX(LEFT_ALIGNMENT);
 		return l;
+	}
+
+	/** The "danger" highlight colour for the active mode; white when highlighting is off. */
+	private Color danger()
+	{
+		switch (config.statHighlighting())
+		{
+			case OFF:
+				return Color.WHITE;
+			case COLOUR_BLIND:
+				return CB_DANGER;
+			default:
+				return DANGER_RED;
+		}
+	}
+
+	/** The "good for the player" highlight colour for the active mode; white when off. */
+	private Color good()
+	{
+		switch (config.statHighlighting())
+		{
+			case OFF:
+				return Color.WHITE;
+			case COLOUR_BLIND:
+				return CB_GOOD;
+			default:
+				return ColorScheme.PROGRESS_COMPLETE_COLOR;
+		}
+	}
+
+	/** Combat-level colour for the active mode: the in-game gradient (Standard) or orange/blue (CB). */
+	private Color levelColor(int playerLevel, int npcLevel)
+	{
+		switch (config.statHighlighting())
+		{
+			case OFF:
+				return Color.WHITE;
+			case COLOUR_BLIND:
+				if (playerLevel <= 0 || npcLevel == playerLevel)
+				{
+					return Color.WHITE;
+				}
+				return npcLevel > playerLevel ? CB_DANGER : CB_GOOD;
+			default:
+				return combatLevelColor(playerLevel, npcLevel);
+		}
 	}
 
 	/**
