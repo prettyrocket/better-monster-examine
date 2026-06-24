@@ -1,0 +1,51 @@
+name: Release to plugin hub
+
+# When a GitHub Release is published (or this is run manually), open/update a PR
+# against runelite/plugin-hub that pins the hub to this repo's released commit.
+# The branch is pushed to the prettyrocket/plugin-hub fork; the PR targets upstream
+# master. No version bump is involved — the hub shows the pinned commit.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+concurrency:
+  group: plugin-hub-release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  hub-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout runelite/plugin-hub (base)
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: runelite/plugin-hub
+          ref: master
+
+      - name: Pin manifest to the released commit
+        run: |
+          cat > plugins/better-monster-examine <<EOF
+          repository=${{ github.server_url }}/${{ github.repository }}.git
+          commit=${{ github.sha }}
+          EOF
+          echo "Manifest now reads:"
+          cat plugins/better-monster-examine
+
+      - name: Open or update the hub PR
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          token: ${{ secrets.PLUGIN_HUB_TOKEN }}
+          push-to-fork: prettyrocket/plugin-hub
+          base: master
+          branch: better-monster-examine-release
+          delete-branch: true
+          commit-message: "better-monster-examine: update to ${{ github.sha }}"
+          title: "better-monster-examine: update to latest release"
+          body: |
+            Updates **Better Monster Examine** to [`${{ github.sha }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}).
+
+            ${{ github.event.release.html_url }}
