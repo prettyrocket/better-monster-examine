@@ -94,6 +94,10 @@ public class BetterMonsterExaminePlugin extends Plugin
 		navButton = NavigationButton.builder()
 				.tooltip("Better Monster Examine")
 				.icon(icon)
+				// Sidebar buttons sort by priority ascending (lower = higher up). Core plugins
+				// occupy 0–10 (Configuration pinned at 0); 5 places this mid-band, among the
+				// normal plugins rather than down with transient raid panels.
+				.priority(5)
 				.panel(monsterStatsPanel)
 				.build();
 
