@@ -422,7 +422,9 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		String xp = wi != null ? wi.get("xpbonus", ver) : null;
 		if (xp != null && !xp.trim().isEmpty() && !isZero(xp))
 		{
-			props.add(kv("XP bonus", "+" + xp.trim() + "%", Color.WHITE));
+			String xpTrimmed = xp.trim();
+			boolean xpPenalty = xpTrimmed.startsWith("-");
+			props.add(kv("XP bonus", (xpPenalty ? "" : "+") + xpTrimmed + "%", xpPenalty ? danger() : good()));
 			anyProp = true;
 		}
 		String aggr = wi != null ? wi.get("aggressive", ver) : null;
@@ -532,23 +534,23 @@ public class BetterMonsterExaminePanel extends PluginPanel
 			String poison = resistanceLabel(wi.get("poisonresistance", ver));
 			if (poison != null)
 			{
-				imm.add(kv("Poison", poison, Color.WHITE));
+				imm.add(kv("Poison", poison, danger()));
 				anyImm = true;
 			}
 			String venom = resistanceLabel(wi.get("venomresistance", ver));
 			if (venom != null)
 			{
-				imm.add(kv("Venom", venom, Color.WHITE));
+				imm.add(kv("Venom", venom, danger()));
 				anyImm = true;
 			}
 			if (yes(wi.get("immunecannon", ver)))
 			{
-				imm.add(kv("Cannon", "Immune", Color.WHITE));
+				imm.add(kv("Cannon", "Immune", danger()));
 				anyImm = true;
 			}
 			if (yes(wi.get("immunethrall", ver)))
 			{
-				imm.add(kv("Thrall", "Immune", Color.WHITE));
+				imm.add(kv("Thrall", "Immune", danger()));
 				anyImm = true;
 			}
 		}
