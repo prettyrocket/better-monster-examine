@@ -51,14 +51,6 @@ tasks.register('run', JavaExec) {
 	args "--developer-mode", "--debug"
 }
 
-// Dev-only: render the panel layouts to PNGs for review.
-tasks.register('previewPanels', JavaExec) {
-	group = 'verification'
-	classpath = sourceSets.test.runtimeClasspath
-	getMainClass().set('com.bettermonsterexamine.PanelPreview')
-	systemProperty 'java.awt.headless', 'false'
-}
-
 // Dev-only: render the in-game overlay states (all tabs / each highlight mode) to PNGs.
 tasks.register('previewOverlay', JavaExec) {
 	group = 'verification'

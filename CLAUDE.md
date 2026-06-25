@@ -39,7 +39,7 @@ A GitHub **Release** (publish a release, or run the `release.yml` workflow manua
 ./gradlew build          # compile, run checkstyle, run tests
 ./gradlew test           # tests only
 ./gradlew checkstyleMain checkstyleTest   # lint only
-./gradlew previewPanels  # dev-only: render the monster card to PNGs in previews/ (non-headless)
+./gradlew previewOverlay # dev-only: render the in-game overlay states to PNGs in previews/ (non-headless)
 ```
 
 Run a single test class/method (JUnit 4):
@@ -49,8 +49,8 @@ Run a single test class/method (JUnit 4):
 ./gradlew test --tests 'com.bettermonsterexamine.MonsterDataServiceTest.matchNames*'
 ```
 
-- `run` and `previewPanels` execute via test-classpath `main()` entrypoints
-  (`BetterMonsterExaminePluginTest`, `PanelPreview`) — the plugin itself has no `main`.
+- `run` and `previewOverlay` execute via test-classpath `main()` entrypoints
+  (`BetterMonsterExaminePluginTest`, `OverlayPreview`) — the plugin itself has no `main`.
 - Targets Java 11. CI (`.github/workflows/build.yml`) runs `./gradlew build` on Temurin 11.
 
 ## Linting — strict, will fail the build
@@ -137,5 +137,5 @@ state reads on the client thread (`clientThread.invoke`), Swing updates on the E
 
 JUnit 4 under `src/test/java`. Pure-logic tests (`MonsterDataServiceTest`,
 `WikiInfoboxServiceTest`) exercise the static helpers; `BetterMonsterExaminePanelTest` covers
-panel rendering logic. `BetterMonsterExaminePluginTest` and `PanelPreview` are dev launchers,
+panel rendering logic. `BetterMonsterExaminePluginTest` and `OverlayPreview` are dev launchers,
 not assertions.
