@@ -36,4 +36,14 @@ public interface BetterMonsterExamineConfig extends Config
 	{
 		return HighlightMode.STANDARD;
 	}
+
+	@ConfigItem(
+		keyName = "statsRenderTarget",
+		name = "Stats render target",
+		description = "Where the right-click 'Stats' action shows a monster: the side panel, an in-game overlay, or both."
+	)
+	default RenderTarget statsRenderTarget()
+	{
+		return RenderTarget.PANEL;
+	}
 }
