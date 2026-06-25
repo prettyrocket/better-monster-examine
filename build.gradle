@@ -58,3 +58,11 @@ tasks.register('previewPanels', JavaExec) {
 	getMainClass().set('com.bettermonsterexamine.PanelPreview')
 	systemProperty 'java.awt.headless', 'false'
 }
+
+// Dev-only: render the in-game overlay states (all tabs / each highlight mode) to PNGs.
+tasks.register('previewOverlay', JavaExec) {
+	group = 'verification'
+	classpath = sourceSets.test.runtimeClasspath
+	getMainClass().set('com.bettermonsterexamine.OverlayPreview')
+	systemProperty 'java.awt.headless', 'false'
+}
