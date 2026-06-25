@@ -1,5 +1,6 @@
 package com.bettermonsterexamine;
 
+import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Font;
@@ -471,7 +472,7 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		// COMBAT INFO — attack style + speed (dataset).
 		JPanel combatInfo = block();
 		combatInfo.add(header("Combat info"));
-		combatInfo.add(kvWrapped("Attack style", styleString(m)));
+		combatInfo.add(kvWrappedRight("Attack style", styleString(m)));
 		combatInfo.add(kv("Attack speed", attackSpeed(m), Color.WHITE));
 		capHeight(combatInfo);
 		cardPanel.add(combatInfo);
@@ -845,28 +846,36 @@ public class BetterMonsterExaminePanel extends PluginPanel
 	}
 
 	/** Label on its own line with a full-width, wrapping value beneath (for long text). */
-	private JPanel kvWrapped(String k, String v)
+	/**
+	 * Label on the left with a right-aligned value that wraps across as many lines as needed,
+	 * kept tight (used for the attack-style list). The value fills the width left by the label.
+	 */
+	private JPanel kvWrappedRight(String k, String v)
 	{
-		JPanel col = new JPanel();
-		col.setLayout(new BoxLayout(col, BoxLayout.Y_AXIS));
-		col.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		col.setAlignmentX(LEFT_ALIGNMENT);
-		col.setBorder(new EmptyBorder(1, 0, 1, 0));
+		JPanel r = new JPanel(new BorderLayout());
+		r.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		r.setBorder(new EmptyBorder(1, 0, 1, 0));
+		r.setAlignmentX(LEFT_ALIGNMENT);
 
 		JLabel kl = new JLabel(k);
 		kl.setFont(FontManager.getRunescapeSmallFont());
 		kl.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-		kl.setAlignmentX(LEFT_ALIGNMENT);
+		kl.setVerticalAlignment(JLabel.TOP);
 
-		JLabel vl = new JLabel("<html><body style='width:200px'>" + esc(v).replace("\n", "<br>") + "</body></html>");
+		// The value takes a fixed body width on the right (BorderLayout.EAST honours it), so it
+		// wraps and right-aligns within the space left by the label. A fixed width avoids relying
+		// on the label's off-screen preferred size, which can measure short before it's realised.
+		int valueW = 112;
+		JLabel vl = new JLabel("<html><body style='width:" + valueW + "px; text-align: right'>"
+			+ esc(v).replace("\n", "<br>") + "</body></html>");
 		vl.setFont(FontManager.getRunescapeSmallFont());
 		vl.setForeground(Color.WHITE);
-		vl.setAlignmentX(LEFT_ALIGNMENT);
+		vl.setVerticalAlignment(JLabel.TOP);
 
-		col.add(kl);
-		col.add(vl);
-		capHeight(col);
-		return col;
+		r.add(kl, BorderLayout.WEST);
+		r.add(vl, BorderLayout.EAST);
+		capHeight(r);
+		return r;
 	}
 
 	/**

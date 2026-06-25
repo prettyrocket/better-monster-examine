@@ -35,6 +35,8 @@ class MonsterCardOverlay extends Overlay
 	private static final int PAD = 6;
 	/** On-screen size each stat-row icon is scaled to (preserving aspect). */
 	private static final int ICON_SIZE = 16;
+	/** Minimum gap between an inline label and a right-aligned wrapping value. */
+	private static final int LABEL_GAP = 8;
 	private static final String[] TAB_LABELS = {"Combat", "Aggro", "Def", "Info"};
 
 	private final BetterMonsterExamineConfig config;
@@ -248,7 +250,7 @@ class MonsterCardOverlay extends Overlay
 				aggressiveTab(rows, m, wi, ver, mode);
 				break;
 			case 2:
-				defensiveTab(rows, m, mode);
+				defensiveTab(rows, m);
 				break;
 			default:
 				infoTab(rows, m, wi, ver, mode);
@@ -279,7 +281,7 @@ class MonsterCardOverlay extends Overlay
 		rows.add(Row.kv("Speed", BetterMonsterExaminePanel.attackSpeed(m), white));
 
 		List<String> st = m.getStyle();
-		rows.add(Row.labelled("Style", st == null || st.isEmpty() ? "—" : String.join(", ", st), white));
+		rows.add(Row.kvWrap("Style", st == null || st.isEmpty() ? "—" : String.join(", ", st), white));
 
 		// Max hits: the wiki carries the full per-style list; fall back to the dataset's value.
 		WikiInfo wi = wiki;
@@ -287,10 +289,13 @@ class MonsterCardOverlay extends Overlay
 		String maxText = wikiMax != null ? wikiMax : (m.getMaxHit() == null || m.getMaxHit().isEmpty() ? "—" : m.getMaxHit());
 		int hp = playerHpLevel.getAsInt();
 		boolean flagOverHp = mode != HighlightMode.OFF && hp > 0;
+		boolean firstMax = true;
 		for (String line : maxText.split(",\\s*"))
 		{
 			boolean over = flagOverHp && BetterMonsterExaminePanel.maxValue(line) > hp;
-			rows.add(Row.kv("Max hit", line, over ? StatColors.danger(mode) : white));
+			// Only the first row is labelled "Max hit"; the rest just list their values.
+			rows.add(Row.kv(firstMax ? "Max hit" : "", line, over ? StatColors.danger(mode) : white));
+			firstMax = false;
 		}
 	}
 
@@ -299,12 +304,6 @@ class MonsterCardOverlay extends Overlay
 		Color white = Color.WHITE;
 		if (wi != null)
 		{
-			String aggr = wi.get("aggressive", ver);
-			if (aggr != null)
-			{
-				boolean yes = aggr.trim().toLowerCase(Locale.ROOT).startsWith("yes");
-				rows.add(Row.kv("Aggressive", aggr.trim(), yes ? StatColors.danger(mode) : white));
-			}
 			String pois = wi.get("poisonous", ver);
 			if (pois != null)
 			{
@@ -329,27 +328,32 @@ class MonsterCardOverlay extends Overlay
 		}
 	}
 
-	private void defensiveTab(List<Row> rows, MonsterData m, HighlightMode mode)
+	private void defensiveTab(List<Row> rows, MonsterData m)
 	{
 		Color white = Color.WHITE;
 		MonsterData.Defensive d = m.getDefensive();
 		if (d != null)
 		{
+			// Grouped like the wiki: melee, then magic defence + elemental weakness, then ranged.
 			rows.add(Row.stat(icons.stabIcon, "Stab", BetterMonsterExaminePanel.bonus(d.getStab()), white));
 			rows.add(Row.stat(icons.slashIcon, "Slash", BetterMonsterExaminePanel.bonus(d.getSlash()), white));
 			rows.add(Row.stat(icons.crushIcon, "Crush", BetterMonsterExaminePanel.bonus(d.getCrush()), white));
+
 			rows.add(Row.stat(icons.magicDefenceIcon, "Magic", BetterMonsterExaminePanel.bonus(d.getMagic()), white));
+			addWeakness(rows, m, white);
+
 			rows.add(Row.stat(icons.lightIcon, "Light", BetterMonsterExaminePanel.bonus(d.getLight()), white));
 			rows.add(Row.stat(icons.standardIcon, "Standard", BetterMonsterExaminePanel.bonus(d.getStandard()), white));
 			rows.add(Row.stat(icons.heavyIcon, "Heavy", BetterMonsterExaminePanel.bonus(d.getHeavy()), white));
-			if (d.getFlatArmour() != 0)
-			{
-				int fa = d.getFlatArmour();
-				rows.add(Row.kv("Flat armour", String.valueOf(fa),
-					fa < 0 ? StatColors.good(mode) : StatColors.danger(mode)));
-			}
 		}
+		else
+		{
+			addWeakness(rows, m, white);
+		}
+	}
 
+	private void addWeakness(List<Row> rows, MonsterData m, Color white)
+	{
 		MonsterData.Weakness w = m.getWeakness();
 		if (w != null && w.getElement() != null)
 		{
@@ -376,6 +380,24 @@ class MonsterCardOverlay extends Overlay
 		if (m.isSlayerMonster())
 		{
 			rows.add(Row.kv("Slayer", "Yes", white));
+		}
+		if (wi != null)
+		{
+			String aggr = wi.get("aggressive", ver);
+			if (aggr != null)
+			{
+				boolean yes = aggr.trim().toLowerCase(Locale.ROOT).startsWith("yes");
+				rows.add(Row.kv("Aggressive", aggr.trim(), yes ? StatColors.danger(mode) : white));
+			}
+		}
+		// Flat armour: a flat damage adjustment, 0 for most monsters — shown only when non-zero,
+		// green when negative (takes extra damage), red when positive (shrugs damage off).
+		MonsterData.Defensive d = m.getDefensive();
+		if (d != null && d.getFlatArmour() != 0)
+		{
+			int fa = d.getFlatArmour();
+			rows.add(Row.kv("Flat armour", String.valueOf(fa),
+				fa < 0 ? StatColors.good(mode) : StatColors.danger(mode)));
 		}
 
 		if (wi != null)
@@ -455,8 +477,15 @@ class MonsterCardOverlay extends Overlay
 
 	private static List<String> wrap(String text, FontMetrics fm, int maxW)
 	{
+		return wrap(text, fm, maxW, maxW);
+	}
+
+	/** Word-wrap, allowing a narrower first line (e.g. to leave room for an inline label). */
+	private static List<String> wrap(String text, FontMetrics fm, int firstW, int restW)
+	{
 		List<String> lines = new ArrayList<>();
 		StringBuilder line = new StringBuilder();
+		int maxW = firstW;
 		for (String word : text.split(" "))
 		{
 			String candidate = line.length() == 0 ? word : line + " " + word;
@@ -464,6 +493,7 @@ class MonsterCardOverlay extends Overlay
 			{
 				lines.add(line.toString());
 				line = new StringBuilder(word);
+				maxW = restW;
 			}
 			else
 			{
@@ -479,8 +509,9 @@ class MonsterCardOverlay extends Overlay
 
 	/**
 	 * One line of tab content. A {@code kv} row is "label … value" on a single line; a {@code stat}
-	 * row swaps the text label for an {@code icon} on the left; a labelled or plain row puts a
-	 * (wrapping) value beneath an optional label, for long text.
+	 * row swaps the text label for an {@code icon} on the left; a {@code kvWrap} row keeps the
+	 * label inline but lets the value wrap across several right-aligned lines; a {@code plain} row
+	 * is a label-less wrapping value (for long text like the attribute list).
 	 */
 	private static final class Row
 	{
@@ -489,34 +520,37 @@ class MonsterCardOverlay extends Overlay
 		private final String value;
 		private final Color color;
 		private final boolean wrap;
+		/** When wrapping, right-align the value lines and keep the label inline (vs. its own line). */
+		private final boolean rightWrap;
 
-		private Row(String label, BufferedImage icon, String value, Color color, boolean wrap)
+		private Row(String label, BufferedImage icon, String value, Color color, boolean wrap, boolean rightWrap)
 		{
 			this.label = label;
 			this.icon = icon;
 			this.value = value;
 			this.color = color;
 			this.wrap = wrap;
+			this.rightWrap = rightWrap;
 		}
 
 		static Row kv(String label, String value, Color color)
 		{
-			return new Row(label, null, value, color, false);
+			return new Row(label, null, value, color, false, false);
 		}
 
 		static Row stat(BufferedImage icon, String label, String value, Color color)
 		{
-			return new Row(label, icon, value, color, false);
+			return new Row(label, icon, value, color, false, false);
 		}
 
-		static Row labelled(String label, String value, Color color)
+		static Row kvWrap(String label, String value, Color color)
 		{
-			return new Row(label, null, value, color, true);
+			return new Row(label, null, value, color, true, true);
 		}
 
 		static Row plain(String value, Color color)
 		{
-			return new Row(null, null, value, color, true);
+			return new Row(null, null, value, color, true, false);
 		}
 
 		int height(FontMetrics fm, int contentW, int lineH)
@@ -528,6 +562,11 @@ class MonsterCardOverlay extends Overlay
 			if (!wrap)
 			{
 				return lineH;
+			}
+			if (rightWrap)
+			{
+				int firstW = contentW - (label != null ? fm.stringWidth(label) + LABEL_GAP : 0);
+				return wrap(value, fm, firstW, contentW).size() * lineH;
 			}
 			int lines = label != null ? 1 : 0;
 			lines += wrap(value, fm, contentW).size();
@@ -558,6 +597,26 @@ class MonsterCardOverlay extends Overlay
 				g.setColor(color);
 				g.drawString(value, x + contentW - fm.stringWidth(value), y + fm.getAscent());
 				return lineH;
+			}
+
+			if (rightWrap)
+			{
+				// Label stays on the first line at the left; the value wraps across right-aligned
+				// lines (the first leaving room for the label), keeping a multi-style list tight.
+				int firstW = contentW - (label != null ? fm.stringWidth(label) + LABEL_GAP : 0);
+				if (label != null)
+				{
+					g.setColor(ColorScheme.LIGHT_GRAY_COLOR);
+					g.drawString(label, x, y + fm.getAscent());
+				}
+				g.setColor(color);
+				int yy = y;
+				for (String ln : wrap(value, fm, firstW, contentW))
+				{
+					g.drawString(ln, x + contentW - fm.stringWidth(ln), yy + fm.getAscent());
+					yy += lineH;
+				}
+				return Math.max(lineH, yy - y);
 			}
 
 			int yy = y;
