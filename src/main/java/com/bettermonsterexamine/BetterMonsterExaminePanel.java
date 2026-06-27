@@ -7,6 +7,7 @@ import java.awt.Font;
 import java.awt.Graphics2D;
 import java.awt.GridLayout;
 import java.awt.Image;
+import java.awt.Insets;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 import java.util.List;
@@ -30,6 +31,7 @@ import javax.swing.SwingUtilities;
 import javax.swing.border.EmptyBorder;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
+import net.runelite.client.config.ConfigManager;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
@@ -46,10 +48,15 @@ public class BetterMonsterExaminePanel extends PluginPanel
 	/** Uniform on-screen size every stat-grid icon is scaled to. */
 	private static final int ICON_BOX = 22;
 
+	/** Config group the persisted Recent/Favorites JSON lives under (alongside the typed config). */
+	private static final String CONFIG_GROUP = "bettermonsterexamine";
+	private static final String HISTORY_KEY = "historyData";
+
 	private final MonsterIcons overlay;
 	private final MonsterDataService data;
 	private final WikiInfoboxService wiki;
 	private final BetterMonsterExamineConfig config;
+	private final ConfigManager configManager;
 	/** Current player combat level (-1 when unknown, e.g. logged out), for tooltip-style colouring. */
 	private final IntSupplier playerCombatLevel;
 	/** Current player Hitpoints level (-1 when unknown), to flag max hits that exceed it. */
@@ -58,6 +65,19 @@ public class BetterMonsterExaminePanel extends PluginPanel
 	private final IconTextField searchField = new IconTextField();
 	private final JPanel resultsPanel = new JPanel();
 	private final JPanel cardPanel = new JPanel();
+	/** Recent/Favorites list view, shown in place of results + card while a mode is active. */
+	private final JPanel listPanel = new JPanel();
+
+	/** Which view the panel is showing: normal search/card, or one of the two list modes. */
+	private enum Mode
+	{
+		NORMAL, RECENT, FAVORITES
+	}
+
+	private final LookupHistory history;
+	private Mode mode = Mode.NORMAL;
+	private JButton recentTabButton;
+	private JButton favoritesTabButton;
 
 	private List<MonsterData> currentVariants;
 	private MonsterData currentSelection;
@@ -68,15 +88,17 @@ public class BetterMonsterExaminePanel extends PluginPanel
 	 */
 	private Consumer<MonsterData> selectionListener;
 
-	public BetterMonsterExaminePanel(MonsterIcons overlay, MonsterDataService data, WikiInfoboxService wiki, BetterMonsterExamineConfig config, IntSupplier playerCombatLevel, IntSupplier playerHpLevel, BufferedImage titleIcon)
+	public BetterMonsterExaminePanel(MonsterIcons overlay, MonsterDataService data, WikiInfoboxService wiki, BetterMonsterExamineConfig config, ConfigManager configManager, IntSupplier playerCombatLevel, IntSupplier playerHpLevel, BufferedImage titleIcon)
 	{
 		super(false);
 		this.overlay = overlay;
 		this.data = data;
 		this.wiki = wiki;
 		this.config = config;
+		this.configManager = configManager;
 		this.playerCombatLevel = playerCombatLevel;
 		this.playerHpLevel = playerHpLevel;
+		this.history = LookupHistory.fromJson(configManager.getConfiguration(CONFIG_GROUP, HISTORY_KEY));
 
 		setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
 		setBorder(new EmptyBorder(8, 8, 8, 8));
@@ -87,38 +109,56 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		searchField.setPreferredSize(new Dimension(100, 30));
 		searchField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
 		searchField.setMinimumSize(new Dimension(0, 30));
-		searchField.setAlignmentX(LEFT_ALIGNMENT);
 		searchField.getDocument().addDocumentListener(new DocumentListener()
 		{
 			public void insertUpdate(DocumentEvent e)
 			{
-				search(searchField.getText(), false, null);
+				onSearchTextChanged();
 			}
 
 			public void removeUpdate(DocumentEvent e)
 			{
-				search(searchField.getText(), false, null);
+				onSearchTextChanged();
 			}
 
 			public void changedUpdate(DocumentEvent e)
 			{
-				search(searchField.getText(), false, null);
+				onSearchTextChanged();
 			}
 		});
-		add(searchField);
+
+		// The two mode buttons sit in the search row: ↺ Recent and ★ Favorites. Glyph text with a
+		// tooltip (no bundled icons yet); the active mode is flagged in brand orange.
+		recentTabButton = makeTabButton("↺", "Recent", () -> onTabClicked(Mode.RECENT));
+		favoritesTabButton = makeTabButton("★", "Favorites", () -> onTabClicked(Mode.FAVORITES));
+
+		JPanel searchRow = new JPanel();
+		searchRow.setLayout(new BoxLayout(searchRow, BoxLayout.X_AXIS));
+		searchRow.setAlignmentX(LEFT_ALIGNMENT);
+		searchRow.add(searchField);
+		searchRow.add(Box.createRigidArea(new Dimension(4, 0)));
+		searchRow.add(recentTabButton);
+		searchRow.add(Box.createRigidArea(new Dimension(2, 0)));
+		searchRow.add(favoritesTabButton);
+		searchRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
+		add(searchRow);
 		add(Box.createRigidArea(new Dimension(0, 6)));
 
-		// Single scroll holding results + the stats card
+		// Single scroll holding results + the stats card, plus the list view (one shown at a time)
 		resultsPanel.setLayout(new BoxLayout(resultsPanel, BoxLayout.Y_AXIS));
 		resultsPanel.setAlignmentX(LEFT_ALIGNMENT);
 		cardPanel.setLayout(new BoxLayout(cardPanel, BoxLayout.Y_AXIS));
 		cardPanel.setAlignmentX(LEFT_ALIGNMENT);
+		listPanel.setLayout(new BoxLayout(listPanel, BoxLayout.Y_AXIS));
+		listPanel.setAlignmentX(LEFT_ALIGNMENT);
+		listPanel.setVisible(false);
 
 		JPanel scrollContent = new WidthTrackingPanel();
 		scrollContent.setLayout(new BoxLayout(scrollContent, BoxLayout.Y_AXIS));
 		scrollContent.add(resultsPanel);
 		scrollContent.add(Box.createRigidArea(new Dimension(0, 6)));
 		scrollContent.add(cardPanel);
+		scrollContent.add(listPanel);
 		scrollContent.add(Box.createVerticalGlue());
 
 		JScrollPane scroll = new JScrollPane(scrollContent,
@@ -129,7 +169,8 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		scroll.setAlignmentX(LEFT_ALIGNMENT);
 		add(scroll);
 
-		hint("Search a monster, or right-click one in game → Stats.");
+		// Fresh panel opens into Recent by default (or the plain hint when history is disabled).
+		showDefaultView();
 	}
 
 	// ------------------------------------------------------------------ search
@@ -173,11 +214,25 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		currentVariants = data.variantsForName(name);
 		if (currentVariants.isEmpty())
 		{
+			// A stored entry whose monster no longer resolves: drop it quietly (once the dataset
+			// has actually loaded — an async-empty index isn't proof the monster is gone).
+			if (data.isLoaded())
+			{
+				pruneDead(name);
+			}
 			return;
 		}
 
 		// Picking a monster collapses the result list so only its card remains on screen.
 		resultsPanel.removeAll();
+
+		// A real selection always lands in the normal card view, even from an open list mode.
+		if (mode != Mode.NORMAL)
+		{
+			mode = Mode.NORMAL;
+			setListVisible(false);
+			updateTabButtons();
+		}
 
 		currentSelection = null;
 		if (preferredVersion != null)
@@ -195,6 +250,7 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		{
 			currentSelection = chooseDefault(currentVariants);
 		}
+		recordSelection(currentSelection);
 		renderCard();
 	}
 
@@ -289,6 +345,336 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		this.selectionListener = listener;
 	}
 
+	// ------------------------------------------------ recent / favorites views
+
+	/** Search-field document changes: empty returns to the default view; text shows live results. */
+	private void onSearchTextChanged()
+	{
+		String text = searchField.getText();
+		if (text == null || text.trim().isEmpty())
+		{
+			showDefaultView();
+			return;
+		}
+		// Typing leaves any active list mode and shows live results.
+		if (mode != Mode.NORMAL)
+		{
+			mode = Mode.NORMAL;
+			setListVisible(false);
+			updateTabButtons();
+		}
+		// Don't trail the previously-viewed card beneath the live results — a fresh query is a
+		// clean slate until the user picks a result.
+		cardPanel.removeAll();
+		currentSelection = null;
+		search(text, false, null);
+	}
+
+	/** The view for an empty search field: Recent by default, or the plain hint when history is off. */
+	private void showDefaultView()
+	{
+		if (config.enableHistory())
+		{
+			enterMode(Mode.RECENT);
+			return;
+		}
+		mode = Mode.NORMAL;
+		setListVisible(false);
+		resultsPanel.removeAll();
+		// Keep whatever card is showing; only fall back to the hint when there's nothing at all.
+		if (currentSelection == null && cardPanel.getComponentCount() == 0)
+		{
+			hint("Search a monster, or right-click one in game → Stats.");
+		}
+		updateTabButtons();
+		revalidate();
+		repaint();
+	}
+
+	/** A mode button: toggles its list view off if already active, else switches to it. */
+	private void onTabClicked(Mode target)
+	{
+		if (mode == target)
+		{
+			exitListMode();
+		}
+		else
+		{
+			enterMode(target);
+		}
+	}
+
+	private void enterMode(Mode target)
+	{
+		mode = target;
+		setListVisible(true);
+		renderList();
+		updateTabButtons();
+		revalidate();
+		repaint();
+	}
+
+	private void exitListMode()
+	{
+		mode = Mode.NORMAL;
+		setListVisible(false);
+		ensureNormalContent();
+		updateTabButtons();
+		revalidate();
+		repaint();
+	}
+
+	/** Show the list view, or the results + card pair — never both at once. */
+	private void setListVisible(boolean listShown)
+	{
+		listPanel.setVisible(listShown);
+		resultsPanel.setVisible(!listShown);
+		cardPanel.setVisible(!listShown);
+	}
+
+	/** Back in the normal view with nothing to show, fall back to the search hint. */
+	private void ensureNormalContent()
+	{
+		String text = searchField.getText();
+		boolean hasSearch = text != null && !text.trim().isEmpty();
+		if (!hasSearch && currentSelection == null && cardPanel.getComponentCount() == 0)
+		{
+			hint("Search a monster, or right-click one in game → Stats.");
+		}
+	}
+
+	private void updateTabButtons()
+	{
+		boolean on = config.enableHistory();
+		recentTabButton.setVisible(on);
+		favoritesTabButton.setVisible(on);
+		recentTabButton.setForeground(mode == Mode.RECENT ? ColorScheme.BRAND_ORANGE : ColorScheme.LIGHT_GRAY_COLOR);
+		favoritesTabButton.setForeground(mode == Mode.FAVORITES ? ColorScheme.BRAND_ORANGE : ColorScheme.LIGHT_GRAY_COLOR);
+	}
+
+	private void renderList()
+	{
+		listPanel.removeAll();
+		boolean fav = mode == Mode.FAVORITES;
+		listPanel.add(listHeader(fav));
+		listPanel.add(Box.createRigidArea(new Dimension(0, 4)));
+
+		int shown = 0;
+		for (LookupHistory.Entry e : (fav ? history.favorites() : history.recent()))
+		{
+			// Skip rows whose monster no longer resolves — but only once the dataset has loaded,
+			// since an async-empty index would otherwise hide everything on a cold start.
+			if (data.isLoaded() && data.variantsForName(e.name).isEmpty())
+			{
+				continue;
+			}
+			listPanel.add(listRow(e));
+			shown++;
+		}
+		if (shown == 0)
+		{
+			listPanel.add(listEmptyHint(fav));
+		}
+		revalidate();
+		repaint();
+	}
+
+	/** The list view's title row, with a Clear control on the right when the list is non-empty. */
+	private JComponent listHeader(boolean fav)
+	{
+		JPanel r = new JPanel();
+		r.setLayout(new BoxLayout(r, BoxLayout.X_AXIS));
+		r.setAlignmentX(LEFT_ALIGNMENT);
+
+		JLabel title = new JLabel((fav ? "Favorites" : "Recent").toUpperCase(Locale.ROOT));
+		title.setFont(FontManager.getRunescapeSmallFont());
+		title.setForeground(ColorScheme.BRAND_ORANGE);
+		r.add(title);
+		r.add(Box.createHorizontalGlue());
+
+		boolean any = !(fav ? history.favorites() : history.recent()).isEmpty();
+		if (any)
+		{
+			JButton clear = new JButton(fav ? "Clear favorites" : "Clear history");
+			clear.setFont(FontManager.getRunescapeSmallFont());
+			clear.setFocusable(false);
+			clear.setMargin(new Insets(0, 6, 0, 6));
+			clear.addActionListener(e ->
+			{
+				if (fav)
+				{
+					history.clearFavorites();
+				}
+				else
+				{
+					history.clearRecent();
+				}
+				persist();
+				renderList();
+			});
+			r.add(clear);
+		}
+		capHeight(r);
+		return r;
+	}
+
+	private JComponent listRow(LookupHistory.Entry e)
+	{
+		JButton b = new JButton(rowLabel(e));
+		b.setAlignmentX(LEFT_ALIGNMENT);
+		b.setHorizontalAlignment(JButton.LEFT);
+		b.setFont(FontManager.getRunescapeSmallFont());
+		b.setMaximumSize(new Dimension(Integer.MAX_VALUE, b.getPreferredSize().height));
+		b.addActionListener(ev -> select(e.name, e.version));
+		return b;
+	}
+
+	/** Row label: name + version when the monster has variants, plain name otherwise. */
+	private String rowLabel(LookupHistory.Entry e)
+	{
+		if (!e.version.isEmpty() && data.variantsForName(e.name).size() > 1)
+		{
+			return e.name + " (" + e.version + ")";
+		}
+		return e.name;
+	}
+
+	private JComponent listEmptyHint(boolean fav)
+	{
+		String msg = fav
+			? "No favorites yet. Open a monster and tap ★ to pin it here."
+			: "Nothing here yet. Search a monster, or right-click one in game → Stats.";
+		JLabel l = new JLabel("<html><body style='width:180px'>" + msg + "</body></html>");
+		l.setFont(FontManager.getRunescapeSmallFont());
+		l.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+		l.setAlignmentX(LEFT_ALIGNMENT);
+		return l;
+	}
+
+	private JButton makeTabButton(String glyph, String tooltip, Runnable onClick)
+	{
+		JButton b = new JButton(glyph);
+		b.setToolTipText(tooltip);
+		b.setFocusable(false);
+		b.setMargin(new Insets(0, 4, 0, 4));
+		Dimension d = new Dimension(30, 30);
+		b.setPreferredSize(d);
+		b.setMinimumSize(d);
+		b.setMaximumSize(d);
+		b.addActionListener(e -> onClick.run());
+		return b;
+	}
+
+	private JButton makeStarButton(MonsterData m)
+	{
+		boolean fav = history.isFavorite(m.getName(), m.getVersion());
+		JButton b = new JButton(fav ? "★" : "☆");
+		b.setToolTipText(fav ? "Remove from favorites" : "Add to favorites");
+		b.setForeground(fav ? ColorScheme.BRAND_ORANGE : ColorScheme.LIGHT_GRAY_COLOR);
+		b.setFocusable(false);
+		b.setMargin(new Insets(0, 4, 0, 4));
+		b.addActionListener(e ->
+		{
+			history.toggleFavorite(m.getName(), m.getVersion());
+			persist();
+			renderCard();
+			if (mode == Mode.FAVORITES)
+			{
+				renderList();
+			}
+		});
+		return b;
+	}
+
+	/**
+	 * Record a user-initiated lookup. Called from {@link #select} and the variant dropdown, plus
+	 * {@link #recordLookup} for overlay-only in-game lookups; never from programmatic re-renders.
+	 */
+	private void recordSelection(MonsterData m)
+	{
+		if (!config.enableHistory() || m == null)
+		{
+			return;
+		}
+		history.record(m.getName(), m.getVersion());
+		persist();
+		// Keep an open Recent view in sync (e.g. an in-game lookup while it's on screen).
+		if (mode == Mode.RECENT)
+		{
+			renderList();
+		}
+	}
+
+	/**
+	 * Record an in-game "Stats" lookup that didn't open the panel (overlay-only target), so it
+	 * still lands in Recent. Resolves the variant the same way the overlay does. Called on the EDT.
+	 */
+	public void recordLookup(String name, String version)
+	{
+		if (!config.enableHistory() || name == null)
+		{
+			return;
+		}
+		List<MonsterData> variants = data.variantsForName(name);
+		if (variants.isEmpty())
+		{
+			return;
+		}
+		recordSelection(pickVariant(variants, version));
+	}
+
+	private MonsterData pickVariant(List<MonsterData> variants, String version)
+	{
+		if (version != null && !version.isEmpty())
+		{
+			for (MonsterData v : variants)
+			{
+				if (version.equalsIgnoreCase(v.getVersion()))
+				{
+					return v;
+				}
+			}
+		}
+		return chooseDefault(variants);
+	}
+
+	/** Drop a stored entry whose monster no longer resolves, refreshing an open list view. */
+	private void pruneDead(String name)
+	{
+		if (history.removeAllByName(name))
+		{
+			persist();
+			if (mode != Mode.NORMAL)
+			{
+				renderList();
+			}
+		}
+	}
+
+	private void persist()
+	{
+		configManager.setConfiguration(CONFIG_GROUP, HISTORY_KEY, history.toJson());
+	}
+
+	/** React to the enableHistory config toggle: hide/show the buttons and any open list view. */
+	public void onHistoryConfigChanged()
+	{
+		if (!config.enableHistory() && mode != Mode.NORMAL)
+		{
+			mode = Mode.NORMAL;
+			setListVisible(false);
+			ensureNormalContent();
+		}
+		updateTabButtons();
+		// A card on screen may need its star shown/hidden to match the new setting.
+		if (currentSelection != null && mode == Mode.NORMAL)
+		{
+			renderCard();
+		}
+		revalidate();
+		repaint();
+	}
+
 	private JComponent header(MonsterData m)
 	{
 		JPanel block = block();
@@ -300,6 +686,12 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		name.setFont(FontManager.getRunescapeBoldFont());
 		name.setForeground(Color.WHITE);
 		nameRow.add(name);
+		// Favourite toggle sits right next to the name (only when the feature is enabled).
+		if (config.enableHistory())
+		{
+			nameRow.add(Box.createRigidArea(new Dimension(4, 0)));
+			nameRow.add(makeStarButton(m));
+		}
 		if (m.getLevel() > 0)
 		{
 			nameRow.add(Box.createHorizontalGlue());
@@ -347,6 +739,10 @@ public class BetterMonsterExaminePanel extends PluginPanel
 				if (i >= 0 && i < currentVariants.size())
 				{
 					currentSelection = currentVariants.get(i);
+					// Switching variant is a user-initiated lookup of that form — record it so
+					// Recent reflects the variant on screen. (Safe: setSelectedIndex above runs
+					// before this listener is attached, so rebuilding the card never re-fires it.)
+					recordSelection(currentSelection);
 					renderCard();
 				}
 			});
