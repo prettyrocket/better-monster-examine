@@ -1,5 +1,6 @@
 package com.bettermonsterexamine;
 
+import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Font;
@@ -10,6 +11,7 @@ import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.Consumer;
 import java.util.function.IntSupplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -44,13 +46,6 @@ public class BetterMonsterExaminePanel extends PluginPanel
 	/** Uniform on-screen size every stat-grid icon is scaled to. */
 	private static final int ICON_BOX = 22;
 
-	/** Red for player-dangerous values: aggressive, positive flat armour, over-HP max hits. */
-	private static final Color DANGER_RED = new Color(0xFF4040);
-
-	/** Okabe-Ito orange/blue: colour-blind-distinguishable stand-ins for the red/green cues. */
-	private static final Color CB_DANGER = new Color(0xE69F00);
-	private static final Color CB_GOOD = new Color(0x56B4E9);
-
 	private final MonsterIcons overlay;
 	private final MonsterDataService data;
 	private final WikiInfoboxService wiki;
@@ -66,6 +61,12 @@ public class BetterMonsterExaminePanel extends PluginPanel
 
 	private List<MonsterData> currentVariants;
 	private MonsterData currentSelection;
+
+	/**
+	 * Notified with the monster whenever a card renders, so the in-game overlay can mirror what
+	 * the side panel is showing. The plugin sets this; left null when there's no overlay to feed.
+	 */
+	private Consumer<MonsterData> selectionListener;
 
 	public BetterMonsterExaminePanel(MonsterIcons overlay, MonsterDataService data, WikiInfoboxService wiki, BetterMonsterExamineConfig config, IntSupplier playerCombatLevel, IntSupplier playerHpLevel, BufferedImage titleIcon)
 	{
@@ -273,6 +274,19 @@ public class BetterMonsterExaminePanel extends PluginPanel
 				}
 			}));
 		}
+
+		// Let the overlay mirror the panel's current monster (and pick up the wiki fields on the
+		// re-render above once they land).
+		if (selectionListener != null)
+		{
+			selectionListener.accept(m);
+		}
+	}
+
+	/** Register a listener fed the current monster on each render, for the in-game overlay. */
+	public void setSelectionListener(Consumer<MonsterData> listener)
+	{
+		this.selectionListener = listener;
 	}
 
 	private JComponent header(MonsterData m)
@@ -458,7 +472,7 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		// COMBAT INFO — attack style + speed (dataset).
 		JPanel combatInfo = block();
 		combatInfo.add(header("Combat info"));
-		combatInfo.add(kvWrapped("Attack style", styleString(m)));
+		combatInfo.add(kvWrappedRight("Attack style", styleString(m)));
 		combatInfo.add(kv("Attack speed", attackSpeed(m), Color.WHITE));
 		capHeight(combatInfo);
 		cardPanel.add(combatInfo);
@@ -621,7 +635,8 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		return new ImageIcon(canvas);
 	}
 
-	private static String bonus(int v)
+	// Package-private so the in-game overlay (MonsterCardOverlay) can reuse the same formatting.
+	static String bonus(int v)
 	{
 		return (v >= 0 ? "+" : "") + v;
 	}
@@ -696,13 +711,13 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		return sb.length() == 0 ? null : sb.toString();
 	}
 
-	private static String burnImmunity(MonsterData m)
+	static String burnImmunity(MonsterData m)
 	{
 		return m.getImmunities() != null ? m.getImmunities().getBurn() : null;
 	}
 
 	/** Wiki poison/venom resistance: 100 → "Immune", >0 → "N% resistance", else null. */
-	private static String resistanceLabel(String resistance)
+	static String resistanceLabel(String resistance)
 	{
 		if (resistance == null)
 		{
@@ -723,13 +738,13 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		}
 	}
 
-	private static boolean yes(String v)
+	static boolean yes(String v)
 	{
 		return v != null && v.trim().equalsIgnoreCase("yes");
 	}
 
 	/** Map dataset attribute keys to their wiki display names (e.g. dragon → Draconic). */
-	private static String attributeNames(List<String> attrs)
+	static String attributeNames(List<String> attrs)
 	{
 		StringBuilder sb = new StringBuilder();
 		for (String a : attrs)
@@ -761,18 +776,18 @@ public class BetterMonsterExaminePanel extends PluginPanel
 	}
 
 	/** "5 ticks (3.0 seconds)". */
-	private static String attackSpeed(MonsterData m)
+	static String attackSpeed(MonsterData m)
 	{
 		int t = m.getSpeed();
 		return t + (t == 1 ? " tick" : " ticks") + " (" + String.format("%.1f", t * 0.6) + " seconds)";
 	}
 
-	private static String num(int v)
+	static String num(int v)
 	{
 		return v <= 0 ? "—" : String.valueOf(v);
 	}
 
-	private static String cap(String s)
+	static String cap(String s)
 	{
 		return s == null || s.isEmpty() ? s : s.substring(0, 1).toUpperCase(Locale.ROOT) + s.substring(1);
 	}
@@ -831,28 +846,36 @@ public class BetterMonsterExaminePanel extends PluginPanel
 	}
 
 	/** Label on its own line with a full-width, wrapping value beneath (for long text). */
-	private JPanel kvWrapped(String k, String v)
+	/**
+	 * Label on the left with a right-aligned value that wraps across as many lines as needed,
+	 * kept tight (used for the attack-style list). The value fills the width left by the label.
+	 */
+	private JPanel kvWrappedRight(String k, String v)
 	{
-		JPanel col = new JPanel();
-		col.setLayout(new BoxLayout(col, BoxLayout.Y_AXIS));
-		col.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		col.setAlignmentX(LEFT_ALIGNMENT);
-		col.setBorder(new EmptyBorder(1, 0, 1, 0));
+		JPanel r = new JPanel(new BorderLayout());
+		r.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		r.setBorder(new EmptyBorder(1, 0, 1, 0));
+		r.setAlignmentX(LEFT_ALIGNMENT);
 
 		JLabel kl = new JLabel(k);
 		kl.setFont(FontManager.getRunescapeSmallFont());
 		kl.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-		kl.setAlignmentX(LEFT_ALIGNMENT);
+		kl.setVerticalAlignment(JLabel.TOP);
 
-		JLabel vl = new JLabel("<html><body style='width:200px'>" + esc(v).replace("\n", "<br>") + "</body></html>");
+		// The value takes a fixed body width on the right (BorderLayout.EAST honours it), so it
+		// wraps and right-aligns within the space left by the label. A fixed width avoids relying
+		// on the label's off-screen preferred size, which can measure short before it's realised.
+		int valueW = 112;
+		JLabel vl = new JLabel("<html><body style='width:" + valueW + "px; text-align: right'>"
+			+ esc(v).replace("\n", "<br>") + "</body></html>");
 		vl.setFont(FontManager.getRunescapeSmallFont());
 		vl.setForeground(Color.WHITE);
-		vl.setAlignmentX(LEFT_ALIGNMENT);
+		vl.setVerticalAlignment(JLabel.TOP);
 
-		col.add(kl);
-		col.add(vl);
-		capHeight(col);
-		return col;
+		r.add(kl, BorderLayout.WEST);
+		r.add(vl, BorderLayout.EAST);
+		capHeight(r);
+		return r;
 	}
 
 	/**
@@ -932,94 +955,19 @@ public class BetterMonsterExaminePanel extends PluginPanel
 	/** The "danger" highlight colour for the active mode; white when highlighting is off. */
 	private Color danger()
 	{
-		switch (config.statHighlighting())
-		{
-			case OFF:
-				return Color.WHITE;
-			case COLOUR_BLIND:
-				return CB_DANGER;
-			default:
-				return DANGER_RED;
-		}
+		return StatColors.danger(config.statHighlighting());
 	}
 
 	/** The "good for the player" highlight colour for the active mode; white when off. */
 	private Color good()
 	{
-		switch (config.statHighlighting())
-		{
-			case OFF:
-				return Color.WHITE;
-			case COLOUR_BLIND:
-				return CB_GOOD;
-			default:
-				return ColorScheme.PROGRESS_COMPLETE_COLOR;
-		}
+		return StatColors.good(config.statHighlighting());
 	}
 
 	/** Combat-level colour for the active mode: the in-game gradient (Standard) or orange/blue (CB). */
 	private Color levelColor(int playerLevel, int npcLevel)
 	{
-		switch (config.statHighlighting())
-		{
-			case OFF:
-				return Color.WHITE;
-			case COLOUR_BLIND:
-				if (playerLevel <= 0 || npcLevel == playerLevel)
-				{
-					return Color.WHITE;
-				}
-				return npcLevel > playerLevel ? CB_DANGER : CB_GOOD;
-			default:
-				return combatLevelColor(playerLevel, npcLevel);
-		}
-	}
-
-	/**
-	 * The in-game combat-level colour for the monster hover: green when it's well below the
-	 * player, yellow at parity, orange→red as it climbs above, matching RuneScape's bands by
-	 * the (player − monster) level difference. White when the player level is unknown.
-	 */
-	private static Color combatLevelColor(int playerLevel, int npcLevel)
-	{
-		if (playerLevel <= 0)
-		{
-			return Color.WHITE;
-		}
-		int d = playerLevel - npcLevel;
-		if (d < -9)
-		{
-			return new Color(0xFF0000);
-		}
-		if (d < -6)
-		{
-			return new Color(0xFF3000);
-		}
-		if (d < -3)
-		{
-			return new Color(0xFF7000);
-		}
-		if (d < 0)
-		{
-			return new Color(0xFFB000);
-		}
-		if (d > 9)
-		{
-			return new Color(0x00FF00);
-		}
-		if (d > 6)
-		{
-			return new Color(0x40FF00);
-		}
-		if (d > 3)
-		{
-			return new Color(0x80FF00);
-		}
-		if (d > 0)
-		{
-			return new Color(0xC0FF00);
-		}
-		return new Color(0xFFFF00);
+		return StatColors.levelColor(config.statHighlighting(), playerLevel, npcLevel);
 	}
 
 	/** True when a numeric wiki value (e.g. XP bonus) is zero, so it can be omitted. */
