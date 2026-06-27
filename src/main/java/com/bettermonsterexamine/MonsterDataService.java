@@ -173,6 +173,12 @@ public class MonsterDataService
 		log.debug("Indexed {} monster entries ({} unique names)", all.size(), name.size());
 	}
 
+	/** True once the dataset has been indexed, so accessors return real data (not async-empty). */
+	public boolean isLoaded()
+	{
+		return !byName.isEmpty();
+	}
+
 	public MonsterData getById(int npcId)
 	{
 		return byId.get(npcId);

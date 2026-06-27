@@ -51,6 +51,9 @@ public class BetterMonsterExaminePlugin extends Plugin
 	private ClientThread clientThread;
 
 	@Inject
+	private ConfigManager configManager;
+
+	@Inject
 	private ClientToolbar clientToolbar;
 
 	@Inject
@@ -154,7 +157,7 @@ public class BetterMonsterExaminePlugin extends Plugin
 	{
 		log.debug("Adding side panel navigation button");
 		BufferedImage icon = titleIcon;
-		monsterStatsPanel = new BetterMonsterExaminePanel(monsterIcons, dataService, wikiService, config, () -> playerCombatLevel, () -> playerHpLevel, icon);
+		monsterStatsPanel = new BetterMonsterExaminePanel(monsterIcons, dataService, wikiService, config, configManager, () -> playerCombatLevel, () -> playerHpLevel, icon);
 		// Mirror whatever the panel is showing into the overlay (when the overlay is a target).
 		monsterStatsPanel.setSelectionListener(this::showInOverlay);
 		navButton = NavigationButton.builder()
@@ -225,6 +228,15 @@ public class BetterMonsterExaminePlugin extends Plugin
 			if (!config.statsRenderTarget().showsOverlay())
 			{
 				hideOverlay();
+			}
+		}
+		else if (event.getKey().equals("enableHistory"))
+		{
+			// Show/hide the panel's Recent/Favorites buttons and any open list view to match.
+			BetterMonsterExaminePanel panel = monsterStatsPanel;
+			if (panel != null)
+			{
+				SwingUtilities.invokeLater(panel::onHistoryConfigChanged);
 			}
 		}
 	}
@@ -328,16 +340,29 @@ public class BetterMonsterExaminePlugin extends Plugin
 			{
 				toggleOverlay(name, version);
 			}
+			boolean fedPanel = false;
 			if (target.showsPanel())
 			{
-				SwingUtilities.invokeLater(() ->
+				BetterMonsterExaminePanel panel = monsterStatsPanel;
+				if (panel != null && navButton != null)
 				{
-					if (monsterStatsPanel != null && navButton != null)
+					// Feeding the panel records the lookup via its own select() choke point.
+					fedPanel = true;
+					SwingUtilities.invokeLater(() ->
 					{
-						monsterStatsPanel.search(name, true, version);
+						panel.search(name, true, version);
 						clientToolbar.openPanel(navButton);
-					}
-				});
+					});
+				}
+			}
+			if (!fedPanel)
+			{
+				// Overlay-only target (or panel unavailable): still record so it lands in Recent.
+				BetterMonsterExaminePanel panel = monsterStatsPanel;
+				if (panel != null)
+				{
+					SwingUtilities.invokeLater(() -> panel.recordLookup(name, version));
+				}
 			}
 		});
 	}

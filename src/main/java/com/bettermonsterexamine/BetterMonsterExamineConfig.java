@@ -46,4 +46,14 @@ public interface BetterMonsterExamineConfig extends Config
 	{
 		return RenderTarget.PANEL;
 	}
+
+	@ConfigItem(
+		keyName = "enableHistory",
+		name = "Recent & favorites",
+		description = "Show Recent and Favorites lists in the side panel, reached via the ↺ / ★ buttons in the search row."
+	)
+	default boolean enableHistory()
+	{
+		return true;
+	}
 }

@@ -26,6 +26,8 @@ max hits and more — without leaving the client.
 - **Wiki-style infobox layout** — mirroring the OSRS Wiki with important values highlighted.
 - **In-game overlay** — show the stats as a compact, tabbed card in the viewport instead of
   (or alongside) the side panel.
+- **Recent & favorites** — the side panel's **↺** and **★** buttons hold your recently viewed
+  monsters and a pinned favorites list, so you can re-open one without re-typing.
 - **Quick links** — open the monster's **Wiki** page or the **DPS calculator**
   in one click.
 - **Accessible highlighting** — colour coding is configurable: the default red/green palette, 
