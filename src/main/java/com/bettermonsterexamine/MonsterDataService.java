@@ -210,6 +210,91 @@ public class MonsterDataService
 		return byName.getOrDefault(name.toLowerCase(Locale.ROOT), Collections.emptyList());
 	}
 
+	/**
+	 * The variant to show for a name: the one matching {@code version} (case-insensitive), else
+	 * {@link #defaultVariant}. Null when the name has no variants.
+	 */
+	public MonsterData variant(String name, String version)
+	{
+		List<MonsterData> variants = variantsForName(name);
+		if (variants.isEmpty())
+		{
+			return null;
+		}
+		if (version != null && !version.isEmpty())
+		{
+			for (MonsterData v : variants)
+			{
+				if (version.equalsIgnoreCase(v.getVersion()))
+				{
+					return v;
+				}
+			}
+		}
+		return defaultVariant(variants);
+	}
+
+	/**
+	 * Pick a sensible default from a name's variants: the standard form carrying real data;
+	 * otherwise (e.g. Vorkath, which only has "Dragon Slayer II" / "Post-quest") the highest-level
+	 * variant with data; failing that, any standard form, else the first. Pure over its argument.
+	 */
+	public MonsterData defaultVariant(List<MonsterData> variants)
+	{
+		for (MonsterData m : variants)
+		{
+			if (isStandard(m) && hasData(m))
+			{
+				return m;
+			}
+		}
+
+		MonsterData best = null;
+		for (MonsterData m : variants)
+		{
+			if (hasData(m) && (best == null || m.getLevel() > best.getLevel()))
+			{
+				best = m;
+			}
+		}
+		if (best != null)
+		{
+			return best;
+		}
+
+		for (MonsterData m : variants)
+		{
+			if (isStandard(m))
+			{
+				return m;
+			}
+		}
+		return variants.isEmpty() ? null : variants.get(0);
+	}
+
+	/** The version string of the variant whose combat level matches {@code combatLevel}, or null. */
+	public String variantVersionForLevel(String name, int combatLevel)
+	{
+		for (MonsterData v : variantsForName(name))
+		{
+			if (v.getLevel() == combatLevel)
+			{
+				return v.getVersion();
+			}
+		}
+		return null;
+	}
+
+	private static boolean isStandard(MonsterData m)
+	{
+		return m.getVersion() == null || m.getVersion().isEmpty();
+	}
+
+	private static boolean hasData(MonsterData m)
+	{
+		return m.getSkills() != null && m.getSkills().getHp() > 0;
+	}
+
 	/** Distinct base names matching the query, exact-match first, then alphabetical. */
 	public List<String> searchNames(String query, int limit)
 	{
