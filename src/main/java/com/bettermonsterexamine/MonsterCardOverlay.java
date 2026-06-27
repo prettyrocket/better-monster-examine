@@ -271,14 +271,14 @@ class MonsterCardOverlay extends Overlay
 		MonsterData.Skills s = m.getSkills();
 		if (s != null)
 		{
-			rows.add(Row.stat(icons.hitpointsIcon, "Hitpoints", BetterMonsterExaminePanel.num(s.getHp()), white));
-			rows.add(Row.stat(icons.attackIcon, "Attack", BetterMonsterExaminePanel.num(s.getAtk()), white));
-			rows.add(Row.stat(icons.strengthIcon, "Strength", BetterMonsterExaminePanel.num(s.getStr()), white));
-			rows.add(Row.stat(icons.defenceIcon, "Defence", BetterMonsterExaminePanel.num(s.getDef()), white));
-			rows.add(Row.stat(icons.magicIcon, "Magic", BetterMonsterExaminePanel.num(s.getMagic()), white));
-			rows.add(Row.stat(icons.rangedIcon, "Ranged", BetterMonsterExaminePanel.num(s.getRanged()), white));
+			rows.add(Row.stat(icons.hitpointsIcon, "Hitpoints", StatFormat.num(s.getHp()), white));
+			rows.add(Row.stat(icons.attackIcon, "Attack", StatFormat.num(s.getAtk()), white));
+			rows.add(Row.stat(icons.strengthIcon, "Strength", StatFormat.num(s.getStr()), white));
+			rows.add(Row.stat(icons.defenceIcon, "Defence", StatFormat.num(s.getDef()), white));
+			rows.add(Row.stat(icons.magicIcon, "Magic", StatFormat.num(s.getMagic()), white));
+			rows.add(Row.stat(icons.rangedIcon, "Ranged", StatFormat.num(s.getRanged()), white));
 		}
-		rows.add(Row.kv("Speed", BetterMonsterExaminePanel.attackSpeed(m), white));
+		rows.add(Row.kv("Speed", StatFormat.attackSpeed(m), white));
 
 		List<String> st = m.getStyle();
 		rows.add(Row.kvWrap("Style", st == null || st.isEmpty() ? "—" : String.join(", ", st), white));
@@ -292,7 +292,7 @@ class MonsterCardOverlay extends Overlay
 		boolean firstMax = true;
 		for (String line : maxText.split(",\\s*"))
 		{
-			boolean over = flagOverHp && BetterMonsterExaminePanel.maxValue(line) > hp;
+			boolean over = flagOverHp && StatFormat.maxValue(line) > hp;
 			// Only the first row is labelled "Max hit"; the rest just list their values.
 			rows.add(Row.kv(firstMax ? "Max hit" : "", line, over ? StatColors.danger(mode) : white));
 			firstMax = false;
@@ -319,12 +319,12 @@ class MonsterCardOverlay extends Overlay
 		MonsterData.Offensive o = m.getOffensive();
 		if (o != null)
 		{
-			rows.add(Row.stat(icons.attackIcon, "Attack", BetterMonsterExaminePanel.bonus(o.getAtk()), white));
-			rows.add(Row.stat(icons.strengthIcon, "Strength", BetterMonsterExaminePanel.bonus(o.getStr()), white));
-			rows.add(Row.stat(icons.magicIcon, "Magic", BetterMonsterExaminePanel.bonus(o.getMagic()), white));
-			rows.add(Row.stat(icons.magicDamageIcon, "Magic dmg", BetterMonsterExaminePanel.bonus(o.getMagicStr()), white));
-			rows.add(Row.stat(icons.rangedIcon, "Ranged", BetterMonsterExaminePanel.bonus(o.getRanged()), white));
-			rows.add(Row.stat(icons.rangedStrengthIcon, "Ranged str", BetterMonsterExaminePanel.bonus(o.getRangedStr()), white));
+			rows.add(Row.stat(icons.attackIcon, "Attack", StatFormat.bonus(o.getAtk()), white));
+			rows.add(Row.stat(icons.strengthIcon, "Strength", StatFormat.bonus(o.getStr()), white));
+			rows.add(Row.stat(icons.magicIcon, "Magic", StatFormat.bonus(o.getMagic()), white));
+			rows.add(Row.stat(icons.magicDamageIcon, "Magic dmg", StatFormat.bonus(o.getMagicStr()), white));
+			rows.add(Row.stat(icons.rangedIcon, "Ranged", StatFormat.bonus(o.getRanged()), white));
+			rows.add(Row.stat(icons.rangedStrengthIcon, "Ranged str", StatFormat.bonus(o.getRangedStr()), white));
 		}
 	}
 
@@ -335,16 +335,16 @@ class MonsterCardOverlay extends Overlay
 		if (d != null)
 		{
 			// Grouped like the wiki: melee, then magic defence + elemental weakness, then ranged.
-			rows.add(Row.stat(icons.stabIcon, "Stab", BetterMonsterExaminePanel.bonus(d.getStab()), white));
-			rows.add(Row.stat(icons.slashIcon, "Slash", BetterMonsterExaminePanel.bonus(d.getSlash()), white));
-			rows.add(Row.stat(icons.crushIcon, "Crush", BetterMonsterExaminePanel.bonus(d.getCrush()), white));
+			rows.add(Row.stat(icons.stabIcon, "Stab", StatFormat.bonus(d.getStab()), white));
+			rows.add(Row.stat(icons.slashIcon, "Slash", StatFormat.bonus(d.getSlash()), white));
+			rows.add(Row.stat(icons.crushIcon, "Crush", StatFormat.bonus(d.getCrush()), white));
 
-			rows.add(Row.stat(icons.magicDefenceIcon, "Magic", BetterMonsterExaminePanel.bonus(d.getMagic()), white));
+			rows.add(Row.stat(icons.magicDefenceIcon, "Magic", StatFormat.bonus(d.getMagic()), white));
 			addWeakness(rows, m, white);
 
-			rows.add(Row.stat(icons.lightIcon, "Light", BetterMonsterExaminePanel.bonus(d.getLight()), white));
-			rows.add(Row.stat(icons.standardIcon, "Standard", BetterMonsterExaminePanel.bonus(d.getStandard()), white));
-			rows.add(Row.stat(icons.heavyIcon, "Heavy", BetterMonsterExaminePanel.bonus(d.getHeavy()), white));
+			rows.add(Row.stat(icons.lightIcon, "Light", StatFormat.bonus(d.getLight()), white));
+			rows.add(Row.stat(icons.standardIcon, "Standard", StatFormat.bonus(d.getStandard()), white));
+			rows.add(Row.stat(icons.heavyIcon, "Heavy", StatFormat.bonus(d.getHeavy()), white));
 		}
 		else
 		{
@@ -358,7 +358,7 @@ class MonsterCardOverlay extends Overlay
 		if (w != null && w.getElement() != null)
 		{
 			rows.add(Row.stat(icons.getElementalWeaknessIcon(w.getElement()),
-				BetterMonsterExaminePanel.cap(w.getElement()), w.getSeverity() + "%", white));
+				StatFormat.cap(w.getElement()), w.getSeverity() + "%", white));
 		}
 		else
 		{
@@ -371,7 +371,7 @@ class MonsterCardOverlay extends Overlay
 		Color white = Color.WHITE;
 		String size = m.getSize() > 0 ? m.getSize() + "x" + m.getSize() : null;
 		String attrs = m.getAttributes() != null && !m.getAttributes().isEmpty()
-			? BetterMonsterExaminePanel.attributeNames(m.getAttributes()) : null;
+			? StatFormat.attributeNames(m.getAttributes()) : null;
 		String sizeAttr = size != null && attrs != null ? size + ", " + attrs : (size != null ? size : attrs);
 		if (sizeAttr != null)
 		{
@@ -403,7 +403,7 @@ class MonsterCardOverlay extends Overlay
 		if (wi != null)
 		{
 			String xp = wi.get("xpbonus", ver);
-			if (xp != null && !xp.trim().isEmpty() && !isZero(xp))
+			if (xp != null && !xp.trim().isEmpty() && !StatFormat.isZero(xp))
 			{
 				boolean penalty = xp.trim().startsWith("-");
 				rows.add(Row.kv("XP bonus", (penalty ? "" : "+") + xp.trim() + "%",
@@ -411,28 +411,28 @@ class MonsterCardOverlay extends Overlay
 			}
 		}
 
-		String burn = BetterMonsterExaminePanel.burnImmunity(m);
+		String burn = StatFormat.burnImmunity(m);
 		if (burn != null)
 		{
 			rows.add(Row.kv("Burn", burn, white));
 		}
 		if (wi != null)
 		{
-			String poison = BetterMonsterExaminePanel.resistanceLabel(wi.get("poisonresistance", ver));
+			String poison = StatFormat.resistanceLabel(wi.get("poisonresistance", ver));
 			if (poison != null)
 			{
 				rows.add(Row.kv("Poison", poison, StatColors.danger(mode)));
 			}
-			String venom = BetterMonsterExaminePanel.resistanceLabel(wi.get("venomresistance", ver));
+			String venom = StatFormat.resistanceLabel(wi.get("venomresistance", ver));
 			if (venom != null)
 			{
 				rows.add(Row.kv("Venom", venom, StatColors.danger(mode)));
 			}
-			if (BetterMonsterExaminePanel.yes(wi.get("immunecannon", ver)))
+			if (StatFormat.yes(wi.get("immunecannon", ver)))
 			{
 				rows.add(Row.kv("Cannon", "Immune", StatColors.danger(mode)));
 			}
-			if (BetterMonsterExaminePanel.yes(wi.get("immunethrall", ver)))
+			if (StatFormat.yes(wi.get("immunethrall", ver)))
 			{
 				rows.add(Row.kv("Thrall", "Immune", StatColors.danger(mode)));
 			}
@@ -440,18 +440,6 @@ class MonsterCardOverlay extends Overlay
 		else
 		{
 			rows.add(Row.plain("loading wiki data…", ColorScheme.LIGHT_GRAY_COLOR));
-		}
-	}
-
-	private static boolean isZero(String v)
-	{
-		try
-		{
-			return Double.parseDouble(v.trim()) == 0;
-		}
-		catch (NumberFormatException e)
-		{
-			return false;
 		}
 	}
 

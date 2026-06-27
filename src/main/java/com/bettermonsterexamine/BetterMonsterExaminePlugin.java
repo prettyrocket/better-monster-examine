@@ -5,7 +5,6 @@ import javax.swing.SwingUtilities;
 
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
-import java.util.List;
 
 import com.google.inject.Provides;
 import lombok.extern.slf4j.Slf4j;
@@ -241,19 +240,6 @@ public class BetterMonsterExaminePlugin extends Plugin
 		}
 	}
 
-	/** When resolving a monster by name, pick the variant whose combat level matches the NPC. */
-	private String variantVersionForLevel(String name, int combatLevel)
-	{
-		for (MonsterData v : dataService.variantsForName(name))
-		{
-			if (v.getLevel() == combatLevel)
-			{
-				return v.getVersion();
-			}
-		}
-		return null;
-	}
-
 	@Subscribe
 	public void onGameTick(GameTick event)
 	{
@@ -329,7 +315,7 @@ public class BetterMonsterExaminePlugin extends Plugin
 				log.debug("No dataset entry for clicked NPC {} (id {})", clickedNPC.getName(), clickedNPC.getId());
 				return;
 			}
-			String version = entry != null ? entry.getVersion() : variantVersionForLevel(name, clickedNPC.getCombatLevel());
+			String version = entry != null ? entry.getVersion() : dataService.variantVersionForLevel(name, clickedNPC.getCombatLevel());
 
 			log.debug("Opening stats for {} (npc id {})", name, clickedNPC.getId());
 			RenderTarget target = config.statsRenderTarget();
@@ -392,7 +378,7 @@ public class BetterMonsterExaminePlugin extends Plugin
 			dismissOverlay();
 			return;
 		}
-		MonsterData selection = pickVariant(name, version);
+		MonsterData selection = dataService.variant(name, version);
 		if (selection == null)
 		{
 			return;
@@ -475,39 +461,4 @@ public class BetterMonsterExaminePlugin extends Plugin
 		}
 	}
 
-	/** The dataset variant to show in the overlay: the one matching {@code version}, else a default. */
-	private MonsterData pickVariant(String name, String version)
-	{
-		List<MonsterData> variants = dataService.variantsForName(name);
-		if (variants.isEmpty())
-		{
-			return null;
-		}
-		if (version != null)
-		{
-			for (MonsterData v : variants)
-			{
-				if (version.equalsIgnoreCase(v.getVersion()))
-				{
-					return v;
-				}
-			}
-		}
-		// Prefer the standard form carrying real data; else the highest-level variant with data.
-		MonsterData best = null;
-		for (MonsterData v : variants)
-		{
-			boolean hasData = v.getSkills() != null && v.getSkills().getHp() > 0;
-			boolean emptyVersion = v.getVersion() == null || v.getVersion().isEmpty();
-			if (hasData && emptyVersion)
-			{
-				return v;
-			}
-			if (hasData && (best == null || v.getLevel() > best.getLevel()))
-			{
-				best = v;
-			}
-		}
-		return best != null ? best : variants.get(0);
-	}
 }
