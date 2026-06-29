@@ -60,9 +60,6 @@ public class BetterMonsterExaminePlugin extends Plugin
 	private MonsterDataService dataService;
 
 	@Inject
-	private WikiInfoboxService wikiService;
-
-	@Inject
 	private OverlayManager overlayManager;
 
 	@Inject
@@ -160,7 +157,7 @@ public class BetterMonsterExaminePlugin extends Plugin
 	{
 		log.debug("Adding side panel navigation button");
 		BufferedImage icon = titleIcon;
-		monsterStatsPanel = new BetterMonsterExaminePanel(monsterIcons, dataService, wikiService, config, configManager, gson, () -> playerCombatLevel, () -> playerHpLevel, icon);
+		monsterStatsPanel = new BetterMonsterExaminePanel(monsterIcons, dataService, config, configManager, gson, () -> playerCombatLevel, () -> playerHpLevel, icon);
 		// Mirror whatever the panel is showing into the overlay (when the overlay is a target).
 		monsterStatsPanel.setSelectionListener(this::showInOverlay);
 		navButton = NavigationButton.builder()
@@ -387,24 +384,9 @@ public class BetterMonsterExaminePlugin extends Plugin
 		{
 			return;
 		}
-		WikiInfo wi = wikiService.getCached(name);
-		overlay.setMonster(selection, wi);
+		overlay.setMonster(selection);
 		overlayKey = key;
 		dismissedKey = null;
-
-		// Pull the wiki-only fields (aggressive/poisonous/xp/full max hit/immunities) if needed,
-		// then patch them in — but only while this monster is still the one on screen.
-		if (wi == null)
-		{
-			wikiService.fetch(name, () ->
-			{
-				MonsterCardOverlay o = cardOverlay;
-				if (o != null && key.equals(overlayKey))
-				{
-					o.setWiki(wikiService.getCached(name));
-				}
-			});
-		}
 	}
 
 	/** Clear the overlay (e.g. it's no longer a render target), forgetting any dismissal. */
@@ -433,10 +415,9 @@ public class BetterMonsterExaminePlugin extends Plugin
 
 	/**
 	 * Mirror the side panel's current monster into the overlay (when the overlay is a render
-	 * target), so searching or switching variants in the panel updates the overlay. The same
-	 * monster — e.g. the panel's wiki re-render — keeps the active tab; a new monster resets it.
-	 * The panel drives the wiki fetch and re-notifies once it lands, so nothing to fetch here.
-	 * Called on the EDT.
+	 * target), so searching or switching variants in the panel updates the overlay. Called on the
+	 * EDT. The data is synchronous now, so an unchanged selection needs no update (the overlay
+	 * redraws live each frame); only a different monster swaps the overlay and resets its tab.
 	 */
 	private void showInOverlay(MonsterData m)
 	{
@@ -446,23 +427,15 @@ public class BetterMonsterExaminePlugin extends Plugin
 			return;
 		}
 		String key = m.getName() + ' ' + m.getVersion();
-		// Honour an explicit close: while this exact monster stays selected (e.g. its wiki fields
-		// landing re-renders the panel), don't reopen the overlay the user just dismissed.
-		if (key.equals(dismissedKey))
+		// Honour an explicit close (while this monster stays selected), and skip redundant
+		// re-pushes of the monster already on screen.
+		if (key.equals(dismissedKey) || key.equals(overlayKey))
 		{
 			return;
 		}
-		WikiInfo wi = wikiService.getCached(m.getName());
-		if (key.equals(overlayKey))
-		{
-			overlay.setWiki(wi);
-		}
-		else
-		{
-			overlay.setMonster(m, wi);
-			overlayKey = key;
-			dismissedKey = null;
-		}
+		overlay.setMonster(m);
+		overlayKey = key;
+		dismissedKey = null;
 	}
 
 }

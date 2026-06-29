@@ -8,10 +8,8 @@ import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.util.List;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import javax.imageio.ImageIO;
 import okhttp3.OkHttpClient;
 
@@ -48,7 +46,6 @@ public class OverlayPreview
 		{
 			Thread.sleep(50);
 		}
-		WikiInfoboxService wiki = new WikiInfoboxService(httpClient);
 
 		File outDir = new File("previews");
 		outDir.mkdirs();
@@ -57,25 +54,23 @@ public class OverlayPreview
 
 		// --- Vorkath: every tab at once -------------------------------------------------
 		MonsterData vorkath = firstVariant(ds, "Vorkath");
-		WikiInfo vorkathWiki = preloadWiki(wiki, "Vorkath");
 		BetterMonsterExamineConfig standard = config(HighlightMode.STANDARD);
 		String[] tabCaptions = {"Combat", "Aggressive", "Defensive", "Info"};
 		BufferedImage[] vorkathTabs = new BufferedImage[4];
 		for (int tab = 0; tab < 4; tab++)
 		{
-			vorkathTabs[tab] = renderOverlay(standard, icons, vorkath, vorkathWiki, tab);
+			vorkathTabs[tab] = renderOverlay(standard, icons, vorkath, tab);
 		}
 		writeStrip(new File(outDir, "overlay_vorkath_tabs.png"), vorkathTabs, tabCaptions);
 
 		// --- Blue Moon: Info tab across the three highlight modes ------------------------
 		MonsterData blueMoon = firstVariant(ds, "Blue Moon");
-		WikiInfo blueMoonWiki = preloadWiki(wiki, "Blue Moon");
 		HighlightMode[] modes = {HighlightMode.STANDARD, HighlightMode.COLOUR_BLIND, HighlightMode.OFF};
 		String[] modeCaptions = {"Standard", "Colour-blind", "No highlighting"};
 		BufferedImage[] modeImgs = new BufferedImage[modes.length];
 		for (int i = 0; i < modes.length; i++)
 		{
-			modeImgs[i] = renderOverlay(config(modes[i]), icons, blueMoon, blueMoonWiki, 3);
+			modeImgs[i] = renderOverlay(config(modes[i]), icons, blueMoon, 3);
 		}
 		writeStrip(new File(outDir, "overlay_blue_moon_modes.png"), modeImgs, modeCaptions);
 
@@ -85,11 +80,11 @@ public class OverlayPreview
 
 	/** Render one overlay state (monster + tab + highlight mode) to a tightly-cropped image. */
 	private static BufferedImage renderOverlay(BetterMonsterExamineConfig cfg, MonsterIcons icons,
-		MonsterData monster, WikiInfo wiki, int tab) throws Exception
+		MonsterData monster, int tab) throws Exception
 	{
 		// Maxed player (126 combat, 99 hp) so level colouring and the over-HP max-hit cue render.
 		MonsterCardOverlay overlay = new MonsterCardOverlay(cfg, icons, () -> 126, () -> 99);
-		overlay.setMonster(monster, wiki);
+		overlay.setMonster(monster);
 		overlay.setActiveTab(tab);
 
 		// First pass: measure the height the overlay wants for this tab.
@@ -141,14 +136,6 @@ public class OverlayPreview
 		g.dispose();
 		ImageIO.write(canvas, "png", out);
 		System.out.println("wrote " + out.getName() + " (" + totalW + "x" + totalH + ")");
-	}
-
-	private static WikiInfo preloadWiki(WikiInfoboxService wiki, String name) throws Exception
-	{
-		CountDownLatch latch = new CountDownLatch(1);
-		wiki.fetch(name, latch::countDown);
-		latch.await(15, TimeUnit.SECONDS);
-		return wiki.getCached(name);
 	}
 
 	private static MonsterData firstVariant(MonsterDataService ds, String name)

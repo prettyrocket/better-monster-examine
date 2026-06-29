@@ -21,8 +21,7 @@ import net.runelite.client.ui.overlay.components.ComponentConstants;
  * A compact, tabbed in-game overlay modelled on the Monster Examine spell's interface. It
  * draws the monster's stats split across four clickable tabs — Combat, Aggressive, Defensive,
  * Info — directly with {@link Graphics2D} so it reads as a native overlay rather than a blitted
- * panel snapshot. The plugin pushes the selected monster in via {@link #setMonster}; the wiki
- * fields land later via {@link #setWiki} and simply appear on the next frame.
+ * panel snapshot. The plugin pushes the selected monster in via {@link #setMonster}.
  *
  * <p>Tab clicks are routed here from the plugin's mouse listener: {@link #tabAt} hit-tests a
  * canvas point against the tab strip (using the bounds the overlay renderer maintains) and
@@ -43,11 +42,10 @@ class MonsterCardOverlay extends Overlay
 	private final IntSupplier playerCombatLevel;
 	private final IntSupplier playerHpLevel;
 
-	// monster/wiki are swapped in from the client thread or an OkHttp callback and read on the
-	// render thread; activeTab is written from the mouse (AWT) thread. Volatile is enough — each
-	// is an independent reference/int, no compound invariant.
+	// monster is swapped in from the client thread and read on the render thread; activeTab is
+	// written from the mouse (AWT) thread. Volatile is enough — each is an independent
+	// reference/int, no compound invariant.
 	private volatile MonsterData monster;
-	private volatile WikiInfo wiki;
 	private volatile int activeTab;
 	// The tab rectangles and close-button rectangle from the last render, relative to the overlay
 	// origin, for hit-testing mouse clicks.
@@ -64,18 +62,11 @@ class MonsterCardOverlay extends Overlay
 		setLayer(OverlayLayer.ABOVE_WIDGETS);
 	}
 
-	/** Show {@code m}, with {@code wi} (possibly null until the wiki fetch lands), from the first tab. */
-	void setMonster(MonsterData m, WikiInfo wi)
+	/** Show {@code m} from the first tab. */
+	void setMonster(MonsterData m)
 	{
 		this.monster = m;
-		this.wiki = wi;
 		this.activeTab = 0;
-	}
-
-	/** Patch in the wiki fields once they arrive, keeping the current tab. */
-	void setWiki(WikiInfo wi)
-	{
-		this.wiki = wi;
 	}
 
 	/** Hide the overlay. */
@@ -236,7 +227,7 @@ class MonsterCardOverlay extends Overlay
 	private List<Row> rowsFor(int tab, MonsterData m)
 	{
 		HighlightMode mode = config.statHighlighting();
-		MonsterStats stats = new MonsterStats(m, wiki, mode, playerHpLevel.getAsInt());
+		MonsterStats stats = new MonsterStats(m, mode, playerHpLevel.getAsInt());
 		List<Row> rows = new ArrayList<>();
 
 		switch (tab)
@@ -296,17 +287,10 @@ class MonsterCardOverlay extends Overlay
 	private void aggressiveTab(List<Row> rows, MonsterStats stats, HighlightMode mode)
 	{
 		Color white = Color.WHITE;
-		if (stats.wikiLoaded())
+		MonsterStats.StatField pois = stats.poisonous();
+		if (pois != null)
 		{
-			MonsterStats.StatField pois = stats.poisonous();
-			if (pois != null)
-			{
-				rows.add(Row.kv("Poisonous", pois.value(), StatColors.resolve(pois.role(), mode)));
-			}
-		}
-		else
-		{
-			rows.add(Row.plain("loading wiki data…", ColorScheme.LIGHT_GRAY_COLOR));
+			rows.add(Row.kv("Poisonous", pois.value(), StatColors.resolve(pois.role(), mode)));
 		}
 
 		List<String> off = stats.offensiveBonuses();
@@ -372,11 +356,6 @@ class MonsterCardOverlay extends Overlay
 		{
 			rows.add(Row.kv("Slayer", "Yes", white));
 		}
-		MonsterStats.StatField aggr = stats.aggressive();
-		if (aggr != null)
-		{
-			rows.add(Row.kv("Aggressive", aggr.value(), StatColors.resolve(aggr.role(), mode)));
-		}
 		// Flat armour: a flat damage adjustment, 0 for most monsters — shown only when non-zero,
 		// green when negative (takes extra damage), red when positive (shrugs damage off).
 		MonsterStats.StatField flatArmour = stats.flatArmour();
@@ -395,32 +374,15 @@ class MonsterCardOverlay extends Overlay
 		{
 			rows.add(Row.kv("Burn", burn, white));
 		}
-		if (stats.wikiLoaded())
+		MonsterStats.StatField cannon = stats.cannon();
+		if (cannon != null)
 		{
-			MonsterStats.StatField poison = stats.poison();
-			if (poison != null)
-			{
-				rows.add(Row.kv("Poison", poison.value(), StatColors.resolve(poison.role(), mode)));
-			}
-			MonsterStats.StatField venom = stats.venom();
-			if (venom != null)
-			{
-				rows.add(Row.kv("Venom", venom.value(), StatColors.resolve(venom.role(), mode)));
-			}
-			MonsterStats.StatField cannon = stats.cannon();
-			if (cannon != null)
-			{
-				rows.add(Row.kv("Cannon", cannon.value(), StatColors.resolve(cannon.role(), mode)));
-			}
-			MonsterStats.StatField thrall = stats.thrall();
-			if (thrall != null)
-			{
-				rows.add(Row.kv("Thrall", thrall.value(), StatColors.resolve(thrall.role(), mode)));
-			}
+			rows.add(Row.kv("Cannon", cannon.value(), StatColors.resolve(cannon.role(), mode)));
 		}
-		else
+		MonsterStats.StatField thrall = stats.thrall();
+		if (thrall != null)
 		{
-			rows.add(Row.plain("loading wiki data…", ColorScheme.LIGHT_GRAY_COLOR));
+			rows.add(Row.kv("Thrall", thrall.value(), StatColors.resolve(thrall.role(), mode)));
 		}
 	}
 
