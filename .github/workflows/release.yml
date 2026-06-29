@@ -17,53 +17,14 @@ permissions:
   contents: read
 
 jobs:
-  # Run the real plugin-hub packager against this commit before opening the hub PR.
-  # This is the exact check upstream CI runs (the same bundled package.jar), so a build
-  # the hub would reject — e.g. constructing fresh Gson instances — fails here and the
-  # hub-pr job below never runs. Our own ./gradlew build can't catch this; the verifier
-  # only exists in the packager. Mirrors runelite/plugin-hub's build.yml layout exactly:
-  # hub repo in ./plugin-hub, bundle (package.jar, gradle/, prepare.sh) extracted at root.
+  # Final gate before the hub PR: run the real packager against the exact released commit.
+  # PRs are verified per-commit in build.yml, but a squash/merge produces a new commit that
+  # was never individually checked, so we re-verify the released commit here. If it fails,
+  # hub-pr below never runs and the hub PR is left untouched.
   verify:
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Checkout runelite/plugin-hub
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          repository: runelite/plugin-hub
-          ref: master
-          path: plugin-hub
-          fetch-depth: 0
-          persist-credentials: false
-
-      - uses: actions/setup-java@1bcf9fb12cf4aa7d266a90ae39939e61372fe520 # v5.4.0
-        with:
-          distribution: temurin
-          java-version: 11
-
-      - name: Fetch the hub packager bundle
-        env:
-          PACKAGER_URL: "https://github.com/runelite/plugin-hub-tooling/releases/download/v1/bundle.tar.zst"
-        run: |
-          set -exu
-          curl --location --fail --retry 4 --max-time 30 --output bundle.tar.zst "$PACKAGER_URL"
-          tar xf bundle.tar.zst
-
-      - name: Prepare api files + gradle deps
-        run: ./prepare.sh
-
-      - name: Pin the manifest to this commit
-        run: |
-          cat > plugin-hub/plugins/better-monster-examine <<EOF
-          repository=${{ github.server_url }}/${{ github.repository }}.git
-          commit=${{ github.sha }}
-          EOF
-          echo "Verifying manifest:"
-          cat plugin-hub/plugins/better-monster-examine
-
-      - name: Run the hub packager (verify only, no upload)
-        env:
-          FORCE_BUILD: better-monster-examine
-        run: java -XX:+UseParallelGC -cp package.jar net.runelite.pluginhub.packager.Packager
+    uses: ./.github/workflows/hub-verify.yml
+    with:
+      commit: ${{ github.sha }}
 
   hub-pr:
     needs: verify
