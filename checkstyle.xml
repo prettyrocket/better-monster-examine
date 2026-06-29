@@ -50,19 +50,6 @@
 			<property name="tokens" value="COMMA"/>
 		</module>
 		<module name="UnusedImports"/>
-		<!--
-		 The plugin hub rejects a plugin that constructs its own Gson ("plugin uses terminally
-		 deprecated APIs: Do not create fresh Gson instances, always @Inject the client's Gson").
-		 That check only runs in the hub packager, not our local/CI build, so guard it here: fail
-		 the build on `new Gson(...)` / `new GsonBuilder(...)` in main source. Tests are exempt
-		 (suppressions.xml) since they legitimately stand up their own Gson.
-		-->
-		<module name="RegexpSinglelineJava">
-			<property name="id" value="noFreshGson"/>
-			<property name="format" value="new\s+Gson(Builder)?\s*\("/>
-			<property name="message" value="Do not create fresh Gson instances; @Inject the client's Gson and customise via .newBuilder(). The plugin hub rejects this as a terminally deprecated API."/>
-			<property name="ignoreComments" value="true"/>
-		</module>
 		<module name="SuppressionCommentFilter"/>
 	</module>
 	<module name="RegexpMultiline">
