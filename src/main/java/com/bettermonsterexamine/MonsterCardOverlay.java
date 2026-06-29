@@ -9,7 +9,6 @@ import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.function.IntSupplier;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
@@ -237,23 +236,22 @@ class MonsterCardOverlay extends Overlay
 	private List<Row> rowsFor(int tab, MonsterData m)
 	{
 		HighlightMode mode = config.statHighlighting();
-		String ver = m.getVersion();
-		WikiInfo wi = wiki;
+		MonsterStats stats = new MonsterStats(m, wiki, mode, playerHpLevel.getAsInt());
 		List<Row> rows = new ArrayList<>();
 
 		switch (tab)
 		{
 			case 0:
-				combatTab(rows, m, mode);
+				combatTab(rows, stats, mode);
 				break;
 			case 1:
-				aggressiveTab(rows, m, wi, ver, mode);
+				aggressiveTab(rows, stats, mode);
 				break;
 			case 2:
-				defensiveTab(rows, m);
+				defensiveTab(rows, stats);
 				break;
 			default:
-				infoTab(rows, m, wi, ver, mode);
+				infoTab(rows, stats, mode);
 				break;
 		}
 
@@ -264,51 +262,46 @@ class MonsterCardOverlay extends Overlay
 		return rows;
 	}
 
-	private void combatTab(List<Row> rows, MonsterData m, HighlightMode mode)
+	private void combatTab(List<Row> rows, MonsterStats stats, HighlightMode mode)
 	{
 		Color white = Color.WHITE;
 		// The combat level is already shown in the title row, so it's not repeated here.
-		MonsterData.Skills s = m.getSkills();
-		if (s != null)
+		List<String> levels = stats.combatLevels();
+		if (!levels.isEmpty())
 		{
-			rows.add(Row.stat(icons.hitpointsIcon, "Hitpoints", StatFormat.num(s.getHp()), white));
-			rows.add(Row.stat(icons.attackIcon, "Attack", StatFormat.num(s.getAtk()), white));
-			rows.add(Row.stat(icons.strengthIcon, "Strength", StatFormat.num(s.getStr()), white));
-			rows.add(Row.stat(icons.defenceIcon, "Defence", StatFormat.num(s.getDef()), white));
-			rows.add(Row.stat(icons.magicIcon, "Magic", StatFormat.num(s.getMagic()), white));
-			rows.add(Row.stat(icons.rangedIcon, "Ranged", StatFormat.num(s.getRanged()), white));
+			rows.add(Row.stat(icons.hitpointsIcon, "Hitpoints", levels.get(0), white));
+			rows.add(Row.stat(icons.attackIcon, "Attack", levels.get(1), white));
+			rows.add(Row.stat(icons.strengthIcon, "Strength", levels.get(2), white));
+			rows.add(Row.stat(icons.defenceIcon, "Defence", levels.get(3), white));
+			rows.add(Row.stat(icons.magicIcon, "Magic", levels.get(4), white));
+			rows.add(Row.stat(icons.rangedIcon, "Ranged", levels.get(5), white));
 		}
-		rows.add(Row.kv("Speed", StatFormat.attackSpeed(m), white));
+		rows.add(Row.kv("Speed", stats.attackSpeed(), white));
+		rows.add(Row.kvWrap("Style", stats.attackStyle(), white));
 
-		List<String> st = m.getStyle();
-		rows.add(Row.kvWrap("Style", st == null || st.isEmpty() ? "—" : String.join(", ", st), white));
-
-		// Max hits: the wiki carries the full per-style list; fall back to the dataset's value.
-		WikiInfo wi = wiki;
-		String wikiMax = wi != null ? wi.get("max hit", m.getVersion()) : null;
-		String maxText = wikiMax != null ? wikiMax : (m.getMaxHit() == null || m.getMaxHit().isEmpty() ? "—" : m.getMaxHit());
-		int hp = playerHpLevel.getAsInt();
-		boolean flagOverHp = mode != HighlightMode.OFF && hp > 0;
+		// Max hits: the view-model splits the wiki list (or dataset fallback) and flags any line
+		// over the player's HP; in colour-blind mode it also gets a ⚠ glyph (parity with the panel).
+		boolean cb = mode == HighlightMode.COLOUR_BLIND;
 		boolean firstMax = true;
-		for (String line : maxText.split(",\\s*"))
+		for (MonsterStats.MaxHitLine line : stats.maxHits())
 		{
-			boolean over = flagOverHp && StatFormat.maxValue(line) > hp;
+			Color c = StatColors.resolve(line.overHp() ? ColourRole.DANGER : ColourRole.NEUTRAL, mode);
+			String text = line.text() + (line.overHp() && cb ? " ⚠" : "");
 			// Only the first row is labelled "Max hit"; the rest just list their values.
-			rows.add(Row.kv(firstMax ? "Max hit" : "", line, over ? StatColors.danger(mode) : white));
+			rows.add(Row.kv(firstMax ? "Max hit" : "", text, c));
 			firstMax = false;
 		}
 	}
 
-	private void aggressiveTab(List<Row> rows, MonsterData m, WikiInfo wi, String ver, HighlightMode mode)
+	private void aggressiveTab(List<Row> rows, MonsterStats stats, HighlightMode mode)
 	{
 		Color white = Color.WHITE;
-		if (wi != null)
+		if (stats.wikiLoaded())
 		{
-			String pois = wi.get("poisonous", ver);
+			MonsterStats.StatField pois = stats.poisonous();
 			if (pois != null)
 			{
-				boolean yes = pois.trim().toLowerCase(Locale.ROOT).startsWith("yes");
-				rows.add(Row.kv("Poisonous", pois.trim(), yes ? StatColors.danger(mode) : white));
+				rows.add(Row.kv("Poisonous", pois.value(), StatColors.resolve(pois.role(), mode)));
 			}
 		}
 		else
@@ -316,49 +309,50 @@ class MonsterCardOverlay extends Overlay
 			rows.add(Row.plain("loading wiki data…", ColorScheme.LIGHT_GRAY_COLOR));
 		}
 
-		MonsterData.Offensive o = m.getOffensive();
-		if (o != null)
+		List<String> off = stats.offensiveBonuses();
+		if (!off.isEmpty())
 		{
-			rows.add(Row.stat(icons.attackIcon, "Attack", StatFormat.bonus(o.getAtk()), white));
-			rows.add(Row.stat(icons.strengthIcon, "Strength", StatFormat.bonus(o.getStr()), white));
-			rows.add(Row.stat(icons.magicIcon, "Magic", StatFormat.bonus(o.getMagic()), white));
-			rows.add(Row.stat(icons.magicDamageIcon, "Magic dmg", StatFormat.bonus(o.getMagicStr()), white));
-			rows.add(Row.stat(icons.rangedIcon, "Ranged", StatFormat.bonus(o.getRanged()), white));
-			rows.add(Row.stat(icons.rangedStrengthIcon, "Ranged str", StatFormat.bonus(o.getRangedStr()), white));
+			rows.add(Row.stat(icons.attackIcon, "Attack", off.get(0), white));
+			rows.add(Row.stat(icons.strengthIcon, "Strength", off.get(1), white));
+			rows.add(Row.stat(icons.magicIcon, "Magic", off.get(2), white));
+			rows.add(Row.stat(icons.magicDamageIcon, "Magic dmg", off.get(3), white));
+			rows.add(Row.stat(icons.rangedIcon, "Ranged", off.get(4), white));
+			rows.add(Row.stat(icons.rangedStrengthIcon, "Ranged str", off.get(5), white));
 		}
 	}
 
-	private void defensiveTab(List<Row> rows, MonsterData m)
+	private void defensiveTab(List<Row> rows, MonsterStats stats)
 	{
 		Color white = Color.WHITE;
-		MonsterData.Defensive d = m.getDefensive();
-		if (d != null)
+		if (stats.hasDefensive())
 		{
 			// Grouped like the wiki: melee, then magic defence + elemental weakness, then ranged.
-			rows.add(Row.stat(icons.stabIcon, "Stab", StatFormat.bonus(d.getStab()), white));
-			rows.add(Row.stat(icons.slashIcon, "Slash", StatFormat.bonus(d.getSlash()), white));
-			rows.add(Row.stat(icons.crushIcon, "Crush", StatFormat.bonus(d.getCrush()), white));
+			List<String> melee = stats.meleeDefence();
+			rows.add(Row.stat(icons.stabIcon, "Stab", melee.get(0), white));
+			rows.add(Row.stat(icons.slashIcon, "Slash", melee.get(1), white));
+			rows.add(Row.stat(icons.crushIcon, "Crush", melee.get(2), white));
 
-			rows.add(Row.stat(icons.magicDefenceIcon, "Magic", StatFormat.bonus(d.getMagic()), white));
-			addWeakness(rows, m, white);
+			rows.add(Row.stat(icons.magicDefenceIcon, "Magic", stats.magicDefence(), white));
+			addWeakness(rows, stats, white);
 
-			rows.add(Row.stat(icons.lightIcon, "Light", StatFormat.bonus(d.getLight()), white));
-			rows.add(Row.stat(icons.standardIcon, "Standard", StatFormat.bonus(d.getStandard()), white));
-			rows.add(Row.stat(icons.heavyIcon, "Heavy", StatFormat.bonus(d.getHeavy()), white));
+			List<String> ranged = stats.rangedDefence();
+			rows.add(Row.stat(icons.lightIcon, "Light", ranged.get(0), white));
+			rows.add(Row.stat(icons.standardIcon, "Standard", ranged.get(1), white));
+			rows.add(Row.stat(icons.heavyIcon, "Heavy", ranged.get(2), white));
 		}
 		else
 		{
-			addWeakness(rows, m, white);
+			addWeakness(rows, stats, white);
 		}
 	}
 
-	private void addWeakness(List<Row> rows, MonsterData m, Color white)
+	private void addWeakness(List<Row> rows, MonsterStats stats, Color white)
 	{
-		MonsterData.Weakness w = m.getWeakness();
-		if (w != null && w.getElement() != null)
+		String element = stats.weaknessElement();
+		if (element != null)
 		{
-			rows.add(Row.stat(icons.getElementalWeaknessIcon(w.getElement()),
-				StatFormat.cap(w.getElement()), w.getSeverity() + "%", white));
+			rows.add(Row.stat(icons.getElementalWeaknessIcon(element),
+				StatFormat.cap(element), stats.weaknessSeverity(), white));
 		}
 		else
 		{
@@ -366,75 +360,62 @@ class MonsterCardOverlay extends Overlay
 		}
 	}
 
-	private void infoTab(List<Row> rows, MonsterData m, WikiInfo wi, String ver, HighlightMode mode)
+	private void infoTab(List<Row> rows, MonsterStats stats, HighlightMode mode)
 	{
 		Color white = Color.WHITE;
-		String size = m.getSize() > 0 ? m.getSize() + "x" + m.getSize() : null;
-		String attrs = m.getAttributes() != null && !m.getAttributes().isEmpty()
-			? StatFormat.attributeNames(m.getAttributes()) : null;
-		String sizeAttr = size != null && attrs != null ? size + ", " + attrs : (size != null ? size : attrs);
+		String sizeAttr = stats.sizeAttr();
 		if (sizeAttr != null)
 		{
 			rows.add(Row.plain(sizeAttr, white));
 		}
-		if (m.isSlayerMonster())
+		if (stats.slayerMonster())
 		{
 			rows.add(Row.kv("Slayer", "Yes", white));
 		}
-		if (wi != null)
+		MonsterStats.StatField aggr = stats.aggressive();
+		if (aggr != null)
 		{
-			String aggr = wi.get("aggressive", ver);
-			if (aggr != null)
-			{
-				boolean yes = aggr.trim().toLowerCase(Locale.ROOT).startsWith("yes");
-				rows.add(Row.kv("Aggressive", aggr.trim(), yes ? StatColors.danger(mode) : white));
-			}
+			rows.add(Row.kv("Aggressive", aggr.value(), StatColors.resolve(aggr.role(), mode)));
 		}
 		// Flat armour: a flat damage adjustment, 0 for most monsters — shown only when non-zero,
 		// green when negative (takes extra damage), red when positive (shrugs damage off).
-		MonsterData.Defensive d = m.getDefensive();
-		if (d != null && d.getFlatArmour() != 0)
+		MonsterStats.StatField flatArmour = stats.flatArmour();
+		if (flatArmour != null)
 		{
-			int fa = d.getFlatArmour();
-			rows.add(Row.kv("Flat armour", String.valueOf(fa),
-				fa < 0 ? StatColors.good(mode) : StatColors.danger(mode)));
+			rows.add(Row.kv("Flat armour", flatArmour.value(), StatColors.resolve(flatArmour.role(), mode)));
+		}
+		MonsterStats.StatField xp = stats.xpBonus();
+		if (xp != null)
+		{
+			rows.add(Row.kv("XP bonus", xp.value(), StatColors.resolve(xp.role(), mode)));
 		}
 
-		if (wi != null)
-		{
-			String xp = wi.get("xpbonus", ver);
-			if (xp != null && !xp.trim().isEmpty() && !StatFormat.isZero(xp))
-			{
-				boolean penalty = xp.trim().startsWith("-");
-				rows.add(Row.kv("XP bonus", (penalty ? "" : "+") + xp.trim() + "%",
-					penalty ? StatColors.danger(mode) : StatColors.good(mode)));
-			}
-		}
-
-		String burn = StatFormat.burnImmunity(m);
+		String burn = stats.burn();
 		if (burn != null)
 		{
 			rows.add(Row.kv("Burn", burn, white));
 		}
-		if (wi != null)
+		if (stats.wikiLoaded())
 		{
-			String poison = StatFormat.resistanceLabel(wi.get("poisonresistance", ver));
+			MonsterStats.StatField poison = stats.poison();
 			if (poison != null)
 			{
-				rows.add(Row.kv("Poison", poison, StatColors.danger(mode)));
+				rows.add(Row.kv("Poison", poison.value(), StatColors.resolve(poison.role(), mode)));
 			}
-			String venom = StatFormat.resistanceLabel(wi.get("venomresistance", ver));
+			MonsterStats.StatField venom = stats.venom();
 			if (venom != null)
 			{
-				rows.add(Row.kv("Venom", venom, StatColors.danger(mode)));
+				rows.add(Row.kv("Venom", venom.value(), StatColors.resolve(venom.role(), mode)));
 			}
-			if (StatFormat.yes(wi.get("immunecannon", ver)))
+			MonsterStats.StatField cannon = stats.cannon();
+			if (cannon != null)
 			{
-				rows.add(Row.kv("Cannon", "Immune", StatColors.danger(mode)));
+				rows.add(Row.kv("Cannon", cannon.value(), StatColors.resolve(cannon.role(), mode)));
 			}
-			if (StatFormat.yes(wi.get("immunethrall", ver)))
+			MonsterStats.StatField thrall = stats.thrall();
+			if (thrall != null)
 			{
-				rows.add(Row.kv("Thrall", "Immune", StatColors.danger(mode)));
+				rows.add(Row.kv("Thrall", thrall.value(), StatColors.resolve(thrall.role(), mode)));
 			}
 		}
 		else
