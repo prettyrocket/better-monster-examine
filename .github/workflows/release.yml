@@ -17,10 +17,6 @@ permissions:
   contents: read
 
 jobs:
-  # Final gate before the hub PR: run the real packager against the exact released commit.
-  # PRs are verified per-commit in build.yml, but a squash/merge produces a new commit that
-  # was never individually checked, so we re-verify the released commit here. If it fails,
-  # hub-pr below never runs and the hub PR is left untouched.
   verify:
     uses: ./.github/workflows/hub-verify.yml
     with:
