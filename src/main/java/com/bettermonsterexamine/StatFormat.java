@@ -74,6 +74,16 @@ final class StatFormat
 		return v != null && v.trim().equalsIgnoreCase("yes");
 	}
 
+	/**
+	 * A looser affirmative for wiki yes/no fields that may carry a qualifier, e.g.
+	 * {@code "Yes (venom)"} or {@code "Yes (on login)"} — true when the value starts with "yes".
+	 * Used for poisonous/aggressive, where the qualifier still means the flag is set.
+	 */
+	static boolean affirmative(String v)
+	{
+		return v != null && v.trim().toLowerCase(Locale.ROOT).startsWith("yes");
+	}
+
 	/** Map dataset attribute keys to their wiki display names (e.g. dragon → Draconic). */
 	static String attributeNames(List<String> attrs)
 	{

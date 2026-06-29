@@ -67,9 +67,10 @@ class MonsterCard extends JPanel
 	void show(MonsterData m, List<MonsterData> variants, WikiInfo wi)
 	{
 		removeAll();
-		add(header(m, variants, wi));
+		MonsterStats stats = new MonsterStats(m, wi, config.statHighlighting(), playerHpLevel.getAsInt());
+		add(header(m, variants, stats));
 		add(Box.createRigidArea(new Dimension(0, 6)));
-		buildWiki(m, wi);
+		buildWiki(stats);
 		revalidate();
 		repaint();
 	}
@@ -94,7 +95,7 @@ class MonsterCard extends JPanel
 		repaint();
 	}
 
-	private JComponent header(MonsterData m, List<MonsterData> variants, WikiInfo wi)
+	private JComponent header(MonsterData m, List<MonsterData> variants, MonsterStats stats)
 	{
 		JPanel block = block();
 
@@ -132,11 +133,11 @@ class MonsterCard extends JPanel
 		block.add(nameRow);
 
 		// Examine text (wiki, async): subtle italic line directly under the name.
-		String examine = wi != null ? wi.get("examine", m.getVersion()) : null;
-		if (examine != null && !examine.trim().isEmpty())
+		String examine = stats.examine();
+		if (examine != null)
 		{
 			block.add(Box.createRigidArea(new Dimension(0, 2)));
-			block.add(wrappedLabel(examine.trim(), ColorScheme.LIGHT_GRAY_COLOR, true));
+			block.add(wrappedLabel(examine, ColorScheme.LIGHT_GRAY_COLOR, true));
 		}
 
 		// Variant selector (only when >1 form shares the name)
@@ -212,70 +213,50 @@ class MonsterCard extends JPanel
 
 	// ---- Wiki: faithful to the OSRS Wiki monster infobox --------------------
 
-	private void buildWiki(MonsterData m, WikiInfo wi)
+	private void buildWiki(MonsterStats stats)
 	{
-		MonsterData.Skills s = m.getSkills();
-		MonsterData.Offensive o = m.getOffensive();
-		MonsterData.Defensive d = m.getDefensive();
-		String ver = m.getVersion();
-
 		// ATTRIBUTES — dataset attributes/size/slayer/flat armour + wiki xp/aggressive/poisonous.
 		JPanel props = block();
 		props.add(sectionHeader("Attributes"));
 		boolean anyProp = false;
 		// Size and attributes share one line, size first: e.g. "7x7, Draconic, Undead, Fiery".
 		// The box header already says "Attributes", so the names need no label of their own.
-		String sizeText = m.getSize() > 0 ? m.getSize() + "x" + m.getSize() : null;
-		String attrText = (m.getAttributes() != null && !m.getAttributes().isEmpty())
-			? StatFormat.attributeNames(m.getAttributes()) : null;
-		String sizeAttr = StatFormat.join(", ", sizeText, attrText);
+		String sizeAttr = stats.sizeAttr();
 		if (sizeAttr != null)
 		{
 			props.add(wrappedLabel(sizeAttr, Color.WHITE, false));
 			anyProp = true;
 		}
-		if (m.isSlayerMonster())
+		if (stats.slayerMonster())
 		{
 			props.add(kv("Slayer monster", "Yes", Color.WHITE));
 			anyProp = true;
 		}
-		// Flat armour: a flat damage adjustment (negative means it takes extra), 0 for most
-		// monsters — show whenever non-zero, signed so negatives like Naguas' -4 read right.
-		if (d != null && d.getFlatArmour() != 0)
+		MonsterStats.StatField flatArmour = stats.flatArmour();
+		if (flatArmour != null)
 		{
-			int fa = d.getFlatArmour();
-			// Negative flat armour means the monster takes extra damage (good for you) → green;
-			// positive means it shrugs damage off (bad for you) → red.
-			props.add(kv("Flat armour", String.valueOf(fa),
-				fa < 0 ? good() : danger(),
-				fa < 0 ? "Takes extra flat damage per hit." : "Reduces damage taken per hit."));
+			props.add(kv("Flat armour", flatArmour.value(), resolve(flatArmour.role()), flatArmour.tooltip()));
 			anyProp = true;
 		}
-		String xp = wi != null ? wi.get("xpbonus", ver) : null;
-		if (xp != null && !xp.trim().isEmpty() && !StatFormat.isZero(xp))
+		MonsterStats.StatField xp = stats.xpBonus();
+		if (xp != null)
 		{
-			String xpTrimmed = xp.trim();
-			boolean xpPenalty = xpTrimmed.startsWith("-");
-			props.add(kv("XP bonus", (xpPenalty ? "" : "+") + xpTrimmed + "%", xpPenalty ? danger() : good()));
+			props.add(kv("XP bonus", xp.value(), resolve(xp.role())));
 			anyProp = true;
 		}
-		String aggr = wi != null ? wi.get("aggressive", ver) : null;
+		MonsterStats.StatField aggr = stats.aggressive();
 		if (aggr != null)
 		{
-			boolean yes = StatFormat.yes(aggr);
-			props.add(kv("Aggressive", aggr.trim(), yes ? danger() : Color.WHITE,
-				yes ? "Attacks on sight." : null));
+			props.add(kv("Aggressive", aggr.value(), resolve(aggr.role()), aggr.tooltip()));
 			anyProp = true;
 		}
-		String pois = wi != null ? wi.get("poisonous", ver) : null;
+		MonsterStats.StatField pois = stats.poisonous();
 		if (pois != null)
 		{
-			boolean yes = StatFormat.yes(pois);
-			props.add(kv("Poisonous", pois.trim(), yes ? danger() : Color.WHITE,
-				yes ? "Can poison you." : null));
+			props.add(kv("Poisonous", pois.value(), resolve(pois.role()), pois.tooltip()));
 			anyProp = true;
 		}
-		if (wi == null)
+		if (!stats.wikiLoaded())
 		{
 			props.add(kv("", "loading wiki data…", ColorScheme.LIGHT_GRAY_COLOR));
 			anyProp = true;
@@ -290,65 +271,63 @@ class MonsterCard extends JPanel
 		// COMBAT INFO — attack style + speed (dataset).
 		JPanel combatInfo = block();
 		combatInfo.add(sectionHeader("Combat info"));
-		combatInfo.add(kvWrappedRight("Attack style", styleString(m)));
-		combatInfo.add(kv("Attack speed", StatFormat.attackSpeed(m), Color.WHITE));
+		combatInfo.add(kvWrappedRight("Attack style", stats.attackStyle()));
+		combatInfo.add(kv("Attack speed", stats.attackSpeed(), Color.WHITE));
 		capHeight(combatInfo);
 		add(combatInfo);
 		add(Box.createRigidArea(new Dimension(0, 6)));
 
 		// MAX HIT — its own box; multi-hit monsters list several values, one per line. Values
 		// above the player's Hitpoints level are flagged red (it could take more than your level).
-		String wikiMax = wi != null ? wi.get("max hit", ver) : null;
-		String maxHitText = wikiMax != null ? wikiMax.replace(", ", "\n") : StatFormat.nz(m.getMaxHit());
 		JPanel maxHit = block();
 		maxHit.add(sectionHeader("Max hit"));
-		maxHit.add(maxHitLabel(maxHitText, playerHpLevel.getAsInt()));
+		maxHit.add(maxHitLabel(stats.maxHits()));
 		capHeight(maxHit);
 		add(maxHit);
 		add(Box.createRigidArea(new Dimension(0, 6)));
 
 		// Combat stats: the monster's six levels as an icon-over-value row
-		if (s != null)
+		List<String> combat = stats.combatLevels();
+		if (!combat.isEmpty())
 		{
-			JPanel combat = gridBlock("Combat stats",
+			add(gridBlock("Combat stats",
 				new BufferedImage[]{icons.hitpointsIcon, icons.attackIcon, icons.strengthIcon, icons.defenceIcon, icons.magicIcon, icons.rangedIcon},
-				new String[]{StatFormat.num(s.getHp()), StatFormat.num(s.getAtk()), StatFormat.num(s.getStr()), StatFormat.num(s.getDef()), StatFormat.num(s.getMagic()), StatFormat.num(s.getRanged())},
-				new String[]{"Hitpoints", "Attack", "Strength", "Defence", "Magic", "Ranged"});
-			add(combat);
+				combat.toArray(new String[0]),
+				new String[]{"Hitpoints", "Attack", "Strength", "Defence", "Magic", "Ranged"}));
 			add(Box.createRigidArea(new Dimension(0, 6)));
 		}
 
 		// Aggressive stats (order: Attack, Strength, Magic, Magic str, Ranged, Ranged str)
-		if (o != null)
+		List<String> off = stats.offensiveBonuses();
+		if (!off.isEmpty())
 		{
-			JPanel aggro = gridBlock("Aggressive stats",
+			add(gridBlock("Aggressive stats",
 				new BufferedImage[]{icons.attackIcon, icons.strengthIcon, icons.magicIcon, icons.magicDamageIcon, icons.rangedIcon, icons.rangedStrengthIcon},
-				new String[]{StatFormat.bonus(o.getAtk()), StatFormat.bonus(o.getStr()), StatFormat.bonus(o.getMagic()), StatFormat.bonus(o.getMagicStr()), StatFormat.bonus(o.getRanged()), StatFormat.bonus(o.getRangedStr())},
-				new String[]{"Attack", "Strength", "Magic", "Magic damage", "Ranged", "Ranged strength"});
-			add(aggro);
+				off.toArray(new String[0]),
+				new String[]{"Attack", "Strength", "Magic", "Magic damage", "Ranged", "Ranged strength"}));
 			add(Box.createRigidArea(new Dimension(0, 6)));
 		}
 
 		// Defensive bonuses, grouped like the wiki
-		if (d != null)
+		if (stats.hasDefensive())
 		{
 			add(gridBlock("Melee defence",
 				new BufferedImage[]{icons.stabIcon, icons.slashIcon, icons.crushIcon},
-				new String[]{StatFormat.bonus(d.getStab()), StatFormat.bonus(d.getSlash()), StatFormat.bonus(d.getCrush())},
+				stats.meleeDefence().toArray(new String[0]),
 				new String[]{"Stab", "Slash", "Crush"}));
 			add(Box.createRigidArea(new Dimension(0, 6)));
 
-			String weakLabel = m.getWeakness() != null && m.getWeakness().getElement() != null
-				? StatFormat.cap(m.getWeakness().getElement()) + " weakness" : "Elemental weakness";
+			String element = stats.weaknessElement();
+			String weakLabel = element != null ? StatFormat.cap(element) + " weakness" : "Elemental weakness";
 			add(gridBlock("Magic defence",
-				new BufferedImage[]{icons.magicDefenceIcon, weaknessIcon(m)},
-				new String[]{StatFormat.bonus(d.getMagic()), m.getWeakness() != null ? m.getWeakness().getSeverity() + "%" : "—"},
+				new BufferedImage[]{icons.magicDefenceIcon, weaknessIcon(element)},
+				new String[]{stats.magicDefence(), stats.weaknessSeverity()},
 				new String[]{"Magic defence", weakLabel}));
 			add(Box.createRigidArea(new Dimension(0, 6)));
 
 			add(gridBlock("Ranged defence",
 				new BufferedImage[]{icons.lightIcon, icons.standardIcon, icons.heavyIcon},
-				new String[]{StatFormat.bonus(d.getLight()), StatFormat.bonus(d.getStandard()), StatFormat.bonus(d.getHeavy())},
+				stats.rangedDefence().toArray(new String[0]),
 				new String[]{"Light", "Standard", "Heavy"}));
 		}
 
@@ -356,36 +335,35 @@ class MonsterCard extends JPanel
 		JPanel imm = block();
 		imm.add(sectionHeader("Immunities"));
 		boolean anyImm = false;
-		String burn = StatFormat.burnImmunity(m);
+		String burn = stats.burn();
 		if (burn != null)
 		{
 			imm.add(kv("Burn", burn, Color.WHITE));
 			anyImm = true;
 		}
-		if (wi != null)
+		MonsterStats.StatField poison = stats.poison();
+		if (poison != null)
 		{
-			String poison = StatFormat.resistanceLabel(wi.get("poisonresistance", ver));
-			if (poison != null)
-			{
-				imm.add(kv("Poison", poison, danger()));
-				anyImm = true;
-			}
-			String venom = StatFormat.resistanceLabel(wi.get("venomresistance", ver));
-			if (venom != null)
-			{
-				imm.add(kv("Venom", venom, danger()));
-				anyImm = true;
-			}
-			if (StatFormat.yes(wi.get("immunecannon", ver)))
-			{
-				imm.add(kv("Cannon", "Immune", danger()));
-				anyImm = true;
-			}
-			if (StatFormat.yes(wi.get("immunethrall", ver)))
-			{
-				imm.add(kv("Thrall", "Immune", danger()));
-				anyImm = true;
-			}
+			imm.add(kv("Poison", poison.value(), resolve(poison.role())));
+			anyImm = true;
+		}
+		MonsterStats.StatField venom = stats.venom();
+		if (venom != null)
+		{
+			imm.add(kv("Venom", venom.value(), resolve(venom.role())));
+			anyImm = true;
+		}
+		MonsterStats.StatField cannon = stats.cannon();
+		if (cannon != null)
+		{
+			imm.add(kv("Cannon", cannon.value(), resolve(cannon.role())));
+			anyImm = true;
+		}
+		MonsterStats.StatField thrall = stats.thrall();
+		if (thrall != null)
+		{
+			imm.add(kv("Thrall", thrall.value(), resolve(thrall.role())));
+			anyImm = true;
 		}
 		if (anyImm)
 		{
@@ -454,19 +432,13 @@ class MonsterCard extends JPanel
 		return new ImageIcon(canvas);
 	}
 
-	private BufferedImage weaknessIcon(MonsterData m)
+	private BufferedImage weaknessIcon(String element)
 	{
-		if (m.getWeakness() == null || m.getWeakness().getElement() == null)
+		if (element == null)
 		{
 			return icons.elementalIcon;
 		}
-		return icons.getElementalWeaknessIcon(StatFormat.cap(m.getWeakness().getElement()));
-	}
-
-	private static String styleString(MonsterData m)
-	{
-		List<String> st = m.getStyle();
-		return st == null || st.isEmpty() ? "—" : String.join(", ", st);
+		return icons.getElementalWeaknessIcon(StatFormat.cap(element));
 	}
 
 	// --------------------------------------------------------------- layout helpers
@@ -556,32 +528,30 @@ class MonsterCard extends JPanel
 	 * Hitpoints level flagged (red in Standard, orange + a warning sign in colour-blind mode).
 	 * {@code hpLevel <= 0} (unknown) or the Off mode disables the highlight.
 	 */
-	private JLabel maxHitLabel(String text, int hpLevel)
+	private JLabel maxHitLabel(List<MonsterStats.MaxHitLine> lines)
 	{
-		HighlightMode mode = config.statHighlighting();
-		boolean cb = mode == HighlightMode.COLOUR_BLIND;
-		boolean highlight = mode != HighlightMode.OFF && hpLevel > 0;
+		boolean cb = config.statHighlighting() == HighlightMode.COLOUR_BLIND;
 		String hex = cb ? "#e69f00" : "#ff4040";
 
 		StringBuilder sb = new StringBuilder("<html><body style='width:200px'>");
-		String[] lines = text.split("\n");
 		boolean anyOver = false;
-		for (int i = 0; i < lines.length; i++)
+		for (int i = 0; i < lines.size(); i++)
 		{
 			if (i > 0)
 			{
 				sb.append("<br>");
 			}
-			if (highlight && StatFormat.maxValue(lines[i]) > hpLevel)
+			MonsterStats.MaxHitLine line = lines.get(i);
+			if (line.overHp())
 			{
 				anyOver = true;
 				// In colour-blind mode add a warning sign so the cue survives without colour.
-				String line = StatFormat.esc(lines[i]) + (cb ? " ⚠" : "");
-				sb.append("<span style='color:").append(hex).append("'>").append(line).append("</span>");
+				String text = StatFormat.esc(line.text()) + (cb ? " ⚠" : "");
+				sb.append("<span style='color:").append(hex).append("'>").append(text).append("</span>");
 			}
 			else
 			{
-				sb.append(StatFormat.esc(lines[i]));
+				sb.append(StatFormat.esc(line.text()));
 			}
 		}
 		sb.append("</body></html>");
@@ -593,7 +563,7 @@ class MonsterCard extends JPanel
 		// The highlight marks a hit larger than your Hitpoints level.
 		if (anyOver)
 		{
-			l.setToolTipText("Max hit exceeds your hitpoints level (" + hpLevel + ").");
+			l.setToolTipText("Max hit exceeds your hitpoints level (" + playerHpLevel.getAsInt() + ").");
 		}
 		return l;
 	}
@@ -627,16 +597,10 @@ class MonsterCard extends JPanel
 
 	// ---- player-relevant colours (delegate to the shared palette) -----------
 
-	/** The "danger" highlight colour for the active mode; white when highlighting is off. */
-	private Color danger()
+	/** Resolve a view-model {@link ColourRole} to a concrete colour for the active mode. */
+	private Color resolve(ColourRole role)
 	{
-		return StatColors.danger(config.statHighlighting());
-	}
-
-	/** The "good for the player" highlight colour for the active mode; white when off. */
-	private Color good()
-	{
-		return StatColors.good(config.statHighlighting());
+		return StatColors.resolve(role, config.statHighlighting());
 	}
 
 	/** Combat-level colour for the active mode: the in-game gradient (Standard) or orange/blue (CB). */
