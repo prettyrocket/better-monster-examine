@@ -65,4 +65,8 @@ jobs:
       - name: Run the hub packager (verify only, no upload)
         env:
           FORCE_BUILD: better-monster-examine
+          # Short-circuits the packager's upload config so it doesn't require REPO_CREDS/REPO_ROOT
+          # (those only exist as upstream secrets, for the separate upload job). Without this the
+          # packager NPEs at startup in UploadConfiguration.fromEnvironment before it ever builds.
+          PACKAGE_IS_PR: "true"
         run: java -XX:+UseParallelGC -cp package.jar net.runelite.pluginhub.packager.Packager
