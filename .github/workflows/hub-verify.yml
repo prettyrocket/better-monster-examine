@@ -1,0 +1,68 @@
+name: Hub packager verification
+
+# Reusable workflow: run the real plugin-hub packager against a commit of THIS repo —
+# the exact check upstream CI runs (the same bundled package.jar). It catches anything
+# the hub would reject (e.g. constructing fresh Gson instances) that our ./gradlew build
+# can't, because that verifier lives only in the packager.
+#
+# Mirrors runelite/plugin-hub's build.yml layout exactly: the hub repo is checked out into
+# ./plugin-hub and the bundle (package.jar, gradle/, prepare.sh) is extracted at the root,
+# which is where the packager resolves everything relative to (RUNTIME = cwd).
+#
+# The `commit` must be reachable on this repo's remote (same-repo branches), so the packager
+# can clone and check it out. No upload credentials are needed; it verifies and skips upload.
+on:
+  workflow_call:
+    inputs:
+      commit:
+        description: "Commit SHA in this repo to verify."
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  packager:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout runelite/plugin-hub
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: runelite/plugin-hub
+          ref: master
+          path: plugin-hub
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-java@1bcf9fb12cf4aa7d266a90ae39939e61372fe520 # v5.4.0
+        with:
+          distribution: temurin
+          java-version: 11
+
+      - name: Fetch the hub packager bundle
+        env:
+          PACKAGER_URL: "https://github.com/runelite/plugin-hub-tooling/releases/download/v1/bundle.tar.zst"
+        run: |
+          set -exu
+          curl --location --fail --retry 4 --max-time 30 --output bundle.tar.zst "$PACKAGER_URL"
+          tar xf bundle.tar.zst
+
+      - name: Prepare api files + gradle deps
+        run: ./prepare.sh
+
+      - name: Pin the manifest to the commit under test
+        env:
+          VERIFY_SHA: ${{ inputs.commit }}
+        run: |
+          cat > plugin-hub/plugins/better-monster-examine <<EOF
+          repository=${{ github.server_url }}/${{ github.repository }}.git
+          commit=${VERIFY_SHA}
+          EOF
+          echo "Verifying manifest:"
+          cat plugin-hub/plugins/better-monster-examine
+
+      - name: Run the hub packager (verify only, no upload)
+        env:
+          FORCE_BUILD: better-monster-examine
+        run: java -XX:+UseParallelGC -cp package.jar net.runelite.pluginhub.packager.Packager
