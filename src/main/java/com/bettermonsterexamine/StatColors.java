@@ -23,6 +23,20 @@ final class StatColors
 	{
 	}
 
+	/** Resolve a semantic {@link ColourRole} to a concrete colour for the active mode. */
+	static Color resolve(ColourRole role, HighlightMode mode)
+	{
+		switch (role)
+		{
+			case DANGER:
+				return danger(mode);
+			case GOOD:
+				return good(mode);
+			default:
+				return Color.WHITE;
+		}
+	}
+
 	/** The "danger" highlight colour for the active mode; white when highlighting is off. */
 	static Color danger(HighlightMode mode)
 	{
