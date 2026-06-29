@@ -2,9 +2,7 @@ package com.bettermonsterexamine;
 
 import java.util.Arrays;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
 import org.junit.Test;
 
 public class StatFormatTest
@@ -64,21 +62,11 @@ public class StatFormatTest
 	}
 
 	@Test
-	public void resistanceLabelBuckets()
+	public void numberDropsTrailingZero()
 	{
-		assertEquals("Immune", StatFormat.resistanceLabel("100"));
-		assertEquals("30% resistance", StatFormat.resistanceLabel("30%"));
-		assertNull(StatFormat.resistanceLabel("0"));
-		assertNull(StatFormat.resistanceLabel(null));
-		assertNull(StatFormat.resistanceLabel("not a number"));
-	}
-
-	@Test
-	public void yesIsTrimmedAndCaseInsensitive()
-	{
-		assertTrue(StatFormat.yes(" Yes "));
-		assertFalse(StatFormat.yes("no"));
-		assertFalse(StatFormat.yes(null));
+		assertEquals("50", StatFormat.number(50.0));
+		assertEquals("77.5", StatFormat.number(77.5));
+		assertEquals("-50", StatFormat.number(-50.0));
 	}
 
 	@Test
@@ -93,14 +81,5 @@ public class StatFormatTest
 	{
 		assertEquals("7x7, Draconic", StatFormat.join(", ", "7x7", null, "", "Draconic"));
 		assertNull(StatFormat.join(", ", null, ""));
-	}
-
-	@Test
-	public void isZeroOnlyForNumericZero()
-	{
-		assertTrue(StatFormat.isZero("0"));
-		assertTrue(StatFormat.isZero(" 0.0 "));
-		assertFalse(StatFormat.isZero("5"));
-		assertFalse(StatFormat.isZero("nope"));
 	}
 }

@@ -1,5 +1,6 @@
 package com.bettermonsterexamine;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Locale;
 import java.util.regex.Matcher;
@@ -30,6 +31,16 @@ final class StatFormat
 		return v <= 0 ? "—" : String.valueOf(v);
 	}
 
+	/** Format a number without a trailing {@code .0} (e.g. {@code 77.5} → "77.5", {@code 50.0} → "50"). */
+	static String number(double v)
+	{
+		if (v == Math.rint(v) && !Double.isInfinite(v))
+		{
+			return String.valueOf((long) v);
+		}
+		return BigDecimal.valueOf(v).stripTrailingZeros().toPlainString();
+	}
+
 	static String cap(String s)
 	{
 		return s == null || s.isEmpty() ? s : s.substring(0, 1).toUpperCase(Locale.ROOT) + s.substring(1);
@@ -38,40 +49,8 @@ final class StatFormat
 	/** "5 ticks (3.0 seconds)". */
 	static String attackSpeed(MonsterData m)
 	{
-		int t = m.getSpeed();
+		int t = m.getAttackSpeed();
 		return t + (t == 1 ? " tick" : " ticks") + " (" + String.format("%.1f", t * 0.6) + " seconds)";
-	}
-
-	static String burnImmunity(MonsterData m)
-	{
-		return m.getImmunities() != null ? m.getImmunities().getBurn() : null;
-	}
-
-	/** Wiki poison/venom resistance: 100 → "Immune", &gt;0 → "N% resistance", else null. */
-	static String resistanceLabel(String resistance)
-	{
-		if (resistance == null)
-		{
-			return null;
-		}
-		try
-		{
-			int r = Integer.parseInt(resistance.trim().replace("%", ""));
-			if (r >= 100)
-			{
-				return "Immune";
-			}
-			return r > 0 ? r + "% resistance" : null;
-		}
-		catch (NumberFormatException e)
-		{
-			return null;
-		}
-	}
-
-	static boolean yes(String v)
-	{
-		return v != null && v.trim().equalsIgnoreCase("yes");
 	}
 
 	/**
@@ -116,12 +95,6 @@ final class StatFormat
 		}
 	}
 
-	/** Em dash for a null/empty string, else the string itself. */
-	static String nz(String s)
-	{
-		return s == null || s.isEmpty() ? "—" : s;
-	}
-
 	/** Join the non-null, non-empty parts with {@code sep}; null when nothing remains. */
 	static String join(String sep, String... parts)
 	{
@@ -159,18 +132,5 @@ final class StatFormat
 			max = Math.max(max, Integer.parseInt(m.group()));
 		}
 		return max;
-	}
-
-	/** True when a numeric wiki value (e.g. XP bonus) is zero, so it can be omitted. */
-	static boolean isZero(String v)
-	{
-		try
-		{
-			return Double.parseDouble(v.trim()) == 0;
-		}
-		catch (NumberFormatException e)
-		{
-			return false;
-		}
 	}
 }
