@@ -38,7 +38,7 @@ final class StatColors
 	}
 
 	/** The "danger" highlight colour for the active mode; white when highlighting is off. */
-	static Color danger(HighlightMode mode)
+	private static Color danger(HighlightMode mode)
 	{
 		switch (mode)
 		{
@@ -52,7 +52,7 @@ final class StatColors
 	}
 
 	/** The "good for the player" highlight colour for the active mode; white when off. */
-	static Color good(HighlightMode mode)
+	private static Color good(HighlightMode mode)
 	{
 		switch (mode)
 		{

@@ -9,23 +9,24 @@ public class StatColorsTest
 	@Test
 	public void offModeIsAlwaysWhite()
 	{
-		assertEquals(Color.WHITE, StatColors.danger(HighlightMode.OFF));
-		assertEquals(Color.WHITE, StatColors.good(HighlightMode.OFF));
+		assertEquals(Color.WHITE, StatColors.resolve(ColourRole.DANGER, HighlightMode.OFF));
+		assertEquals(Color.WHITE, StatColors.resolve(ColourRole.GOOD, HighlightMode.OFF));
 		assertEquals(Color.WHITE, StatColors.levelColor(HighlightMode.OFF, 100, 50));
 	}
 
 	@Test
 	public void standardDangerAndGood()
 	{
-		assertEquals(StatColors.DANGER_RED, StatColors.danger(HighlightMode.STANDARD));
-		assertEquals(net.runelite.client.ui.ColorScheme.PROGRESS_COMPLETE_COLOR, StatColors.good(HighlightMode.STANDARD));
+		assertEquals(StatColors.DANGER_RED, StatColors.resolve(ColourRole.DANGER, HighlightMode.STANDARD));
+		assertEquals(net.runelite.client.ui.ColorScheme.PROGRESS_COMPLETE_COLOR, StatColors.resolve(ColourRole.GOOD, HighlightMode.STANDARD));
+		assertEquals(Color.WHITE, StatColors.resolve(ColourRole.NEUTRAL, HighlightMode.STANDARD));
 	}
 
 	@Test
 	public void colourBlindUsesOkabeIto()
 	{
-		assertEquals(StatColors.CB_DANGER, StatColors.danger(HighlightMode.COLOUR_BLIND));
-		assertEquals(StatColors.CB_GOOD, StatColors.good(HighlightMode.COLOUR_BLIND));
+		assertEquals(StatColors.CB_DANGER, StatColors.resolve(ColourRole.DANGER, HighlightMode.COLOUR_BLIND));
+		assertEquals(StatColors.CB_GOOD, StatColors.resolve(ColourRole.GOOD, HighlightMode.COLOUR_BLIND));
 	}
 
 	@Test
