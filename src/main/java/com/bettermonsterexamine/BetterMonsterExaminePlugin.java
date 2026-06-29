@@ -6,6 +6,7 @@ import javax.swing.SwingUtilities;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 
+import com.google.gson.Gson;
 import com.google.inject.Provides;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
@@ -66,6 +67,9 @@ public class BetterMonsterExaminePlugin extends Plugin
 
 	@Inject
 	private MouseManager mouseManager;
+
+	@Inject
+	private Gson gson;
 
 	// Touched from the client thread (lifecycle/menu), the event bus (config), and the EDT
 	// (panel open), so kept volatile for safe publication across those threads.
@@ -156,7 +160,7 @@ public class BetterMonsterExaminePlugin extends Plugin
 	{
 		log.debug("Adding side panel navigation button");
 		BufferedImage icon = titleIcon;
-		monsterStatsPanel = new BetterMonsterExaminePanel(monsterIcons, dataService, wikiService, config, configManager, () -> playerCombatLevel, () -> playerHpLevel, icon);
+		monsterStatsPanel = new BetterMonsterExaminePanel(monsterIcons, dataService, wikiService, config, configManager, gson, () -> playerCombatLevel, () -> playerHpLevel, icon);
 		// Mirror whatever the panel is showing into the overlay (when the overlay is a target).
 		monsterStatsPanel.setSelectionListener(this::showInOverlay);
 		navButton = NavigationButton.builder()

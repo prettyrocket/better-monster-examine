@@ -27,4 +27,6 @@
 	"-//Checkstyle//DTD SuppressionFilter Configuration 1.1//EN"
 	"https://checkstyle.org/dtds/suppressions_1_1.dtd">
 <suppressions>
+	<!-- Tests legitimately construct their own Gson; the no-fresh-Gson rule only applies to main. -->
+	<suppress files="[\\/]src[\\/]test[\\/]" id="noFreshGson"/>
 </suppressions>

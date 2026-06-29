@@ -1,5 +1,6 @@
 package com.bettermonsterexamine;
 
+import com.google.gson.Gson;
 import java.util.List;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -8,6 +9,8 @@ import org.junit.Test;
 
 public class LookupHistoryTest
 {
+	private static final Gson GSON = new Gson();
+
 	@Test
 	public void recordMovesExistingToFrontWithoutDuplicating()
 	{
@@ -127,7 +130,7 @@ public class LookupHistoryTest
 		h.record("Vorkath", "Post-Quest");
 		h.toggleFavorite("Goblin", "");
 
-		LookupHistory restored = LookupHistory.fromJson(h.toJson());
+		LookupHistory restored = LookupHistory.fromJson(GSON, h.toJson(GSON));
 		assertEquals("Vorkath", restored.recent().get(0).name);
 		assertEquals("Post-Quest", restored.recent().get(0).version);
 		assertEquals("Cow", restored.recent().get(1).name);
@@ -137,11 +140,11 @@ public class LookupHistoryTest
 	@Test
 	public void garbageJsonDegradesToEmpty()
 	{
-		assertTrue(LookupHistory.fromJson("not json at all {{{").recent().isEmpty());
-		assertTrue(LookupHistory.fromJson("").favorites().isEmpty());
-		assertTrue(LookupHistory.fromJson(null).recent().isEmpty());
+		assertTrue(LookupHistory.fromJson(GSON, "not json at all {{{").recent().isEmpty());
+		assertTrue(LookupHistory.fromJson(GSON, "").favorites().isEmpty());
+		assertTrue(LookupHistory.fromJson(GSON, null).recent().isEmpty());
 		// Valid JSON of the wrong shape parses to empty lists rather than throwing.
-		assertTrue(LookupHistory.fromJson("[1,2,3]").recent().isEmpty());
+		assertTrue(LookupHistory.fromJson(GSON, "[1,2,3]").recent().isEmpty());
 	}
 
 	@Test
@@ -159,7 +162,7 @@ public class LookupHistoryTest
 		// A duplicate of M0 and a blank-name entry that should both be filtered.
 		sb.append(",{\"name\":\"M0\",\"version\":\"\"},{\"name\":\"\",\"version\":\"\"}]}");
 
-		LookupHistory h = LookupHistory.fromJson(sb.toString());
+		LookupHistory h = LookupHistory.fromJson(GSON, sb.toString());
 		assertEquals(LookupHistory.RECENT_CAP, h.recent().size());
 	}
 }

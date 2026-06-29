@@ -1,5 +1,6 @@
 package com.bettermonsterexamine;
 
+import com.google.gson.Gson;
 import java.awt.Dimension;
 import java.awt.Insets;
 import java.awt.Rectangle;
@@ -44,6 +45,7 @@ public class BetterMonsterExaminePanel extends PluginPanel
 	private final WikiInfoboxService wiki;
 	private final BetterMonsterExamineConfig config;
 	private final ConfigManager configManager;
+	private final Gson gson;
 
 	private final IconTextField searchField = new IconTextField();
 	private final JPanel resultsPanel = new JPanel();
@@ -72,14 +74,15 @@ public class BetterMonsterExaminePanel extends PluginPanel
 	 */
 	private Consumer<MonsterData> selectionListener;
 
-	public BetterMonsterExaminePanel(MonsterIcons icons, MonsterDataService data, WikiInfoboxService wiki, BetterMonsterExamineConfig config, ConfigManager configManager, IntSupplier playerCombatLevel, IntSupplier playerHpLevel, BufferedImage titleIcon)
+	public BetterMonsterExaminePanel(MonsterIcons icons, MonsterDataService data, WikiInfoboxService wiki, BetterMonsterExamineConfig config, ConfigManager configManager, Gson gson, IntSupplier playerCombatLevel, IntSupplier playerHpLevel, BufferedImage titleIcon)
 	{
 		super(false);
 		this.data = data;
 		this.wiki = wiki;
 		this.config = config;
 		this.configManager = configManager;
-		this.history = LookupHistory.fromJson(configManager.getConfiguration(CONFIG_GROUP, HISTORY_KEY));
+		this.gson = gson;
+		this.history = LookupHistory.fromJson(gson, configManager.getConfiguration(CONFIG_GROUP, HISTORY_KEY));
 		this.card = new MonsterCard(icons, config, playerCombatLevel, playerHpLevel,
 			m -> history.isFavorite(m.getName(), m.getVersion()),
 			this::toggleFavorite,
@@ -561,7 +564,7 @@ public class BetterMonsterExaminePanel extends PluginPanel
 
 	private void persist()
 	{
-		configManager.setConfiguration(CONFIG_GROUP, HISTORY_KEY, history.toJson());
+		configManager.setConfiguration(CONFIG_GROUP, HISTORY_KEY, history.toJson(gson));
 	}
 
 	/** React to the enableHistory config toggle: hide/show the buttons and any open list view. */

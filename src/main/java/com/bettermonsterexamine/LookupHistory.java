@@ -18,8 +18,6 @@ class LookupHistory
 	/** Newest-first Recent cap; older entries fall off the end. */
 	static final int RECENT_CAP = 15;
 
-	private static final Gson GSON = new Gson();
-
 	/**
 	 * A looked-up monster: base name + variant version. {@code version} is empty for single-form
 	 * monsters. Identity is name + version, compared case-insensitively so a lookup recorded from
@@ -138,17 +136,21 @@ class LookupHistory
 
 	// ---------------------------------------------------------- persistence
 
-	/** Serialise both lists to a compact JSON string for {@code ConfigManager}. */
-	String toJson()
+	/**
+	 * Serialise both lists to a compact JSON string for {@code ConfigManager}. Takes the client's
+	 * injected {@code Gson} — the plugin hub rejects fresh {@code new Gson()} instances.
+	 */
+	String toJson(Gson gson)
 	{
-		return GSON.toJson(new Persisted(recent, favorites));
+		return gson.toJson(new Persisted(recent, favorites));
 	}
 
 	/**
-	 * Parse from a {@code ConfigManager} string. Malformed, legacy, or empty input degrades to
-	 * empty lists rather than throwing — this runs during panel construction on the EDT.
+	 * Parse from a {@code ConfigManager} string, using the client's injected {@code Gson}. Malformed,
+	 * legacy, or empty input degrades to empty lists rather than throwing — this runs during panel
+	 * construction on the EDT.
 	 */
-	static LookupHistory fromJson(String json)
+	static LookupHistory fromJson(Gson gson, String json)
 	{
 		LookupHistory h = new LookupHistory();
 		if (json == null || json.trim().isEmpty())
@@ -157,7 +159,7 @@ class LookupHistory
 		}
 		try
 		{
-			Persisted p = GSON.fromJson(json, Persisted.class);
+			Persisted p = gson.fromJson(json, Persisted.class);
 			if (p != null)
 			{
 				copyValid(p.recent, h.recent, RECENT_CAP);
