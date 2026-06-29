@@ -8,6 +8,11 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import org.junit.Test;
 
+/**
+ * Locks the view-model semantics over the flat Bucket {@link MonsterData} DTO (the regression net
+ * for the cutover): max-hit flagging, the affirmative poisonous check, flat-armour/XP-bonus signs,
+ * and the immunity flags.
+ */
 public class MonsterStatsTest
 {
 	private static final Gson GSON = new Gson();
@@ -17,23 +22,17 @@ public class MonsterStatsTest
 		return GSON.fromJson(json, MonsterData.class);
 	}
 
-	private static WikiInfo wiki(String... lines)
+	private static MonsterStats stats(MonsterData m)
 	{
-		return WikiInfoboxService.parse(String.join("\n", lines));
-	}
-
-	private static MonsterStats stats(MonsterData m, WikiInfo wi)
-	{
-		return new MonsterStats(m, wi, HighlightMode.STANDARD, 99);
+		return new MonsterStats(m, HighlightMode.STANDARD, 99);
 	}
 
 	@Test
-	public void maxHitsSplitsWikiListAndFlagsOverHp()
+	public void maxHitsListsEachValueAndFlagsOverHp()
 	{
-		MonsterData m = monster("{\"version\":\"\",\"max_hit\":\"32\"}");
-		WikiInfo wi = wiki("|max hit = 30 (Magic), 28 (Ranged), 121 (Dragonfire Bomb/Special)");
+		MonsterData m = monster("{\"max_hit\":[\"30 (Magic)\",\"28 (Ranged)\",\"121 (Dragonfire Bomb/Special)\"]}");
 
-		List<MonsterStats.MaxHitLine> hits = stats(m, wi).maxHits();
+		List<MonsterStats.MaxHitLine> hits = stats(m).maxHits();
 
 		assertEquals(3, hits.size());
 		assertEquals("30 (Magic)", hits.get(0).text());
@@ -42,47 +41,30 @@ public class MonsterStatsTest
 	}
 
 	@Test
-	public void maxHitsFallsBackToDatasetWhenNoWiki()
+	public void maxHitsFallsBackToDashWhenAbsent()
 	{
-		MonsterData m = monster("{\"version\":\"\",\"max_hit\":\"10\"}");
-
-		List<MonsterStats.MaxHitLine> hits = new MonsterStats(m, null, HighlightMode.STANDARD, 99).maxHits();
+		List<MonsterStats.MaxHitLine> hits = stats(monster("{}")).maxHits();
 
 		assertEquals(1, hits.size());
-		assertEquals("10", hits.get(0).text());
+		assertEquals("—", hits.get(0).text());
 		assertFalse(hits.get(0).overHp());
-	}
-
-	@Test
-	public void maxHitsSplitsOnCommaSpaceNotBareComma()
-	{
-		// R2: canonical split is ", " — a comma with no following space stays on one line.
-		MonsterData m = monster("{\"version\":\"\"}");
-		WikiInfo wi = wiki("|max hit = 5,10 (special)");
-
-		List<MonsterStats.MaxHitLine> hits = stats(m, wi).maxHits();
-
-		assertEquals(1, hits.size());
-		assertEquals("5,10 (special)", hits.get(0).text());
 	}
 
 	@Test
 	public void maxHitsNeverFlaggedWhenHighlightOff()
 	{
-		MonsterData m = monster("{\"version\":\"\"}");
-		WikiInfo wi = wiki("|max hit = 999");
+		MonsterData m = monster("{\"max_hit\":[\"999\"]}");
 
-		MonsterStats s = new MonsterStats(m, wi, HighlightMode.OFF, 99);
+		MonsterStats s = new MonsterStats(m, HighlightMode.OFF, 99);
 
 		assertFalse(s.maxHits().get(0).overHp());
 	}
 
 	@Test
-	public void poisonousAffirmativeWithQualifierIsDanger()
+	public void poisonousAffirmativeWithLinkIsSanitisedAndDanger()
 	{
-		// R1: "Yes (venom)" is affirmative — danger — even though it isn't exactly "yes".
-		MonsterData m = monster("{\"version\":\"\"}");
-		MonsterStats.StatField pois = stats(m, wiki("|poisonous = Yes (venom)")).poisonous();
+		// Bucket carries "Yes ([[venom]])"; the link is stripped and the value flagged danger.
+		MonsterStats.StatField pois = stats(monster("{\"poisonous\":\"Yes ([[venom]])\"}")).poisonous();
 
 		assertEquals("Yes (venom)", pois.value());
 		assertEquals(ColourRole.DANGER, pois.role());
@@ -92,80 +74,60 @@ public class MonsterStatsTest
 	@Test
 	public void poisonousNoIsNeutral()
 	{
-		MonsterData m = monster("{\"version\":\"\"}");
-		MonsterStats.StatField pois = stats(m, wiki("|poisonous = No")).poisonous();
+		MonsterStats.StatField pois = stats(monster("{\"poisonous\":\"No\"}")).poisonous();
 
 		assertEquals(ColourRole.NEUTRAL, pois.role());
 		assertNull(pois.tooltip());
 	}
 
 	@Test
-	public void aggressiveAbsentIsNullPresentYesIsDanger()
-	{
-		MonsterData m = monster("{\"version\":\"\"}");
-
-		assertNull(stats(m, wiki("|poisonous = No")).aggressive());
-		assertEquals(ColourRole.DANGER, stats(m, wiki("|aggressive = Yes")).aggressive().role());
-	}
-
-	@Test
 	public void flatArmourSignDrivesRoleAndIsAbsentWhenZero()
 	{
-		MonsterData neg = monster("{\"version\":\"\",\"defensive\":{\"flat_armour\":-4}}");
-		MonsterData pos = monster("{\"version\":\"\",\"defensive\":{\"flat_armour\":10}}");
-		MonsterData zero = monster("{\"version\":\"\",\"defensive\":{\"flat_armour\":0}}");
-
-		assertEquals(ColourRole.GOOD, stats(neg, null).flatArmour().role());
-		assertEquals("-4", stats(neg, null).flatArmour().value());
-		assertEquals(ColourRole.DANGER, stats(pos, null).flatArmour().role());
-		assertNull(stats(zero, null).flatArmour());
+		assertEquals(ColourRole.GOOD, stats(monster("{\"flat_armour\":-4}")).flatArmour().role());
+		assertEquals("-4", stats(monster("{\"flat_armour\":-4}")).flatArmour().value());
+		assertEquals(ColourRole.DANGER, stats(monster("{\"flat_armour\":10}")).flatArmour().role());
+		assertNull(stats(monster("{\"flat_armour\":0}")).flatArmour());
+		assertNull(stats(monster("{}")).flatArmour());
 	}
 
 	@Test
 	public void xpBonusSignsAndOmitsZero()
 	{
-		MonsterData m = monster("{\"version\":\"\"}");
-
-		assertEquals("+77.5%", stats(m, wiki("|xpbonus = 77.5")).xpBonus().value());
-		assertEquals(ColourRole.GOOD, stats(m, wiki("|xpbonus = 77.5")).xpBonus().role());
-		assertEquals(ColourRole.DANGER, stats(m, wiki("|xpbonus = -50")).xpBonus().role());
-		assertNull(stats(m, wiki("|xpbonus = 0")).xpBonus());
-		assertNull(stats(m, wiki("|poisonous = No")).xpBonus());
+		assertEquals("+77.5%", stats(monster("{\"experience_bonus\":77.5}")).xpBonus().value());
+		assertEquals(ColourRole.GOOD, stats(monster("{\"experience_bonus\":77.5}")).xpBonus().role());
+		assertEquals(ColourRole.DANGER, stats(monster("{\"experience_bonus\":-50}")).xpBonus().role());
+		assertNull(stats(monster("{\"experience_bonus\":0}")).xpBonus());
+		assertNull(stats(monster("{}")).xpBonus());
 	}
 
 	@Test
-	public void immunitiesResolveFromWiki()
+	public void immunitiesResolveFromBucketFlags()
 	{
-		MonsterData m = monster("{\"version\":\"\"}");
-		WikiInfo wi = wiki(
-			"|poisonresistance = 100",
-			"|venomresistance = 50",
-			"|immunecannon = Yes",
-			"|immunethrall = No");
+		MonsterData m = monster("{\"cannon_immune\":\"Immune\",\"thrall_immune\":\"Not immune\","
+			+ "\"burn_immune\":\"Immune (weak)\"}");
 
-		MonsterStats s = stats(m, wi);
+		MonsterStats s = stats(m);
 
-		assertEquals("Immune", s.poison().value());
-		assertEquals("50% resistance", s.venom().value());
+		assertEquals("Immune", s.cannon().value());
 		assertEquals(ColourRole.DANGER, s.cannon().role());
 		assertNull(s.thrall());
+		assertEquals("Immune (weak)", s.burn());
 	}
 
 	@Test
-	public void wikiAbsentLeavesDatasetFieldsButNoWikiFields()
+	public void sizeAttributesAndCombatLevelsRender()
 	{
-		MonsterData m = monster("{\"version\":\"\",\"size\":7,\"attributes\":[\"dragon\"],"
-			+ "\"skills\":{\"hp\":600,\"atk\":255,\"str\":255,\"def\":150,\"magic\":255,\"ranged\":255}}");
+		MonsterData m = monster("{\"size\":7,\"attribute\":[\"dragon\",\"undead\"],"
+			+ "\"hitpoints\":600,\"attack_level\":255,\"strength_level\":255,\"defence_level\":150,"
+			+ "\"magic_level\":255,\"ranged_level\":255}");
 
-		MonsterStats s = new MonsterStats(m, null, HighlightMode.STANDARD, 99);
+		MonsterStats s = stats(m);
 
-		assertFalse(s.wikiLoaded());
-		assertEquals("7x7, Draconic", s.sizeAttr());
+		assertEquals("7x7, Draconic, Undead", s.sizeAttr());
 		assertEquals(6, s.combatLevels().size());
 		assertEquals("600", s.combatLevels().get(0));
-		assertNull(s.aggressive());
 		assertNull(s.poisonous());
 		assertNull(s.xpBonus());
-		assertNull(s.poison());
+		assertNull(s.cannon());
 	}
 }

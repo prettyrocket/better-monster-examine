@@ -63,11 +63,11 @@ class MonsterCard extends JPanel
 		setAlignmentX(LEFT_ALIGNMENT);
 	}
 
-	/** Render {@code m}, with its {@code variants} (for the dropdown) and async {@code wi} fields. */
-	void show(MonsterData m, List<MonsterData> variants, WikiInfo wi)
+	/** Render {@code m}, with its {@code variants} (for the dropdown). */
+	void show(MonsterData m, List<MonsterData> variants)
 	{
 		removeAll();
-		MonsterStats stats = new MonsterStats(m, wi, config.statHighlighting(), playerHpLevel.getAsInt());
+		MonsterStats stats = new MonsterStats(m, config.statHighlighting(), playerHpLevel.getAsInt());
 		add(header(m, variants, stats));
 		add(Box.createRigidArea(new Dimension(0, 6)));
 		buildWiki(stats);
@@ -215,7 +215,7 @@ class MonsterCard extends JPanel
 
 	private void buildWiki(MonsterStats stats)
 	{
-		// ATTRIBUTES — dataset attributes/size/slayer/flat armour + wiki xp/aggressive/poisonous.
+		// ATTRIBUTES — size/attributes/slayer/flat armour/XP bonus/poisonous.
 		JPanel props = block();
 		props.add(sectionHeader("Attributes"));
 		boolean anyProp = false;
@@ -244,21 +244,10 @@ class MonsterCard extends JPanel
 			props.add(kv("XP bonus", xp.value(), resolve(xp.role())));
 			anyProp = true;
 		}
-		MonsterStats.StatField aggr = stats.aggressive();
-		if (aggr != null)
-		{
-			props.add(kv("Aggressive", aggr.value(), resolve(aggr.role()), aggr.tooltip()));
-			anyProp = true;
-		}
 		MonsterStats.StatField pois = stats.poisonous();
 		if (pois != null)
 		{
 			props.add(kv("Poisonous", pois.value(), resolve(pois.role()), pois.tooltip()));
-			anyProp = true;
-		}
-		if (!stats.wikiLoaded())
-		{
-			props.add(kv("", "loading wiki data…", ColorScheme.LIGHT_GRAY_COLOR));
 			anyProp = true;
 		}
 		if (anyProp)
@@ -331,7 +320,7 @@ class MonsterCard extends JPanel
 				new String[]{"Light", "Standard", "Heavy"}));
 		}
 
-		// Immunities — burn from the dataset, the rest (poison/venom/cannon/thrall) from wiki.
+		// Immunities — burn / cannon / thrall, all from Bucket.
 		JPanel imm = block();
 		imm.add(sectionHeader("Immunities"));
 		boolean anyImm = false;
@@ -339,18 +328,6 @@ class MonsterCard extends JPanel
 		if (burn != null)
 		{
 			imm.add(kv("Burn", burn, Color.WHITE));
-			anyImm = true;
-		}
-		MonsterStats.StatField poison = stats.poison();
-		if (poison != null)
-		{
-			imm.add(kv("Poison", poison.value(), resolve(poison.role())));
-			anyImm = true;
-		}
-		MonsterStats.StatField venom = stats.venom();
-		if (venom != null)
-		{
-			imm.add(kv("Venom", venom.value(), resolve(venom.role())));
 			anyImm = true;
 		}
 		MonsterStats.StatField cannon = stats.cannon();

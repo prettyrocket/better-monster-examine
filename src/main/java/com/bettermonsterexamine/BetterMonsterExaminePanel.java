@@ -18,7 +18,6 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.Scrollable;
 import javax.swing.ScrollPaneConstants;
-import javax.swing.SwingUtilities;
 import javax.swing.border.EmptyBorder;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
@@ -42,7 +41,6 @@ public class BetterMonsterExaminePanel extends PluginPanel
 	private static final String HINT = "Search a monster, or right-click one in game → Stats.";
 
 	private final MonsterDataService data;
-	private final WikiInfoboxService wiki;
 	private final BetterMonsterExamineConfig config;
 	private final ConfigManager configManager;
 	private final Gson gson;
@@ -74,11 +72,10 @@ public class BetterMonsterExaminePanel extends PluginPanel
 	 */
 	private Consumer<MonsterData> selectionListener;
 
-	public BetterMonsterExaminePanel(MonsterIcons icons, MonsterDataService data, WikiInfoboxService wiki, BetterMonsterExamineConfig config, ConfigManager configManager, Gson gson, IntSupplier playerCombatLevel, IntSupplier playerHpLevel, BufferedImage titleIcon)
+	public BetterMonsterExaminePanel(MonsterIcons icons, MonsterDataService data, BetterMonsterExamineConfig config, ConfigManager configManager, Gson gson, IntSupplier playerCombatLevel, IntSupplier playerHpLevel, BufferedImage titleIcon)
 	{
 		super(false);
 		this.data = data;
-		this.wiki = wiki;
 		this.config = config;
 		this.configManager = configManager;
 		this.gson = gson;
@@ -251,26 +248,11 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		{
 			return;
 		}
-		WikiInfo wi = wiki.getCached(m.getName());
-		card.show(m, currentVariants, wi);
+		card.show(m, currentVariants);
 		revalidate();
 		repaint();
 
-		// Lazily pull the wiki-only fields (aggressive/poisonous/xp/full max hit/immunities),
-		// then re-render when they land.
-		if (wi == null)
-		{
-			wiki.fetch(m.getName(), () -> SwingUtilities.invokeLater(() ->
-			{
-				if (currentSelection != null && currentSelection.getName().equals(m.getName()))
-				{
-					renderCard();
-				}
-			}));
-		}
-
-		// Let the overlay mirror the panel's current monster (and pick up the wiki fields on the
-		// re-render above once they land).
+		// Let the overlay mirror the panel's current monster.
 		if (selectionListener != null)
 		{
 			selectionListener.accept(m);

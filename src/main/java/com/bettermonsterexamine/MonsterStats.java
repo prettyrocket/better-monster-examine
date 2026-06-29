@@ -1,19 +1,20 @@
 package com.bettermonsterexamine;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 /**
  * The neutral view-model behind both renderers ({@link MonsterCard} and
- * {@link MonsterCardOverlay}): given a monster, its (possibly null) wiki fields, the highlight
- * mode and the player's Hitpoints level, it resolves <em>which fields to show, their values, and
- * their {@link ColourRole}</em> — with zero rendering. It owns the content/semantics that were
- * previously duplicated across the panel's {@code buildWiki} and the overlay's tab builders; the
- * renderers keep their own labels, icons and layout and read values/roles from here.
+ * {@link MonsterCardOverlay}): given a monster, the highlight mode and the player's Hitpoints
+ * level, it resolves <em>which fields to show, their values, and their {@link ColourRole}</em> —
+ * with zero rendering. It owns the content/semantics that were previously duplicated across the
+ * panel's {@code buildWiki} and the overlay's tab builders; the renderers keep their own labels,
+ * icons and layout and read values/roles from here.
  *
  * <p>Pure and immutable — built per render from current state on whichever thread is rendering
- * (panel: EDT; overlay: client thread), so it never shares mutable state across threads.
+ * (panel: EDT; overlay: client thread), so it never shares mutable state across threads. Since the
+ * cutover to the single Bucket dataset every field is present synchronously; there is no async
+ * "wiki fields land later" path any more.
  */
 final class MonsterStats
 {
@@ -72,24 +73,14 @@ final class MonsterStats
 	}
 
 	private final MonsterData m;
-	private final WikiInfo wi;
 	private final HighlightMode mode;
 	private final int playerHpLevel;
-	private final String ver;
 
-	MonsterStats(MonsterData m, WikiInfo wi, HighlightMode mode, int playerHpLevel)
+	MonsterStats(MonsterData m, HighlightMode mode, int playerHpLevel)
 	{
 		this.m = m;
-		this.wi = wi;
 		this.mode = mode;
 		this.playerHpLevel = playerHpLevel;
-		this.ver = m.getVersion();
-	}
-
-	/** True once the async wiki fields have landed (so renderers can show their placeholders). */
-	boolean wikiLoaded()
-	{
-		return wi != null;
 	}
 
 	// ---- Attributes / Info ---------------------------------------------------
@@ -98,8 +89,7 @@ final class MonsterStats
 	String sizeAttr()
 	{
 		String sizeText = m.getSize() > 0 ? m.getSize() + "x" + m.getSize() : null;
-		String attrText = m.getAttributes() != null && !m.getAttributes().isEmpty()
-			? StatFormat.attributeNames(m.getAttributes()) : null;
+		String attrText = !m.getAttributes().isEmpty() ? StatFormat.attributeNames(m.getAttributes()) : null;
 		return StatFormat.join(", ", sizeText, attrText);
 	}
 
@@ -111,12 +101,11 @@ final class MonsterStats
 	/** Flat-armour adjustment; null when zero. Negative (takes extra damage) is good, positive bad. */
 	StatField flatArmour()
 	{
-		MonsterData.Defensive d = m.getDefensive();
-		if (d == null || d.getFlatArmour() == 0)
+		int fa = m.getFlatArmour();
+		if (fa == 0)
 		{
 			return null;
 		}
-		int fa = d.getFlatArmour();
 		return new StatField(String.valueOf(fa), fa < 0 ? ColourRole.GOOD : ColourRole.DANGER,
 			fa < 0 ? "Takes extra flat damage per hit." : "Reduces damage taken per hit.");
 	}
@@ -124,48 +113,34 @@ final class MonsterStats
 	/** XP bonus, e.g. {@code "+77.5%"} / {@code "-50%"}; null when absent or zero. */
 	StatField xpBonus()
 	{
-		String xp = wi != null ? wi.get("xpbonus", ver) : null;
-		if (xp == null || xp.trim().isEmpty() || StatFormat.isZero(xp))
+		double xp = m.getExperienceBonus();
+		if (xp == 0)
 		{
 			return null;
 		}
-		String t = xp.trim();
-		boolean penalty = t.startsWith("-");
-		return new StatField((penalty ? "" : "+") + t + "%",
+		boolean penalty = xp < 0;
+		return new StatField((penalty ? "" : "+") + StatFormat.number(xp) + "%",
 			penalty ? ColourRole.DANGER : ColourRole.GOOD, null);
 	}
 
-	/** Aggressive flag; null when the wiki field is absent. */
-	StatField aggressive()
-	{
-		String aggr = wi != null ? wi.get("aggressive", ver) : null;
-		if (aggr == null)
-		{
-			return null;
-		}
-		boolean yes = StatFormat.affirmative(aggr);
-		return new StatField(aggr.trim(), yes ? ColourRole.DANGER : ColourRole.NEUTRAL,
-			yes ? "Attacks on sight." : null);
-	}
-
-	/** Poisonous flag; null when the wiki field is absent. */
+	/** Poisonous flag; null when the field is absent. */
 	StatField poisonous()
 	{
-		String pois = wi != null ? wi.get("poisonous", ver) : null;
-		if (pois == null)
+		String pois = m.getPoisonous();
+		if (pois == null || pois.isEmpty())
 		{
 			return null;
 		}
 		boolean yes = StatFormat.affirmative(pois);
-		return new StatField(pois.trim(), yes ? ColourRole.DANGER : ColourRole.NEUTRAL,
+		return new StatField(pois, yes ? ColourRole.DANGER : ColourRole.NEUTRAL,
 			yes ? "Can poison you." : null);
 	}
 
 	/** Examine text, or null. */
 	String examine()
 	{
-		String ex = wi != null ? wi.get("examine", ver) : null;
-		return ex == null || ex.trim().isEmpty() ? null : ex.trim();
+		String ex = m.getExamine();
+		return ex == null || ex.isEmpty() ? null : ex;
 	}
 
 	// ---- Combat info ---------------------------------------------------------
@@ -173,8 +148,8 @@ final class MonsterStats
 	/** Attack styles joined, or an em dash. */
 	String attackStyle()
 	{
-		List<String> st = m.getStyle();
-		return st == null || st.isEmpty() ? "—" : String.join(", ", st);
+		List<String> st = m.getAttackStyles();
+		return st.isEmpty() ? "—" : String.join(", ", st);
 	}
 
 	String attackSpeed()
@@ -185,17 +160,21 @@ final class MonsterStats
 	// ---- Max hit -------------------------------------------------------------
 
 	/**
-	 * The max-hit list, one entry per value. The wiki carries the full per-style list (split on
-	 * {@code ", "}); otherwise the dataset's single value is used. Each line is flagged when its
-	 * value exceeds the player's Hitpoints level (and highlighting is on).
+	 * The max-hit list, one entry per value (Bucket returns them already split; the sanitizer
+	 * cleans each). Each line is flagged when its value exceeds the player's Hitpoints level (and
+	 * highlighting is on). An em dash stands in when the monster carries no max-hit data.
 	 */
 	List<MaxHitLine> maxHits()
 	{
-		String wikiMax = wi != null ? wi.get("max hit", ver) : null;
-		String text = wikiMax != null ? wikiMax : StatFormat.nz(m.getMaxHit());
+		List<String> lines = m.getMaxHitLines();
 		boolean flag = mode != HighlightMode.OFF && playerHpLevel > 0;
 		List<MaxHitLine> out = new ArrayList<>();
-		for (String line : text.split(", "))
+		if (lines.isEmpty())
+		{
+			out.add(new MaxHitLine("—", false));
+			return out;
+		}
+		for (String line : lines)
 		{
 			out.add(new MaxHitLine(line, flag && StatFormat.maxValue(line) > playerHpLevel));
 		}
@@ -204,131 +183,94 @@ final class MonsterStats
 
 	// ---- Stat grids (values only; renderers supply icons + labels) -----------
 
-	/** Combat levels in icon order [Hitpoints, Attack, Strength, Defence, Magic, Ranged]; empty if absent. */
+	/** Combat levels in icon order [Hitpoints, Attack, Strength, Defence, Magic, Ranged]. */
 	List<String> combatLevels()
 	{
-		MonsterData.Skills s = m.getSkills();
-		if (s == null)
-		{
-			return Collections.emptyList();
-		}
 		List<String> v = new ArrayList<>(6);
-		v.add(StatFormat.num(s.getHp()));
-		v.add(StatFormat.num(s.getAtk()));
-		v.add(StatFormat.num(s.getStr()));
-		v.add(StatFormat.num(s.getDef()));
-		v.add(StatFormat.num(s.getMagic()));
-		v.add(StatFormat.num(s.getRanged()));
+		v.add(StatFormat.num(m.getHitpoints()));
+		v.add(StatFormat.num(m.getAttackLevel()));
+		v.add(StatFormat.num(m.getStrengthLevel()));
+		v.add(StatFormat.num(m.getDefenceLevel()));
+		v.add(StatFormat.num(m.getMagicLevel()));
+		v.add(StatFormat.num(m.getRangedLevel()));
 		return v;
 	}
 
-	/** Offensive bonuses in icon order [Attack, Strength, Magic, Magic dmg, Ranged, Ranged str]; empty if absent. */
+	/** Offensive bonuses in icon order [Attack, Strength, Magic, Magic dmg, Ranged, Ranged str]. */
 	List<String> offensiveBonuses()
 	{
-		MonsterData.Offensive o = m.getOffensive();
-		if (o == null)
-		{
-			return Collections.emptyList();
-		}
 		List<String> v = new ArrayList<>(6);
-		v.add(StatFormat.bonus(o.getAtk()));
-		v.add(StatFormat.bonus(o.getStr()));
-		v.add(StatFormat.bonus(o.getMagic()));
-		v.add(StatFormat.bonus(o.getMagicStr()));
-		v.add(StatFormat.bonus(o.getRanged()));
-		v.add(StatFormat.bonus(o.getRangedStr()));
+		v.add(StatFormat.bonus(m.getAttackBonus()));
+		v.add(StatFormat.bonus(m.getStrengthBonus()));
+		v.add(StatFormat.bonus(m.getMagicAttackBonus()));
+		v.add(StatFormat.bonus(m.getMagicDamageBonus()));
+		v.add(StatFormat.bonus(m.getRangeAttackBonus()));
+		v.add(StatFormat.bonus(m.getRangeStrengthBonus()));
 		return v;
 	}
 
-	/** True when the monster carries defensive bonuses (so the defence grids should render). */
+	/** Bucket always carries the defensive bonus fields, so the defence grids always render. */
 	boolean hasDefensive()
 	{
-		return m.getDefensive() != null;
+		return true;
 	}
 
-	/** Melee defence bonuses [Stab, Slash, Crush]; empty if absent. */
+	/** Melee defence bonuses [Stab, Slash, Crush]. */
 	List<String> meleeDefence()
 	{
-		MonsterData.Defensive d = m.getDefensive();
-		if (d == null)
-		{
-			return Collections.emptyList();
-		}
 		List<String> v = new ArrayList<>(3);
-		v.add(StatFormat.bonus(d.getStab()));
-		v.add(StatFormat.bonus(d.getSlash()));
-		v.add(StatFormat.bonus(d.getCrush()));
+		v.add(StatFormat.bonus(m.getStabDefenceBonus()));
+		v.add(StatFormat.bonus(m.getSlashDefenceBonus()));
+		v.add(StatFormat.bonus(m.getCrushDefenceBonus()));
 		return v;
 	}
 
-	/** Magic-defence bonus, or null if absent. */
+	/** Magic-defence bonus. */
 	String magicDefence()
 	{
-		MonsterData.Defensive d = m.getDefensive();
-		return d == null ? null : StatFormat.bonus(d.getMagic());
+		return StatFormat.bonus(m.getMagicDefenceBonus());
 	}
 
-	/** Ranged defence bonuses [Light, Standard, Heavy]; empty if absent. */
+	/** Ranged defence bonuses [Light, Standard, Heavy]. */
 	List<String> rangedDefence()
 	{
-		MonsterData.Defensive d = m.getDefensive();
-		if (d == null)
-		{
-			return Collections.emptyList();
-		}
 		List<String> v = new ArrayList<>(3);
-		v.add(StatFormat.bonus(d.getLight()));
-		v.add(StatFormat.bonus(d.getStandard()));
-		v.add(StatFormat.bonus(d.getHeavy()));
+		v.add(StatFormat.bonus(m.getLightRangeDefenceBonus()));
+		v.add(StatFormat.bonus(m.getStandardRangeDefenceBonus()));
+		v.add(StatFormat.bonus(m.getHeavyRangeDefenceBonus()));
 		return v;
 	}
 
-	/** The elemental weakness element (e.g. {@code "fire"}), or null if none. */
+	/** The elemental weakness element (e.g. {@code "Fire"}), or null if none. */
 	String weaknessElement()
 	{
-		return m.getWeakness() != null ? m.getWeakness().getElement() : null;
+		String e = m.getWeaknessElement();
+		return e == null || e.isEmpty() ? null : e;
 	}
 
 	/** The weakness severity as {@code "N%"}, or an em dash when there is no weakness. */
 	String weaknessSeverity()
 	{
-		MonsterData.Weakness w = m.getWeakness();
-		return w != null && w.getElement() != null ? w.getSeverity() + "%" : "—";
+		return weaknessElement() != null ? m.getWeaknessPercent() + "%" : "—";
 	}
 
 	// ---- Immunities ----------------------------------------------------------
 
-	/** Burn-immunity tier from the dataset, or null. */
+	/** Burn-immunity label (e.g. {@code "Immune (weak)"}), or null. */
 	String burn()
 	{
-		return StatFormat.burnImmunity(m);
-	}
-
-	/** Poison resistance label (e.g. "Immune", "50% resistance"), as a danger field; null if none. */
-	StatField poison()
-	{
-		String label = wi != null ? StatFormat.resistanceLabel(wi.get("poisonresistance", ver)) : null;
-		return label == null ? null : new StatField(label, ColourRole.DANGER, null);
-	}
-
-	/** Venom resistance label, as a danger field; null if none. */
-	StatField venom()
-	{
-		String label = wi != null ? StatFormat.resistanceLabel(wi.get("venomresistance", ver)) : null;
-		return label == null ? null : new StatField(label, ColourRole.DANGER, null);
+		return m.getBurnLabel();
 	}
 
 	/** Cannon immunity, as a danger field; null when not immune. */
 	StatField cannon()
 	{
-		return wi != null && StatFormat.yes(wi.get("immunecannon", ver))
-			? new StatField("Immune", ColourRole.DANGER, null) : null;
+		return MonsterData.isImmune(m.getCannonImmune()) ? new StatField("Immune", ColourRole.DANGER, null) : null;
 	}
 
 	/** Thrall immunity, as a danger field; null when not immune. */
 	StatField thrall()
 	{
-		return wi != null && StatFormat.yes(wi.get("immunethrall", ver))
-			? new StatField("Immune", ColourRole.DANGER, null) : null;
+		return MonsterData.isImmune(m.getThrallImmune()) ? new StatField("Immune", ColourRole.DANGER, null) : null;
 	}
 }
