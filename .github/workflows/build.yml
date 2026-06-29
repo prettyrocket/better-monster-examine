@@ -38,9 +38,6 @@ jobs:
         with:
           report_paths: '**/build/test-results/test/TEST-*.xml'
 
-  # The real plugin-hub packager check, run per-PR so a build the hub would reject is caught
-  # here rather than at release time. Verifies the PR head commit (or the pushed commit on a
-  # branch / main); these are same-repo branches, so the packager can clone and check them out.
   hub-verify:
     uses: ./.github/workflows/hub-verify.yml
     with:
