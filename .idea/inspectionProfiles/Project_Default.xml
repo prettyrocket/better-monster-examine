@@ -1,16 +1,11 @@
 <component name="InspectionProjectProfileManager">
   <profile version="1.0">
     <option name="myName" value="Project Default" />
-    <!--
-      Shared inspection profile for Better Monster Examine.
-      Silences IntelliJ nags that clash with RuneLite/Guice idioms. The DI
-      false positives (@Inject fields "never assigned", @Provides/@Subscribe
-      methods "never used") are handled by EntryPointsManager in .idea/misc.xml.
-      Below we quiet the two style inspections that fire on framework code.
-    -->
-    <!-- startUp()/shutDown() override Plugin's `throws Exception` signature by contract. -->
-    <inspection_tool class="RedundantThrowsDeclaration" enabled="false" level="WARNING" enabled_by_default="false" />
-    <!-- The onConfigChanged if/else-if chain on getKey() reads fine as-is. -->
-    <inspection_tool class="IfCanBeSwitch" enabled="false" level="WARNING" enabled_by_default="false" />
+    <inspection_tool class="IfCanBeSwitch" enabled="false" level="WARNING" enabled_by_default="false">
+      <option name="minimumBranches" value="3" />
+      <option name="suggestIntSwitches" value="false" />
+      <option name="suggestEnumSwitches" value="false" />
+    </inspection_tool>
+    <inspection_tool class="RedundantThrows" enabled="false" level="WARNING" enabled_by_default="false" />
   </profile>
 </component>
