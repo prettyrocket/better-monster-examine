@@ -32,6 +32,15 @@ jobs:
           repository: runelite/plugin-hub
           ref: master
 
+      - name: Sync the fork's master with upstream
+        # create-pull-request force-pushes the branch (rebased onto upstream master) to the
+        # fork. If the fork trails upstream, that push carries upstream commits that touch
+        # .github/workflows/ — which GitHub rejects for a PAT lacking `workflow` scope. Bringing
+        # the fork's master up to date first means only the manifest commit is new on the push.
+        env:
+          GH_TOKEN: ${{ secrets.PLUGIN_HUB_TOKEN }}
+        run: gh api -X POST repos/prettyrocket/plugin-hub/merge-upstream -f branch=master
+
       - name: Pin manifest to the released commit
         run: |
           cat > plugins/better-monster-examine <<EOF
