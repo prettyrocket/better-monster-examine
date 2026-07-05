@@ -50,6 +50,43 @@ jobs:
           echo "Manifest now reads:"
           cat plugins/better-monster-examine
 
+      - name: Resolve the release notes
+        id: notes
+        # On `release: published` the notes ride in on the event payload; on a manual
+        # workflow_dispatch there is none, so fall back to the latest release. Everything is
+        # passed through env (never inlined into the script) so notes content can't inject shell.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          REL_TAG: ${{ github.event.release.tag_name }}
+          REL_URL: ${{ github.event.release.html_url }}
+          REL_NAME: ${{ github.event.release.name }}
+          REL_BODY: ${{ github.event.release.body }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "release" ]; then
+            tag="$REL_TAG"; url="$REL_URL"; name="$REL_NAME"; body="$REL_BODY"
+          else
+            tag="$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName)"
+            url="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json url -q .url)"
+            name="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json name -q .name)"
+            body="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json body -q .body)"
+          fi
+          echo "tag=${tag:-the latest release}" >> "$GITHUB_OUTPUT"
+          commit_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$SHA"
+          {
+            echo "PR_BODY<<__HUB_PR_BODY__"
+            echo "Updates **Better Monster Examine** to [\`$SHA\`]($commit_url)."
+            echo ""
+            echo "Released as **${name:-$tag}** — $url"
+            echo ""
+            echo "---"
+            echo ""
+            echo "$body"
+            echo "__HUB_PR_BODY__"
+          } >> "$GITHUB_ENV"
+
       - name: Open or update the hub PR
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         with:
@@ -59,8 +96,5 @@ jobs:
           branch: better-monster-examine-release
           delete-branch: true
           commit-message: "better-monster-examine: update to ${{ github.sha }}"
-          title: "better-monster-examine: update to latest release"
-          body: |
-            Updates **Better Monster Examine** to [`${{ github.sha }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}).
-
-            ${{ github.event.release.html_url }}
+          title: "better-monster-examine: update to ${{ steps.notes.outputs.tag }}"
+          body: ${{ env.PR_BODY }}
