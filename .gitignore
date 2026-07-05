@@ -4,7 +4,12 @@ out/
 bin/
 *.class
 *.iml
-.idea/
+# Ignore local IDE state, but share the inspection profile + DI entry-point
+# annotations so IntelliJ doesn't flag RuneLite/Guice idioms for everyone.
+.idea/*
+!.idea/misc.xml
+!.idea/inspectionProfiles
+!.idea/inspectionProfiles/**
 .vscode/
 .project
 .settings/
