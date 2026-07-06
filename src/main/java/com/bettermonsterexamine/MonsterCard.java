@@ -258,24 +258,36 @@ class MonsterCard extends JPanel
 			add(Box.createRigidArea(new Dimension(0, 6)));
 		}
 
-		// SLAYER — only for Slayer targets: required level (red when above your Slayer level) and
-		// XP per kill as an icon pair, the assignment categories (each links to its wiki task page)
-		// and the masters who assign it, shown as chatheads.
+		// SLAYER — only for Slayer targets: the required level (red when above your Slayer level)
+		// sits inline on the header row next to the Slayer icon; XP is its own line; the assignment
+		// categories each link to their wiki task page and the masters show as chatheads.
 		if (stats.slayerMonster())
 		{
 			JPanel slayer = block();
-			slayer.add(sectionHeader("Slayer"));
 
 			MonsterStats.StatField req = stats.slayerRequirement();
+			String reqTip = req.tooltip() != null ? req.tooltip() : "Slayer level";
+			JPanel head = rowX();
+			head.add(headerLabel("Slayer"));
+			head.add(Box.createHorizontalGlue());
+			JLabel slayerLvlIcon = new JLabel(uniformIcon(icons.slayerIcon, 16));
+			slayerLvlIcon.setToolTipText(reqTip);
+			JLabel lvl = new JLabel(req.value());
+			lvl.setFont(FontManager.getRunescapeSmallFont());
+			lvl.setForeground(resolve(req.role()));
+			lvl.setToolTipText(reqTip);
+			head.add(slayerLvlIcon);
+			head.add(Box.createRigidArea(new Dimension(3, 0)));
+			head.add(lvl);
+			capHeight(head);
+			slayer.add(head);
+			slayer.add(Box.createRigidArea(new Dimension(0, 3)));
+
 			String slayerXp = stats.slayerXp();
-			JPanel pair = new JPanel(new GridLayout(1, 2, 4, 0));
-			pair.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-			pair.setAlignmentX(LEFT_ALIGNMENT);
-			pair.add(statCell(icons.slayerIcon, req.value(), resolve(req.role()),
-				req.tooltip() != null ? req.tooltip() : "Slayer level"));
-			pair.add(statCell(icons.slayerXpIcon, slayerXp != null ? slayerXp : "—", Color.WHITE, "Slayer XP per kill"));
-			capHeight(pair);
-			slayer.add(pair);
+			if (slayerXp != null)
+			{
+				slayer.add(kv("Slayer XP", slayerXp, Color.WHITE));
+			}
 
 			List<String> categories = stats.slayerCategories();
 			if (!categories.isEmpty())
@@ -658,12 +670,19 @@ class MonsterCard extends JPanel
 		return l;
 	}
 
-	private JLabel sectionHeader(String text)
+	/** The orange uppercase section-title label, without the trailing gap (for inline header rows). */
+	private JLabel headerLabel(String text)
 	{
 		JLabel h = new JLabel(text.toUpperCase(Locale.ROOT));
 		h.setFont(FontManager.getRunescapeSmallFont());
 		h.setForeground(ColorScheme.BRAND_ORANGE);
 		h.setAlignmentX(LEFT_ALIGNMENT);
+		return h;
+	}
+
+	private JLabel sectionHeader(String text)
+	{
+		JLabel h = headerLabel(text);
 		h.setBorder(new EmptyBorder(0, 0, 3, 0));
 		return h;
 	}
