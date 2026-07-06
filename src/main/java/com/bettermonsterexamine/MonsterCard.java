@@ -292,12 +292,7 @@ class MonsterCard extends JPanel
 			List<String> categories = stats.slayerCategories();
 			if (!categories.isEmpty())
 			{
-				slayer.add(Box.createRigidArea(new Dimension(0, 4)));
-				slayer.add(caption("Category"));
-				for (String category : categories)
-				{
-					slayer.add(linkLabel(category, StatFormat.slayerTaskUrl(category)));
-				}
+				slayer.add(categoryLinks(categories));
 			}
 
 			List<String> masters = stats.slayerMasters();
@@ -466,13 +461,46 @@ class MonsterCard extends JPanel
 		return l;
 	}
 
-	/** A clickable link label (indented under its caption) that opens {@code url} in the browser. */
-	private JLabel linkLabel(String text, String url)
+	/**
+	 * A "Category" row: the caption on the left, the assignment categories right-aligned as
+	 * underlined links (one per line) that open their wiki Slayer-task page. Mirrors the
+	 * label-left / value-right shape of the other stat rows.
+	 */
+	private JPanel categoryLinks(List<String> categories)
 	{
-		JLabel l = new JLabel("  " + text);
+		JPanel r = new JPanel(new BorderLayout());
+		r.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		r.setBorder(new EmptyBorder(1, 0, 1, 0));
+		r.setAlignmentX(LEFT_ALIGNMENT);
+
+		JLabel kl = new JLabel("Category");
+		kl.setFont(FontManager.getRunescapeSmallFont());
+		kl.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+		kl.setVerticalAlignment(JLabel.TOP);
+
+		JPanel values = new JPanel();
+		values.setLayout(new BoxLayout(values, BoxLayout.Y_AXIS));
+		values.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		for (String category : categories)
+		{
+			JLabel link = linkValue(category, StatFormat.slayerTaskUrl(category));
+			link.setAlignmentX(RIGHT_ALIGNMENT);
+			values.add(link);
+		}
+
+		r.add(kl, BorderLayout.WEST);
+		r.add(values, BorderLayout.EAST);
+		capHeight(r);
+		return r;
+	}
+
+	/** A right-aligned, underlined clickable link value that opens {@code url} in the browser. */
+	private JLabel linkValue(String text, String url)
+	{
+		JLabel l = new JLabel("<html><u>" + StatFormat.esc(text) + "</u></html>");
 		l.setFont(FontManager.getRunescapeSmallFont());
 		l.setForeground(ColorScheme.BRAND_ORANGE);
-		l.setAlignmentX(LEFT_ALIGNMENT);
+		l.setHorizontalAlignment(JLabel.RIGHT);
 		l.setToolTipText(url);
 		l.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 		l.addMouseListener(new MouseAdapter()
