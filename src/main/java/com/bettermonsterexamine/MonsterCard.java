@@ -255,56 +255,6 @@ class MonsterCard extends JPanel
 			add(Box.createRigidArea(new Dimension(0, 6)));
 		}
 
-		// SLAYER — only for Slayer targets: the required level (red when above your Slayer level)
-		// sits inline on the header row next to the Slayer icon; XP is its own line; the assignment
-		// categories each link to their wiki task page and the masters show as chatheads.
-		if (stats.slayerMonster())
-		{
-			JPanel slayer = block();
-
-			MonsterStats.StatField req = stats.slayerRequirement();
-			String reqTip = req.tooltip() != null ? req.tooltip() : "Slayer level";
-			JPanel head = rowX();
-			head.add(headerLabel("Slayer"));
-			head.add(Box.createHorizontalGlue());
-			JLabel slayerLvlIcon = new JLabel(uniformIcon(icons.slayerIcon, 16));
-			slayerLvlIcon.setToolTipText(reqTip);
-			JLabel lvl = new JLabel(req.value());
-			lvl.setFont(FontManager.getRunescapeSmallFont());
-			lvl.setForeground(resolve(req.role()));
-			lvl.setToolTipText(reqTip);
-			head.add(slayerLvlIcon);
-			head.add(Box.createRigidArea(new Dimension(3, 0)));
-			head.add(lvl);
-			capHeight(head);
-			slayer.add(head);
-			slayer.add(Box.createRigidArea(new Dimension(0, 3)));
-
-			String slayerXp = stats.slayerXp();
-			if (slayerXp != null)
-			{
-				slayer.add(kv("Slayer XP", slayerXp, Color.WHITE));
-			}
-
-			List<String> categories = stats.slayerCategories();
-			if (!categories.isEmpty())
-			{
-				slayer.add(kvWrappedRight("Category", String.join(", ", categories)));
-			}
-
-			List<String> masters = stats.slayerMasters();
-			if (!masters.isEmpty())
-			{
-				slayer.add(Box.createRigidArea(new Dimension(0, 4)));
-				slayer.add(caption("Assigned by"));
-				slayer.add(masterIconStrip(masters));
-			}
-
-			capHeight(slayer);
-			add(slayer);
-			add(Box.createRigidArea(new Dimension(0, 6)));
-		}
-
 		// COMBAT INFO — attack style + speed (dataset).
 		JPanel combatInfo = block();
 		combatInfo.add(sectionHeader("Combat info"));
@@ -395,6 +345,56 @@ class MonsterCard extends JPanel
 			add(Box.createRigidArea(new Dimension(0, 6)));
 			capHeight(imm);
 			add(imm);
+		}
+
+		// SLAYER — last block, only for Slayer targets: the required level (red when above your
+		// Slayer level) sits inline on the header row next to the Slayer icon; XP is its own line;
+		// the assignment categories are plain text and the masters show as chatheads.
+		if (stats.slayerMonster())
+		{
+			JPanel slayer = block();
+
+			MonsterStats.StatField req = stats.slayerRequirement();
+			String reqTip = req.tooltip() != null ? req.tooltip() : "Slayer level";
+			JPanel head = rowX();
+			head.add(headerLabel("Slayer"));
+			head.add(Box.createHorizontalGlue());
+			JLabel slayerLvlIcon = new JLabel(uniformIcon(icons.slayerIcon, 16));
+			slayerLvlIcon.setToolTipText(reqTip);
+			JLabel lvl = new JLabel(req.value());
+			lvl.setFont(FontManager.getRunescapeSmallFont());
+			lvl.setForeground(resolve(req.role()));
+			lvl.setToolTipText(reqTip);
+			head.add(slayerLvlIcon);
+			head.add(Box.createRigidArea(new Dimension(3, 0)));
+			head.add(lvl);
+			capHeight(head);
+			slayer.add(head);
+			slayer.add(Box.createRigidArea(new Dimension(0, 3)));
+
+			String slayerXp = stats.slayerXp();
+			if (slayerXp != null)
+			{
+				slayer.add(kv("Slayer XP", slayerXp, Color.WHITE));
+			}
+
+			List<String> categories = stats.slayerCategories();
+			if (!categories.isEmpty())
+			{
+				slayer.add(kvWrappedRight("Category", String.join(", ", categories)));
+			}
+
+			List<String> masters = stats.slayerMasters();
+			if (!masters.isEmpty())
+			{
+				slayer.add(Box.createRigidArea(new Dimension(0, 4)));
+				slayer.add(caption("Assigned by"));
+				slayer.add(masterIconStrip(masters));
+			}
+
+			capHeight(slayer);
+			add(Box.createRigidArea(new Dimension(0, 6)));
+			add(slayer);
 		}
 	}
 
