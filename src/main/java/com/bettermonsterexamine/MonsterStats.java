@@ -75,12 +75,14 @@ final class MonsterStats
 	private final MonsterData m;
 	private final HighlightMode mode;
 	private final int playerHpLevel;
+	private final int playerSlayerLevel;
 
-	MonsterStats(MonsterData m, HighlightMode mode, int playerHpLevel)
+	MonsterStats(MonsterData m, HighlightMode mode, int playerHpLevel, int playerSlayerLevel)
 	{
 		this.m = m;
 		this.mode = mode;
 		this.playerHpLevel = playerHpLevel;
+		this.playerSlayerLevel = playerSlayerLevel;
 	}
 
 	// ---- Attributes / Info ---------------------------------------------------
@@ -96,6 +98,49 @@ final class MonsterStats
 	boolean slayerMonster()
 	{
 		return m.isSlayerMonster();
+	}
+
+	/**
+	 * Required Slayer level to damage the monster (the wiki shows {@code 1} when there is no real
+	 * requirement). Flagged {@link ColourRole#DANGER} when the player's Slayer level is known and
+	 * below it — you can't harm it yet. Only meaningful on a Slayer monster.
+	 */
+	StatField slayerRequirement()
+	{
+		int req = Math.max(1, m.getSlayerLevel());
+		boolean tooLow = playerSlayerLevel > 0 && playerSlayerLevel < req;
+		return new StatField(String.valueOf(req), tooLow ? ColourRole.DANGER : ColourRole.NEUTRAL,
+			req > 1 ? "Requires Slayer level " + req + " to damage." : null);
+	}
+
+	/** Slayer XP awarded per kill, without a trailing {@code .0}; null when absent. */
+	String slayerXp()
+	{
+		double xp = m.getSlayerExperience();
+		return xp > 0 ? StatFormat.number(xp) : null;
+	}
+
+	/** The Slayer assignment categories joined (e.g. {@code "Blue dragons, Bosses"}); null when none. */
+	String slayerCategories()
+	{
+		List<String> c = m.getSlayerCategory();
+		return c == null || c.isEmpty() ? null : String.join(", ", c);
+	}
+
+	/** The Slayer masters who assign it, capitalised and joined (e.g. {@code "Duradel, Nieve"}); null when none. */
+	String slayerMasters()
+	{
+		List<String> a = m.getAssignedBy();
+		if (a == null || a.isEmpty())
+		{
+			return null;
+		}
+		List<String> capped = new ArrayList<>(a.size());
+		for (String master : a)
+		{
+			capped.add(StatFormat.cap(master));
+		}
+		return String.join(", ", capped);
 	}
 
 	/** Flat-armour adjustment; null when zero. Negative (takes extra damage) is good, positive bad. */

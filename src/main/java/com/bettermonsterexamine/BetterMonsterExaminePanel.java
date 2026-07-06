@@ -72,7 +72,7 @@ public class BetterMonsterExaminePanel extends PluginPanel
 	 */
 	private Consumer<MonsterData> selectionListener;
 
-	public BetterMonsterExaminePanel(MonsterIcons icons, MonsterDataService data, BetterMonsterExamineConfig config, ConfigManager configManager, Gson gson, IntSupplier playerCombatLevel, IntSupplier playerHpLevel, BufferedImage titleIcon)
+	public BetterMonsterExaminePanel(MonsterIcons icons, MonsterDataService data, BetterMonsterExamineConfig config, ConfigManager configManager, Gson gson, IntSupplier playerCombatLevel, IntSupplier playerHpLevel, IntSupplier playerSlayerLevel, BufferedImage titleIcon)
 	{
 		super(false);
 		this.data = data;
@@ -80,7 +80,7 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		this.configManager = configManager;
 		this.gson = gson;
 		this.history = LookupHistory.fromJson(gson, configManager.getConfiguration(CONFIG_GROUP, HISTORY_KEY));
-		this.card = new MonsterCard(icons, config, playerCombatLevel, playerHpLevel,
+		this.card = new MonsterCard(icons, config, playerCombatLevel, playerHpLevel, playerSlayerLevel,
 			m -> history.isFavorite(m.getName(), m.getVersion()),
 			this::toggleFavorite,
 			this::selectVariant);

@@ -85,6 +85,7 @@ public class BetterMonsterExaminePlugin extends Plugin
 	// Cached on the client thread (GameTick) so the panel can read them safely off-thread (EDT).
 	private volatile int playerCombatLevel = -1;
 	private volatile int playerHpLevel = -1;
+	private volatile int playerSlayerLevel = -1;
 	private static final String STATS_OPTION = "Stats";
 
 	@Provides
@@ -98,7 +99,7 @@ public class BetterMonsterExaminePlugin extends Plugin
 	{
 		log.info("Better Monster Examine started");
 		titleIcon = ImageUtil.loadImageResource(getClass(), "/icon.png");
-		cardOverlay = new MonsterCardOverlay(config, monsterIcons, () -> playerCombatLevel, () -> playerHpLevel);
+		cardOverlay = new MonsterCardOverlay(config, monsterIcons, () -> playerCombatLevel, () -> playerHpLevel, () -> playerSlayerLevel);
 		overlayManager.add(cardOverlay);
 
 		// Route left-clicks on the overlay's tab strip to the overlay, consuming them so they
@@ -157,7 +158,7 @@ public class BetterMonsterExaminePlugin extends Plugin
 	{
 		log.debug("Adding side panel navigation button");
 		BufferedImage icon = titleIcon;
-		monsterStatsPanel = new BetterMonsterExaminePanel(monsterIcons, dataService, config, configManager, gson, () -> playerCombatLevel, () -> playerHpLevel, icon);
+		monsterStatsPanel = new BetterMonsterExaminePanel(monsterIcons, dataService, config, configManager, gson, () -> playerCombatLevel, () -> playerHpLevel, () -> playerSlayerLevel, icon);
 		// Mirror whatever the panel is showing into the overlay (when the overlay is a target).
 		monsterStatsPanel.setSelectionListener(this::showInOverlay);
 		navButton = NavigationButton.builder()
@@ -244,19 +245,21 @@ public class BetterMonsterExaminePlugin extends Plugin
 	@Subscribe
 	public void onGameTick(GameTick event)
 	{
-		// Keep the player's combat and hitpoints levels current so the panel can colour the
-		// monster level relative to combat and flag max hits above the player's HP; a couple
-		// of field reads per tick is negligible.
+		// Keep the player's combat, hitpoints and Slayer levels current so the panel can colour the
+		// monster level relative to combat, flag max hits above the player's HP, and flag Slayer
+		// requirements above the player's Slayer level; a few field reads per tick is negligible.
 		Player p = client.getLocalPlayer();
 		if (p != null)
 		{
 			playerCombatLevel = p.getCombatLevel();
 			playerHpLevel = client.getRealSkillLevel(Skill.HITPOINTS);
+			playerSlayerLevel = client.getRealSkillLevel(Skill.SLAYER);
 		}
 		else
 		{
 			playerCombatLevel = -1;
 			playerHpLevel = -1;
+			playerSlayerLevel = -1;
 		}
 	}
 

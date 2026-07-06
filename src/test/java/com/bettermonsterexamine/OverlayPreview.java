@@ -82,8 +82,8 @@ public class OverlayPreview
 	private static BufferedImage renderOverlay(BetterMonsterExamineConfig cfg, MonsterIcons icons,
 		MonsterData monster, int tab) throws Exception
 	{
-		// Maxed player (126 combat, 99 hp) so level colouring and the over-HP max-hit cue render.
-		MonsterCardOverlay overlay = new MonsterCardOverlay(cfg, icons, () -> 126, () -> 99);
+		// Maxed player (126 combat, 99 hp, 99 Slayer) so level colouring and the over-HP max-hit cue render.
+		MonsterCardOverlay overlay = new MonsterCardOverlay(cfg, icons, () -> 126, () -> 99, () -> 99);
 		overlay.setMonster(monster);
 		overlay.setActiveTab(tab);
 

@@ -44,18 +44,20 @@ class MonsterCard extends JPanel
 	private final BetterMonsterExamineConfig config;
 	private final IntSupplier playerCombatLevel;
 	private final IntSupplier playerHpLevel;
+	private final IntSupplier playerSlayerLevel;
 	private final Predicate<MonsterData> isFavorite;
 	private final Consumer<MonsterData> onToggleFavorite;
 	private final Consumer<MonsterData> onSelectVariant;
 
 	MonsterCard(MonsterIcons icons, BetterMonsterExamineConfig config, IntSupplier playerCombatLevel,
-		IntSupplier playerHpLevel, Predicate<MonsterData> isFavorite, Consumer<MonsterData> onToggleFavorite,
-		Consumer<MonsterData> onSelectVariant)
+		IntSupplier playerHpLevel, IntSupplier playerSlayerLevel, Predicate<MonsterData> isFavorite,
+		Consumer<MonsterData> onToggleFavorite, Consumer<MonsterData> onSelectVariant)
 	{
 		this.icons = icons;
 		this.config = config;
 		this.playerCombatLevel = playerCombatLevel;
 		this.playerHpLevel = playerHpLevel;
+		this.playerSlayerLevel = playerSlayerLevel;
 		this.isFavorite = isFavorite;
 		this.onToggleFavorite = onToggleFavorite;
 		this.onSelectVariant = onSelectVariant;
@@ -67,7 +69,7 @@ class MonsterCard extends JPanel
 	void show(MonsterData m, List<MonsterData> variants)
 	{
 		removeAll();
-		MonsterStats stats = new MonsterStats(m, config.statHighlighting(), playerHpLevel.getAsInt());
+		MonsterStats stats = new MonsterStats(m, config.statHighlighting(), playerHpLevel.getAsInt(), playerSlayerLevel.getAsInt());
 		add(header(m, variants, stats));
 		add(Box.createRigidArea(new Dimension(0, 6)));
 		buildWiki(stats);
@@ -227,11 +229,6 @@ class MonsterCard extends JPanel
 			props.add(wrappedLabel(sizeAttr, Color.WHITE, false));
 			anyProp = true;
 		}
-		if (stats.slayerMonster())
-		{
-			props.add(kv("Slayer monster", "Yes", Color.WHITE));
-			anyProp = true;
-		}
 		MonsterStats.StatField flatArmour = stats.flatArmour();
 		if (flatArmour != null)
 		{
@@ -254,6 +251,34 @@ class MonsterCard extends JPanel
 		{
 			capHeight(props);
 			add(props);
+			add(Box.createRigidArea(new Dimension(0, 6)));
+		}
+
+		// SLAYER — only for Slayer targets: required level (red when above your Slayer level),
+		// XP per kill, assignment categories and the masters who assign it.
+		if (stats.slayerMonster())
+		{
+			JPanel slayer = block();
+			slayer.add(sectionHeader("Slayer"));
+			MonsterStats.StatField req = stats.slayerRequirement();
+			slayer.add(kv("Slayer level", req.value(), resolve(req.role()), req.tooltip()));
+			String slayerXp = stats.slayerXp();
+			if (slayerXp != null)
+			{
+				slayer.add(kv("Slayer XP", slayerXp, Color.WHITE));
+			}
+			String categories = stats.slayerCategories();
+			if (categories != null)
+			{
+				slayer.add(kvWrappedRight("Category", categories));
+			}
+			String masters = stats.slayerMasters();
+			if (masters != null)
+			{
+				slayer.add(kvWrappedRight("Assigned by", masters));
+			}
+			capHeight(slayer);
+			add(slayer);
 			add(Box.createRigidArea(new Dimension(0, 6)));
 		}
 
