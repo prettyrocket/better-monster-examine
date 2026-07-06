@@ -122,11 +122,32 @@ final class MonsterStats
 		return xp > 0 ? StatFormat.number(xp) : null;
 	}
 
-	/** The Slayer assignment categories (e.g. {@code ["Blue dragons","Bosses"]}); empty when none. */
+	/**
+	 * The Slayer assignment categories, cleaned of wiki markers and de-junked (Bucket carries a few
+	 * {@code "No"}/{@code "None"} placeholders and the odd strip-marker), deduplicated in order.
+	 * Empty when none. E.g. {@code ["Blue dragons","Bosses"]}.
+	 */
 	List<String> slayerCategories()
 	{
 		List<String> c = m.getSlayerCategory();
-		return c == null ? Collections.emptyList() : c;
+		if (c == null)
+		{
+			return Collections.emptyList();
+		}
+		List<String> out = new ArrayList<>();
+		for (String raw : c)
+		{
+			String clean = WikiSanitizer.text(raw);
+			if (clean == null || clean.isEmpty() || clean.equalsIgnoreCase("no") || clean.equalsIgnoreCase("none"))
+			{
+				continue;
+			}
+			if (!out.contains(clean))
+			{
+				out.add(clean);
+			}
+		}
+		return out;
 	}
 
 	/**

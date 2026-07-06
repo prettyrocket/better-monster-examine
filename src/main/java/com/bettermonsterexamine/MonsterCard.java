@@ -2,7 +2,6 @@ package com.bettermonsterexamine;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
-import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
@@ -10,8 +9,6 @@ import java.awt.Graphics2D;
 import java.awt.GridLayout;
 import java.awt.Image;
 import java.awt.Insets;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 import java.util.List;
 import java.util.Locale;
@@ -292,7 +289,7 @@ class MonsterCard extends JPanel
 			List<String> categories = stats.slayerCategories();
 			if (!categories.isEmpty())
 			{
-				slayer.add(categoryLinks(categories));
+				slayer.add(kvWrappedRight("Category", String.join(", ", categories)));
 			}
 
 			List<String> masters = stats.slayerMasters();
@@ -458,59 +455,6 @@ class MonsterCard extends JPanel
 		l.setFont(FontManager.getRunescapeSmallFont());
 		l.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
 		l.setAlignmentX(LEFT_ALIGNMENT);
-		return l;
-	}
-
-	/**
-	 * A "Category" row: the caption on the left, the assignment categories right-aligned as
-	 * underlined links (one per line) that open their wiki Slayer-task page. Mirrors the
-	 * label-left / value-right shape of the other stat rows.
-	 */
-	private JPanel categoryLinks(List<String> categories)
-	{
-		JPanel r = new JPanel(new BorderLayout());
-		r.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		r.setBorder(new EmptyBorder(1, 0, 1, 0));
-		r.setAlignmentX(LEFT_ALIGNMENT);
-
-		JLabel kl = new JLabel("Category");
-		kl.setFont(FontManager.getRunescapeSmallFont());
-		kl.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-		kl.setVerticalAlignment(JLabel.TOP);
-
-		JPanel values = new JPanel();
-		values.setLayout(new BoxLayout(values, BoxLayout.Y_AXIS));
-		values.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		for (String category : categories)
-		{
-			JLabel link = linkValue(category, StatFormat.slayerTaskUrl(category));
-			link.setAlignmentX(RIGHT_ALIGNMENT);
-			values.add(link);
-		}
-
-		r.add(kl, BorderLayout.WEST);
-		r.add(values, BorderLayout.EAST);
-		capHeight(r);
-		return r;
-	}
-
-	/** A right-aligned, underlined clickable link value that opens {@code url} in the browser. */
-	private JLabel linkValue(String text, String url)
-	{
-		JLabel l = new JLabel("<html><u>" + StatFormat.esc(text) + "</u></html>");
-		l.setFont(FontManager.getRunescapeSmallFont());
-		l.setForeground(ColorScheme.BRAND_ORANGE);
-		l.setHorizontalAlignment(JLabel.RIGHT);
-		l.setToolTipText(url);
-		l.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-		l.addMouseListener(new MouseAdapter()
-		{
-			@Override
-			public void mouseClicked(MouseEvent e)
-			{
-				LinkBrowser.browse(url);
-			}
-		});
 		return l;
 	}
 
