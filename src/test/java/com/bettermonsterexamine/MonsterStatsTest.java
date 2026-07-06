@@ -24,7 +24,7 @@ public class MonsterStatsTest
 
 	private static MonsterStats stats(MonsterData m)
 	{
-		return new MonsterStats(m, HighlightMode.STANDARD, 99);
+		return new MonsterStats(m, HighlightMode.STANDARD, 99, 99);
 	}
 
 	@Test
@@ -55,7 +55,7 @@ public class MonsterStatsTest
 	{
 		MonsterData m = monster("{\"max_hit\":[\"999\"]}");
 
-		MonsterStats s = new MonsterStats(m, HighlightMode.OFF, 99);
+		MonsterStats s = new MonsterStats(m, HighlightMode.OFF, 99, 99);
 
 		assertFalse(s.maxHits().get(0).overHp());
 	}
@@ -112,6 +112,59 @@ public class MonsterStatsTest
 		assertEquals(ColourRole.DANGER, s.cannon().role());
 		assertNull(s.thrall());
 		assertEquals("Immune (weak)", s.burn());
+	}
+
+	@Test
+	public void slayerMonsterOnlyWhenCategoryPresent()
+	{
+		assertTrue(stats(monster("{\"slayer_category\":[\"Abyssal demons\"]}")).slayerMonster());
+		assertFalse(stats(monster("{\"slayer_level\":85}")).slayerMonster());
+		assertFalse(stats(monster("{}")).slayerMonster());
+	}
+
+	@Test
+	public void slayerRequirementFlagsDangerOnlyWhenPlayerBelow()
+	{
+		MonsterData m = monster("{\"slayer_category\":[\"Abyssal demons\"],\"slayer_level\":85}");
+
+		// Player at 84 can't damage it yet → danger; at 85 or with unknown level → neutral.
+		assertEquals("85", new MonsterStats(m, HighlightMode.STANDARD, 99, 84).slayerRequirement().value());
+		assertEquals(ColourRole.DANGER, new MonsterStats(m, HighlightMode.STANDARD, 99, 84).slayerRequirement().role());
+		assertEquals(ColourRole.NEUTRAL, new MonsterStats(m, HighlightMode.STANDARD, 99, 85).slayerRequirement().role());
+		assertEquals(ColourRole.NEUTRAL, new MonsterStats(m, HighlightMode.STANDARD, 99, -1).slayerRequirement().role());
+	}
+
+	@Test
+	public void slayerRequirementFloorsAtOneAndStaysNeutral()
+	{
+		// No listed requirement: the wiki shows level 1, which every player meets.
+		MonsterStats.StatField req = new MonsterStats(monster("{\"slayer_category\":[\"Zombies\"]}"),
+			HighlightMode.STANDARD, 99, 1).slayerRequirement();
+
+		assertEquals("1", req.value());
+		assertEquals(ColourRole.NEUTRAL, req.role());
+		assertNull(req.tooltip());
+	}
+
+	@Test
+	public void slayerXpFormatsAndOmitsZero()
+	{
+		assertEquals("150", stats(monster("{\"slayer_experience\":150.0}")).slayerXp());
+		assertEquals("18.5", stats(monster("{\"slayer_experience\":18.5}")).slayerXp());
+		assertNull(stats(monster("{\"slayer_experience\":0}")).slayerXp());
+		assertNull(stats(monster("{}")).slayerXp());
+	}
+
+	@Test
+	public void slayerCategoriesAndMastersJoinAndCapitalise()
+	{
+		MonsterData m = monster("{\"slayer_category\":[\"Blue dragons\",\"Bosses\"],"
+			+ "\"assigned_by\":[\"duradel\",\"nieve\"]}");
+
+		assertEquals("Blue dragons, Bosses", stats(m).slayerCategories());
+		assertEquals("Duradel, Nieve", stats(m).slayerMasters());
+		assertNull(stats(monster("{}")).slayerCategories());
+		assertNull(stats(monster("{}")).slayerMasters());
 	}
 
 	@Test

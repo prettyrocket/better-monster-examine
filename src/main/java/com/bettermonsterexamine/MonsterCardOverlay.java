@@ -41,6 +41,7 @@ class MonsterCardOverlay extends Overlay
 	private final MonsterIcons icons;
 	private final IntSupplier playerCombatLevel;
 	private final IntSupplier playerHpLevel;
+	private final IntSupplier playerSlayerLevel;
 
 	// monster is swapped in from the client thread and read on the render thread; activeTab is
 	// written from the mouse (AWT) thread. Volatile is enough — each is an independent
@@ -52,12 +53,13 @@ class MonsterCardOverlay extends Overlay
 	private volatile Rectangle[] tabBounds;
 	private volatile Rectangle closeBounds;
 
-	MonsterCardOverlay(BetterMonsterExamineConfig config, MonsterIcons icons, IntSupplier playerCombatLevel, IntSupplier playerHpLevel)
+	MonsterCardOverlay(BetterMonsterExamineConfig config, MonsterIcons icons, IntSupplier playerCombatLevel, IntSupplier playerHpLevel, IntSupplier playerSlayerLevel)
 	{
 		this.config = config;
 		this.icons = icons;
 		this.playerCombatLevel = playerCombatLevel;
 		this.playerHpLevel = playerHpLevel;
+		this.playerSlayerLevel = playerSlayerLevel;
 		setPosition(OverlayPosition.TOP_LEFT);
 		setLayer(OverlayLayer.ABOVE_WIDGETS);
 	}
@@ -227,7 +229,7 @@ class MonsterCardOverlay extends Overlay
 	private List<Row> rowsFor(int tab, MonsterData m)
 	{
 		HighlightMode mode = config.statHighlighting();
-		MonsterStats stats = new MonsterStats(m, mode, playerHpLevel.getAsInt());
+		MonsterStats stats = new MonsterStats(m, mode, playerHpLevel.getAsInt(), playerSlayerLevel.getAsInt());
 		List<Row> rows = new ArrayList<>();
 
 		switch (tab)
@@ -354,7 +356,23 @@ class MonsterCardOverlay extends Overlay
 		}
 		if (stats.slayerMonster())
 		{
-			rows.add(Row.kv("Slayer", "Yes", white));
+			MonsterStats.StatField req = stats.slayerRequirement();
+			rows.add(Row.kv("Slayer level", req.value(), StatColors.resolve(req.role(), mode)));
+			String slayerXp = stats.slayerXp();
+			if (slayerXp != null)
+			{
+				rows.add(Row.kv("Slayer XP", slayerXp, white));
+			}
+			String categories = stats.slayerCategories();
+			if (categories != null)
+			{
+				rows.add(Row.kvWrap("Category", categories, white));
+			}
+			String masters = stats.slayerMasters();
+			if (masters != null)
+			{
+				rows.add(Row.kvWrap("Assigned by", masters, white));
+			}
 		}
 		// Flat armour: a flat damage adjustment, 0 for most monsters — shown only when non-zero,
 		// green when negative (takes extra damage), red when positive (shrugs damage off).
