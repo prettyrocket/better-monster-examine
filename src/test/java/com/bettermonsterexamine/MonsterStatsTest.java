@@ -168,6 +168,15 @@ public class MonsterStatsTest
 	}
 
 	@Test
+	public void slayerCategoriesCleanWikiMarkupDropJunkAndDedupe()
+	{
+		// Wikilinks are unwrapped, "No"/"None" placeholders dropped, and duplicates removed in order.
+		MonsterData m = monster("{\"slayer_category\":[\"[[Blue dragon|Blue dragons]]\",\"No\",\"None\",\"Bosses\",\"Bosses\"]}");
+
+		assertEquals(List.of("Blue dragons", "Bosses"), stats(m).slayerCategories());
+	}
+
+	@Test
 	public void slayerMastersNormaliseCaseFoldKonarAndDropJunk()
 	{
 		// Bucket carries mixed casing, Konar's full name, duplicates and "No"/"None" placeholders.
