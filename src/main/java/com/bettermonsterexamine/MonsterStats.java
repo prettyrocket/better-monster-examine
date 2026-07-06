@@ -1,7 +1,9 @@
 package com.bettermonsterexamine;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * The neutral view-model behind both renderers ({@link MonsterCard} and
@@ -120,27 +122,49 @@ final class MonsterStats
 		return xp > 0 ? StatFormat.number(xp) : null;
 	}
 
-	/** The Slayer assignment categories joined (e.g. {@code "Blue dragons, Bosses"}); null when none. */
-	String slayerCategories()
+	/** The Slayer assignment categories (e.g. {@code ["Blue dragons","Bosses"]}); empty when none. */
+	List<String> slayerCategories()
 	{
 		List<String> c = m.getSlayerCategory();
-		return c == null || c.isEmpty() ? null : String.join(", ", c);
+		return c == null ? Collections.emptyList() : c;
 	}
 
-	/** The Slayer masters who assign it, capitalised and joined (e.g. {@code "Duradel, Nieve"}); null when none. */
-	String slayerMasters()
+	/**
+	 * The Slayer masters who assign it, as normalised lower-case keys (e.g. {@code ["duradel","nieve"]}),
+	 * deduplicated in order — Bucket carries mixed casing and a few junk values. Empty when none.
+	 */
+	List<String> slayerMasters()
 	{
 		List<String> a = m.getAssignedBy();
-		if (a == null || a.isEmpty())
+		if (a == null)
+		{
+			return Collections.emptyList();
+		}
+		List<String> out = new ArrayList<>();
+		for (String raw : a)
+		{
+			String key = normaliseMaster(raw);
+			if (key != null && !out.contains(key))
+			{
+				out.add(key);
+			}
+		}
+		return out;
+	}
+
+	/** Lower-case a raw {@code assigned_by} value to a master key, folding Konar's full name and dropping junk. */
+	static String normaliseMaster(String raw)
+	{
+		if (raw == null)
 		{
 			return null;
 		}
-		List<String> capped = new ArrayList<>(a.size());
-		for (String master : a)
+		String key = raw.trim().toLowerCase(Locale.ROOT);
+		if (key.isEmpty() || key.equals("no") || key.equals("none"))
 		{
-			capped.add(StatFormat.cap(master));
+			return null;
 		}
-		return String.join(", ", capped);
+		return key.startsWith("konar") ? "konar" : key;
 	}
 
 	/** Flat-armour adjustment; null when zero. Negative (takes extra damage) is good, positive bad. */

@@ -1,7 +1,9 @@
 package com.bettermonsterexamine;
 
 import java.awt.image.BufferedImage;
+import java.util.HashMap;
 import java.util.Locale;
+import java.util.Map;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import net.runelite.client.util.ImageUtil;
@@ -13,6 +15,10 @@ import net.runelite.client.util.ImageUtil;
 @Singleton
 public class MonsterIcons
 {
+	/** The Slayer masters we bundle a chathead for (keyed by the lower-case name Bucket uses). */
+	static final String[] SLAYER_MASTERS =
+		{"turael", "spria", "mazchna", "vannaka", "chaeldar", "nieve", "steve", "duradel", "kuradal", "konar", "krystilia"};
+
 	final BufferedImage stabIcon;
 	final BufferedImage crushIcon;
 	final BufferedImage slashIcon;
@@ -33,6 +39,9 @@ public class MonsterIcons
 	final BufferedImage magicDamageIcon;
 	final BufferedImage rangedStrengthIcon;
 	final BufferedImage magicDefenceIcon;
+	final BufferedImage slayerIcon;
+	final BufferedImage slayerXpIcon;
+	private final Map<String, BufferedImage> masterIcons = new HashMap<>();
 
 	@Inject
 	MonsterIcons()
@@ -57,6 +66,18 @@ public class MonsterIcons
 		magicDamageIcon = ImageUtil.loadImageResource(getClass(), "/Magic_Damage_icon.png");
 		rangedStrengthIcon = ImageUtil.loadImageResource(getClass(), "/Ranged_Strength_icon.png");
 		magicDefenceIcon = ImageUtil.loadImageResource(getClass(), "/Magic_defence_icon.png");
+		slayerIcon = ImageUtil.loadImageResource(getClass(), "/Slayer_icon.png");
+		slayerXpIcon = ImageUtil.loadImageResource(getClass(), "/Antique_lamp.png");
+		for (String master : SLAYER_MASTERS)
+		{
+			masterIcons.put(master, ImageUtil.loadImageResource(getClass(), "/slayer/" + master + ".png"));
+		}
+	}
+
+	/** The chathead for a Slayer master (by its lower-case name), or null when we bundle none. */
+	BufferedImage masterIcon(String master)
+	{
+		return master == null ? null : masterIcons.get(master);
 	}
 
 	public BufferedImage getElementalWeaknessIcon(String elementalWeakness)

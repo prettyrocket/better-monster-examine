@@ -95,6 +95,18 @@ final class StatFormat
 		}
 	}
 
+	/** The OSRS Wiki Slayer-task page for an assignment category, e.g. {@code "Blue dragons"}. */
+	static String slayerTaskUrl(String category)
+	{
+		return "https://oldschool.runescape.wiki/w/Slayer_task/" + category.replace(' ', '_');
+	}
+
+	/** Display name for a Slayer master key (e.g. {@code "konar"} → "Konar quo Maten"). */
+	static String masterName(String key)
+	{
+		return "konar".equals(key) ? "Konar quo Maten" : cap(key);
+	}
+
 	/** Join the non-null, non-empty parts with {@code sep}; null when nothing remains. */
 	static String join(String sep, String... parts)
 	{

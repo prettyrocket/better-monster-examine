@@ -2,12 +2,16 @@ package com.bettermonsterexamine;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Cursor;
 import java.awt.Dimension;
+import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.Graphics2D;
 import java.awt.GridLayout;
 import java.awt.Image;
 import java.awt.Insets;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 import java.util.List;
 import java.util.Locale;
@@ -254,29 +258,44 @@ class MonsterCard extends JPanel
 			add(Box.createRigidArea(new Dimension(0, 6)));
 		}
 
-		// SLAYER — only for Slayer targets: required level (red when above your Slayer level),
-		// XP per kill, assignment categories and the masters who assign it.
+		// SLAYER — only for Slayer targets: required level (red when above your Slayer level) and
+		// XP per kill as an icon pair, the assignment categories (each links to its wiki task page)
+		// and the masters who assign it, shown as chatheads.
 		if (stats.slayerMonster())
 		{
 			JPanel slayer = block();
 			slayer.add(sectionHeader("Slayer"));
+
 			MonsterStats.StatField req = stats.slayerRequirement();
-			slayer.add(kv("Slayer level", req.value(), resolve(req.role()), req.tooltip()));
 			String slayerXp = stats.slayerXp();
-			if (slayerXp != null)
+			JPanel pair = new JPanel(new GridLayout(1, 2, 4, 0));
+			pair.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+			pair.setAlignmentX(LEFT_ALIGNMENT);
+			pair.add(statCell(icons.slayerIcon, req.value(), resolve(req.role()),
+				req.tooltip() != null ? req.tooltip() : "Slayer level"));
+			pair.add(statCell(icons.slayerXpIcon, slayerXp != null ? slayerXp : "—", Color.WHITE, "Slayer XP per kill"));
+			capHeight(pair);
+			slayer.add(pair);
+
+			List<String> categories = stats.slayerCategories();
+			if (!categories.isEmpty())
 			{
-				slayer.add(kv("Slayer XP", slayerXp, Color.WHITE));
+				slayer.add(Box.createRigidArea(new Dimension(0, 4)));
+				slayer.add(caption("Category"));
+				for (String category : categories)
+				{
+					slayer.add(linkLabel(category, StatFormat.slayerTaskUrl(category)));
+				}
 			}
-			String categories = stats.slayerCategories();
-			if (categories != null)
+
+			List<String> masters = stats.slayerMasters();
+			if (!masters.isEmpty())
 			{
-				slayer.add(kvWrappedRight("Category", categories));
+				slayer.add(Box.createRigidArea(new Dimension(0, 4)));
+				slayer.add(caption("Assigned by"));
+				slayer.add(masterIconStrip(masters));
 			}
-			String masters = stats.slayerMasters();
-			if (masters != null)
-			{
-				slayer.add(kvWrappedRight("Assigned by", masters));
-			}
+
 			capHeight(slayer);
 			add(slayer);
 			add(Box.createRigidArea(new Dimension(0, 6)));
@@ -398,6 +417,11 @@ class MonsterCard extends JPanel
 
 	private JComponent statCell(BufferedImage icon, String value, String tooltip)
 	{
+		return statCell(icon, value, Color.WHITE, tooltip);
+	}
+
+	private JComponent statCell(BufferedImage icon, String value, Color valueColor, String tooltip)
+	{
 		JPanel cell = new JPanel();
 		cell.setLayout(new BoxLayout(cell, BoxLayout.Y_AXIS));
 		cell.setBackground(ColorScheme.DARKER_GRAY_COLOR);
@@ -411,13 +435,66 @@ class MonsterCard extends JPanel
 
 		JLabel vl = new JLabel(value);
 		vl.setFont(FontManager.getRunescapeSmallFont());
-		vl.setForeground(Color.WHITE);
+		vl.setForeground(valueColor);
 		vl.setAlignmentX(CENTER_ALIGNMENT);
 
 		cell.add(ic);
 		cell.add(Box.createRigidArea(new Dimension(0, 3)));
 		cell.add(vl);
 		return cell;
+	}
+
+	/** A small left-aligned caption label (the light-grey key style used for sub-labels). */
+	private JLabel caption(String text)
+	{
+		JLabel l = new JLabel(text);
+		l.setFont(FontManager.getRunescapeSmallFont());
+		l.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+		l.setAlignmentX(LEFT_ALIGNMENT);
+		return l;
+	}
+
+	/** A clickable link label (indented under its caption) that opens {@code url} in the browser. */
+	private JLabel linkLabel(String text, String url)
+	{
+		JLabel l = new JLabel("  " + text);
+		l.setFont(FontManager.getRunescapeSmallFont());
+		l.setForeground(ColorScheme.BRAND_ORANGE);
+		l.setAlignmentX(LEFT_ALIGNMENT);
+		l.setToolTipText(url);
+		l.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+		l.addMouseListener(new MouseAdapter()
+		{
+			@Override
+			public void mouseClicked(MouseEvent e)
+			{
+				LinkBrowser.browse(url);
+			}
+		});
+		return l;
+	}
+
+	/** The Slayer masters as a left-flowing row of chatheads (name on hover); text fallback if unbundled. */
+	private JPanel masterIconStrip(List<String> masters)
+	{
+		JPanel strip = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 2));
+		strip.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		strip.setAlignmentX(LEFT_ALIGNMENT);
+		for (String master : masters)
+		{
+			String name = StatFormat.masterName(master);
+			BufferedImage icon = icons.masterIcon(master);
+			JLabel l = icon != null ? new JLabel(uniformIcon(icon, ICON_BOX)) : new JLabel(name);
+			if (icon == null)
+			{
+				l.setFont(FontManager.getRunescapeSmallFont());
+				l.setForeground(Color.WHITE);
+			}
+			l.setToolTipText(name);
+			strip.add(l);
+		}
+		capHeight(strip);
+		return strip;
 	}
 
 	/** Scale to fit a fixed square (preserving aspect) and centre it, so all icons match. */

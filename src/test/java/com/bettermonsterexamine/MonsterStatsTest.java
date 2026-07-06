@@ -156,15 +156,24 @@ public class MonsterStatsTest
 	}
 
 	@Test
-	public void slayerCategoriesAndMastersJoinAndCapitalise()
+	public void slayerCategoriesAndMastersAsLists()
 	{
 		MonsterData m = monster("{\"slayer_category\":[\"Blue dragons\",\"Bosses\"],"
 			+ "\"assigned_by\":[\"duradel\",\"nieve\"]}");
 
-		assertEquals("Blue dragons, Bosses", stats(m).slayerCategories());
-		assertEquals("Duradel, Nieve", stats(m).slayerMasters());
-		assertNull(stats(monster("{}")).slayerCategories());
-		assertNull(stats(monster("{}")).slayerMasters());
+		assertEquals(List.of("Blue dragons", "Bosses"), stats(m).slayerCategories());
+		assertEquals(List.of("duradel", "nieve"), stats(m).slayerMasters());
+		assertTrue(stats(monster("{}")).slayerCategories().isEmpty());
+		assertTrue(stats(monster("{}")).slayerMasters().isEmpty());
+	}
+
+	@Test
+	public void slayerMastersNormaliseCaseFoldKonarAndDropJunk()
+	{
+		// Bucket carries mixed casing, Konar's full name, duplicates and "No"/"None" placeholders.
+		MonsterData m = monster("{\"assigned_by\":[\"Duradel\",\"duradel\",\"Konar quo Maten\",\"No\",\"None\"]}");
+
+		assertEquals(List.of("duradel", "konar"), stats(m).slayerMasters());
 	}
 
 	@Test

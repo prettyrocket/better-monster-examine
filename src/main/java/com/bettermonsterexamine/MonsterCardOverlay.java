@@ -357,21 +357,29 @@ class MonsterCardOverlay extends Overlay
 		if (stats.slayerMonster())
 		{
 			MonsterStats.StatField req = stats.slayerRequirement();
-			rows.add(Row.kv("Slayer level", req.value(), StatColors.resolve(req.role(), mode)));
+			rows.add(Row.stat(icons.slayerIcon, "Slayer level", req.value(), StatColors.resolve(req.role(), mode)));
 			String slayerXp = stats.slayerXp();
 			if (slayerXp != null)
 			{
-				rows.add(Row.kv("Slayer XP", slayerXp, white));
+				rows.add(Row.stat(icons.slayerXpIcon, "Slayer XP", slayerXp, white));
 			}
-			String categories = stats.slayerCategories();
-			if (categories != null)
+			List<String> categories = stats.slayerCategories();
+			if (!categories.isEmpty())
 			{
-				rows.add(Row.kvWrap("Category", categories, white));
+				rows.add(Row.kvWrap("Category", String.join(", ", categories), white));
 			}
-			String masters = stats.slayerMasters();
-			if (masters != null)
+			List<BufferedImage> heads = new ArrayList<>();
+			for (String master : stats.slayerMasters())
 			{
-				rows.add(Row.kvWrap("Assigned by", masters, white));
+				BufferedImage head = icons.masterIcon(master);
+				if (head != null)
+				{
+					heads.add(head);
+				}
+			}
+			if (!heads.isEmpty())
+			{
+				rows.add(Row.icons("Assigned by", heads));
 			}
 		}
 		// Flat armour: a flat damage adjustment, 0 for most monsters — shown only when non-zero,
@@ -464,6 +472,9 @@ class MonsterCardOverlay extends Overlay
 	 */
 	private static final class Row
 	{
+		/** Gap between chatheads in an {@code icons} strip. */
+		private static final int STRIP_GAP = 2;
+
 		private final String label;
 		private final BufferedImage icon;
 		private final String value;
@@ -471,6 +482,8 @@ class MonsterCardOverlay extends Overlay
 		private final boolean wrap;
 		/** When wrapping, right-align the value lines and keep the label inline (vs. its own line). */
 		private final boolean rightWrap;
+		/** A wrapped row of icons drawn under the label (Slayer master chatheads); null otherwise. */
+		private final List<BufferedImage> iconStrip;
 
 		private Row(String label, BufferedImage icon, String value, Color color, boolean wrap, boolean rightWrap)
 		{
@@ -480,6 +493,18 @@ class MonsterCardOverlay extends Overlay
 			this.color = color;
 			this.wrap = wrap;
 			this.rightWrap = rightWrap;
+			this.iconStrip = null;
+		}
+
+		private Row(String label, List<BufferedImage> iconStrip)
+		{
+			this.label = label;
+			this.icon = null;
+			this.value = null;
+			this.color = Color.WHITE;
+			this.wrap = false;
+			this.rightWrap = false;
+			this.iconStrip = iconStrip;
 		}
 
 		static Row kv(String label, String value, Color color)
@@ -502,8 +527,24 @@ class MonsterCardOverlay extends Overlay
 			return new Row(null, null, value, color, true, false);
 		}
 
+		static Row icons(String label, List<BufferedImage> iconStrip)
+		{
+			return new Row(label, iconStrip);
+		}
+
+		/** Chatheads per row for the width available to an icon strip. */
+		private int perRow(int contentW)
+		{
+			return Math.max(1, (contentW + STRIP_GAP) / (ICON_SIZE + STRIP_GAP));
+		}
+
 		int height(FontMetrics fm, int contentW, int lineH)
 		{
+			if (iconStrip != null)
+			{
+				int stripRows = (iconStrip.size() + perRow(contentW) - 1) / perRow(contentW);
+				return lineH + stripRows * (ICON_SIZE + STRIP_GAP);
+			}
 			if (icon != null)
 			{
 				return Math.max(lineH, ICON_SIZE);
@@ -524,6 +565,29 @@ class MonsterCardOverlay extends Overlay
 
 		int draw(Graphics2D g, FontMetrics fm, int x, int y, int contentW, int lineH)
 		{
+			if (iconStrip != null)
+			{
+				g.setColor(ColorScheme.LIGHT_GRAY_COLOR);
+				g.drawString(label, x, y + fm.getAscent());
+				int perRow = perRow(contentW);
+				int ix = x;
+				int iy = y + lineH;
+				int col = 0;
+				for (BufferedImage head : iconStrip)
+				{
+					drawIcon(g, head, ix, iy, ICON_SIZE);
+					ix += ICON_SIZE + STRIP_GAP;
+					if (++col == perRow)
+					{
+						col = 0;
+						ix = x;
+						iy += ICON_SIZE + STRIP_GAP;
+					}
+				}
+				int stripRows = (iconStrip.size() + perRow - 1) / perRow;
+				return lineH + stripRows * (ICON_SIZE + STRIP_GAP);
+			}
+
 			if (icon != null)
 			{
 				int rowH = Math.max(lineH, ICON_SIZE);
