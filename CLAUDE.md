@@ -66,10 +66,13 @@ When editing, match the surrounding tab indentation exactly or the build breaks.
 
 ## Architecture
 
-Single package `com.bettermonsterexamine`. The plugin reads a **single data source** — the OSRS
-Wiki **Bucket API** — fetched once off the client thread and cached so later launches work offline.
-(It began as a two-source design — Weirdgloop `monsters.json` + per-page wikitext scraping — cut
-over to Bucket in #26.)
+Mostly one flat package `com.bettermonsterexamine`, plus a `com.bettermonsterexamine.loot`
+sub-package for the drops/loot module (the first sub-package; the existing flat classes were
+**not** reorganised — a stats/shared split can come later). Both layers read the OSRS Wiki
+**Bucket API**: stats bulk-load the whole bestiary once (cached, offline-first); drops fetch
+**on demand per monster** and cache per page (the asymmetry is intentional — see the loot note
+below). (Stats began as a two-source design — Weirdgloop `monsters.json` + per-page wikitext
+scraping — cut over to Bucket in #26.)
 
 ### Data flow
 
@@ -97,6 +100,31 @@ The view-model (`MonsterStats`, from #23) sits between the DTO and both renderer
 which fields to show and their colour roles, so the panel and overlay stay in sync. Three fields
 the old wikitext layer showed have **no usable Bucket source and were dropped** (aggressive,
 poison/venom resistance) — tracked in #30.
+
+### Drops data layer (`loot/`, #41 · epic #39)
+
+Drops live in the `com.bettermonsterexamine.loot` sub-package and use the **`dropsline`** Bucket
+(same `api.php?action=bucket` endpoint), fetched **on demand per monster** — not bulk. Rationale:
+stats are the searchable index (need the whole name index local, fits one query); drops are
+per-entity detail hung off an already-identified monster, ~10× the size, and the API hard-caps
+queries at 5000 rows. So **stats = bulk index, drops = on-demand detail**; don't unify.
+
+- **`DropTableService`** (singleton) — `request(pageName)` fetches that page's drops off-thread
+  (client-thread/EDT safe), caches the raw response per page under
+  `.runelite/better-monster-examine/drops/`, and publishes into a concurrent by-page index;
+  `tableFor(pageName, pageNameSub)` reads it without blocking (null until loaded), grouping rows
+  by variant. Concurrent requests for a page coalesce; an update listener notifies when a page
+  lands. Mirrors `MonsterDataService`'s cache/refresh (`MAX_AGE = 7 days`) but on-demand.
+- **`DropRow`** — a Gson DTO for one drop, mapped from the row's nested `drop_json` **string**
+  (item, rarity `Always`/fraction, quantity low/high + display, rolls, drop type, GE value) with
+  derived `isAlways`/`isNoted`/rarity-fraction helpers. `pageNameSub` and the `rareDropTable` flag
+  come from the enclosing Bucket row (set post-parse); the flag reuses the `""`-or-null
+  sentinel-string convention of `MonsterData.default_version`.
+- **`DropTable`** — one variant's rows, keyed by `page_name#version_anchor` (joins straight onto
+  the existing `MonsterData` variant model, so the UI shows only the viewed variant's table).
+
+The variant join is `dropsline.page_name_sub` == `page_name` + `#` + the infobox `version_anchor`
+(e.g. `Vorkath#Post-quest`). No UI yet (Phase 1a is data-only).
 
 ### Plugin + UI
 
@@ -145,4 +173,6 @@ state reads on the client thread (`clientThread.invoke`), Swing updates on the E
 JUnit 4 under `src/test/java`. Pure-logic tests exercise the static helpers and the view-model:
 `MonsterDataServiceTest` (name matching), `WikiSanitizerTest` (the Bucket field-cleaning shapes),
 `MonsterStatsTest` (view-model semantics), `StatFormatTest`, `StatColorsTest`, `LookupHistoryTest`.
-`BetterMonsterExaminePluginTest` and `OverlayPreview` are dev launchers, not assertions.
+The `loot/` layer adds `DropRowTest` (the `drop_json` parsing shapes) and `DropTableServiceTest`
+(the two-stage row → nested-`drop_json` parse). `BetterMonsterExaminePluginTest` and `OverlayPreview`
+are dev launchers, not assertions.
