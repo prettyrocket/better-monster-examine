@@ -25,24 +25,13 @@ final class DropFormat
 	}
 
 	/**
-	 * Quantity as the wiki shows it: the row's display string ({@code "2"}, {@code "2–3"},
-	 * {@code "60 (noted)"}) when present, otherwise derived from the low/high bounds. Empty when the
-	 * row carries neither — the caller drops the "×N" suffix rather than showing a bare "0".
+	 * Quantity as the wiki rendered it ({@code "1"}, {@code "35–55"}, {@code "60 (noted)"}), trimmed.
+	 * Empty when the row carries none — the caller drops the "×N" suffix rather than showing a bare "0".
 	 */
 	static String quantity(DropRow row)
 	{
-		String display = row.getQuantityDisplay();
-		if (display != null && !display.trim().isEmpty())
-		{
-			return display.trim();
-		}
-		int lo = row.getQuantityLow();
-		int hi = row.getQuantityHigh();
-		if (lo <= 0 && hi <= 0)
-		{
-			return "";
-		}
-		return lo == hi ? String.valueOf(lo) : lo + "–" + hi;
+		String q = row.getQuantity();
+		return q == null ? "" : q.trim();
 	}
 
 	/** Compact coin value: grouped under a million, else one-decimal {@code M}/{@code B}; blank for ≤0. */

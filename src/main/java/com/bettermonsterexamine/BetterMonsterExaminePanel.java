@@ -1,6 +1,6 @@
 package com.bettermonsterexamine;
 
-import com.bettermonsterexamine.loot.DropTableService;
+import com.bettermonsterexamine.loot.DropPageService;
 import com.bettermonsterexamine.loot.DropsCard;
 import com.bettermonsterexamine.loot.ItemIdService;
 import com.google.gson.Gson;
@@ -53,7 +53,7 @@ public class BetterMonsterExaminePanel extends PluginPanel
 	private final BetterMonsterExamineConfig config;
 	private final ConfigManager configManager;
 	private final Gson gson;
-	private final DropTableService drops;
+	private final DropPageService drops;
 
 	private final IconTextField searchField = new IconTextField();
 	private final JPanel resultsPanel = new JPanel();
@@ -95,7 +95,7 @@ public class BetterMonsterExaminePanel extends PluginPanel
 	 */
 	private Consumer<MonsterData> selectionListener;
 
-	public BetterMonsterExaminePanel(MonsterIcons icons, MonsterDataService data, DropTableService drops, ItemIdService itemIds, DropsCard dropsCard, BetterMonsterExamineConfig config, ConfigManager configManager, Gson gson, IntSupplier playerCombatLevel, IntSupplier playerHpLevel, IntSupplier playerSlayerLevel, BufferedImage titleIcon)
+	public BetterMonsterExaminePanel(MonsterIcons icons, MonsterDataService data, DropPageService drops, ItemIdService itemIds, DropsCard dropsCard, BetterMonsterExamineConfig config, ConfigManager configManager, Gson gson, IntSupplier playerCombatLevel, IntSupplier playerHpLevel, IntSupplier playerSlayerLevel, BufferedImage titleIcon)
 	{
 		super(false);
 		this.data = data;

@@ -1,37 +1,34 @@
 package com.bettermonsterexamine.loot;
 
-import com.google.gson.Gson;
 import static org.junit.Assert.assertEquals;
 import org.junit.Test;
 
 /**
  * Locks {@link DropFormat}'s pure display shaping: rarity (Always / raw fraction / em dash), the
- * quantity display or low–high fallback, compact coin values, and the GE/Alch caption line.
+ * wiki quantity string, compact coin values, and the GE/Alch caption line.
  */
 public class DropFormatTest
 {
-	private static final Gson GSON = new Gson();
-
-	private static DropRow row(String dropJson)
+	private static DropRow row(String quantity, String rarity)
 	{
-		return GSON.fromJson(dropJson, DropRow.class);
+		return new DropRow("Item", quantity, rarity, "Other");
 	}
 
 	@Test
 	public void rarityShowsAlwaysRawFractionOrEmDash()
 	{
-		assertEquals("Always", DropFormat.rarity(row("{\"Rarity\":\"Always\"}")));
-		assertEquals("1/128", DropFormat.rarity(row("{\"Rarity\":\"1/128\"}")));
-		assertEquals("—", DropFormat.rarity(row("{\"Dropped item\":\"x\"}")));
+		assertEquals("Always", DropFormat.rarity(row("1", "Always")));
+		assertEquals("1/128", DropFormat.rarity(row("1", "1/128")));
+		assertEquals("—", DropFormat.rarity(row("1", "")));
+		assertEquals("—", DropFormat.rarity(row("1", null)));
 	}
 
 	@Test
-	public void quantityPrefersDisplayThenFallsBackToBounds()
+	public void quantityIsTheWikiStringTrimmed()
 	{
-		assertEquals("60 (noted)", DropFormat.quantity(row("{\"Drop Quantity\":\"60 (noted)\"}")));
-		assertEquals("35–55", DropFormat.quantity(row("{\"Quantity Low\":35,\"Quantity High\":55}")));
-		assertEquals("2", DropFormat.quantity(row("{\"Quantity Low\":2,\"Quantity High\":2}")));
-		assertEquals("", DropFormat.quantity(row("{\"Dropped item\":\"x\"}")));
+		assertEquals("60 (noted)", DropFormat.quantity(row("60 (noted)", "1/128")));
+		assertEquals("35–55", DropFormat.quantity(row(" 35–55 ", "1/128")));
+		assertEquals("", DropFormat.quantity(row("", "1/128")));
 	}
 
 	@Test

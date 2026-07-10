@@ -6,6 +6,8 @@ import java.awt.Dimension;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.JComponent;
@@ -37,6 +39,7 @@ public class DropsCard extends JPanel
 {
 	/** On-screen size of each item icon (native OSRS item sprites are ~36×32). */
 	private static final int ICON_BOX = 28;
+	private static final Pattern LEADING_INT = Pattern.compile("(\\d[\\d,]*)");
 
 	private final ItemManager itemManager;
 	private final ClientThread clientThread;
@@ -69,30 +72,20 @@ public class DropsCard extends JPanel
 	}
 
 	/**
-	 * Render a page's drops. {@code tables} is null while the page is still loading; empty (or all
-	 * empty) when the monster has no drops; otherwise one block per variant, with a variant header
-	 * only when there's more than one.
+	 * Render a monster's drops. {@code table} is null while the page is still loading, empty when the
+	 * monster has no drops; otherwise one block per wiki section, in the page's order.
 	 */
-	public void show(List<DropTable> tables)
+	public void show(DropTable table)
 	{
 		removeAll();
-		if (tables == null)
+		if (table == null)
 		{
 			renderMessage("Loading drops…");
 			revalidate();
 			repaint();
 			return;
 		}
-
-		int variants = 0;
-		for (DropTable t : tables)
-		{
-			if (!t.isEmpty())
-			{
-				variants++;
-			}
-		}
-		if (variants == 0)
+		if (table.isEmpty())
 		{
 			renderMessage("No drops recorded for this monster.");
 			revalidate();
@@ -101,26 +94,13 @@ public class DropsCard extends JPanel
 		}
 
 		List<PriceCell> cells = new ArrayList<>();
-		boolean multi = variants > 1;
-		for (DropTable table : tables)
+		for (DropTable.Section section : table.getSections())
 		{
-			if (table.isEmpty())
-			{
-				continue;
-			}
-			if (multi)
-			{
-				if (getComponentCount() > 0)
-				{
-					add(Box.createRigidArea(new Dimension(0, 6)));
-				}
-				add(variantHeader(table.displayName()));
-			}
-			for (DropTable.Section section : table.getSections())
+			if (getComponentCount() > 0)
 			{
 				add(Box.createRigidArea(new Dimension(0, 6)));
-				add(sectionBlock(section, cells));
 			}
+			add(sectionBlock(section, cells));
 		}
 
 		fill(cells);
@@ -218,9 +198,27 @@ public class DropsCard extends JPanel
 		Integer id = itemIds.idFor(row.getItem());
 		if (id != null)
 		{
-			cells.add(new PriceCell(id, Math.max(1, row.getQuantityLow()), icon, price));
+			cells.add(new PriceCell(id, iconQuantity(qty), icon, price));
 		}
 		return r;
+	}
+
+	/** The leading integer of a quantity string (for the icon's stack number), or 1 when there's none. */
+	private static int iconQuantity(String qty)
+	{
+		Matcher m = LEADING_INT.matcher(qty);
+		if (m.find())
+		{
+			try
+			{
+				return Math.max(1, Integer.parseInt(m.group(1).replace(",", "")));
+			}
+			catch (NumberFormatException e)
+			{
+				return 1;
+			}
+		}
+		return 1;
 	}
 
 	/**
@@ -276,17 +274,6 @@ public class DropsCard extends JPanel
 		l.setMinimumSize(d);
 		l.setMaximumSize(d);
 		l.setToolTipText(itemName);
-		return l;
-	}
-
-	private JComponent variantHeader(String name)
-	{
-		JLabel l = new JLabel(name.toUpperCase(Locale.ROOT));
-		l.setFont(FontManager.getRunescapeSmallFont());
-		l.setForeground(ColorScheme.BRAND_ORANGE);
-		l.setAlignmentX(LEFT_ALIGNMENT);
-		l.setBorder(new EmptyBorder(2, 2, 0, 0));
-		capHeight(l);
 		return l;
 	}
 
