@@ -9,8 +9,10 @@ import java.awt.Dimension;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.swing.Box;
@@ -66,15 +68,17 @@ public class DropsCard extends JPanel
 	{
 		private final String itemName;
 		private final int quantity;
+		private final boolean noted;
 		private final JLabel icon;
-		private final JLabel price;
+		private final JComponent row;
 
-		private PriceCell(String itemName, int quantity, JLabel icon, JLabel price)
+		private PriceCell(String itemName, int quantity, boolean noted, JLabel icon, JComponent row)
 		{
 			this.itemName = itemName;
 			this.quantity = quantity;
+			this.noted = noted;
 			this.icon = icon;
-			this.price = price;
+			this.row = row;
 		}
 	}
 
@@ -155,71 +159,67 @@ public class DropsCard extends JPanel
 		JLabel icon = iconLabel(row.getItem());
 		r.add(icon, BorderLayout.WEST);
 
-		// Centre column: name on the left, quantity + rarity together on the right (line 1); the
-		// GE/Alch caption fills in below (line 2, async).
+		// Two lines: item name + quantity on top, the drop odds below. GE / High Alch go in the row's
+		// hover tooltip rather than on screen, to keep each row uncluttered.
 		JPanel centre = new JPanel();
 		centre.setLayout(new BoxLayout(centre, BoxLayout.Y_AXIS));
 		centre.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 		centre.setAlignmentX(LEFT_ALIGNMENT);
 
-		JPanel line1 = new JPanel();
-		line1.setLayout(new BoxLayout(line1, BoxLayout.X_AXIS));
-		line1.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		line1.setAlignmentX(LEFT_ALIGNMENT);
+		JPanel nameLine = new JPanel();
+		nameLine.setLayout(new BoxLayout(nameLine, BoxLayout.X_AXIS));
+		nameLine.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		nameLine.setAlignmentX(LEFT_ALIGNMENT);
 
 		JLabel name = new JLabel(row.getItem() == null ? "?" : row.getItem());
 		name.setFont(FontManager.getRunescapeSmallFont());
 		name.setForeground(Color.WHITE);
-		// Let the name shrink and truncate rather than crowd the numbers on the right.
+		// Let the name shrink and truncate rather than overflow the row width.
 		name.setMinimumSize(new Dimension(24, name.getPreferredSize().height));
-		line1.add(name);
-		// A guaranteed gap between the name and the right-hand numbers, plus glue to hold them right.
-		line1.add(Box.createRigidArea(new Dimension(12, 0)));
-		line1.add(Box.createHorizontalGlue());
+		nameLine.add(name);
 
-		// Quantity (when it isn't a plain single) then rarity, spaced apart so both can breathe.
 		String qty = DropFormat.quantity(row);
 		if (!qty.isEmpty() && !"1".equals(qty))
 		{
 			JLabel q = new JLabel("×" + qty);
 			q.setFont(FontManager.getRunescapeSmallFont());
 			q.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-			line1.add(q);
-			line1.add(Box.createRigidArea(new Dimension(14, 0)));
+			nameLine.add(Box.createRigidArea(new Dimension(6, 0)));
+			nameLine.add(q);
 		}
+		nameLine.add(Box.createHorizontalGlue());
+		capHeight(nameLine);
+		centre.add(nameLine);
 
+		// Line 2: the drop odds, directly under the name.
 		JLabel rarity = new JLabel(DropFormat.rarity(row));
 		rarity.setFont(FontManager.getRunescapeSmallFont());
 		rarity.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-		line1.add(rarity);
-		capHeight(line1);
-		centre.add(line1);
-		centre.add(Box.createRigidArea(new Dimension(0, 2)));
-
-		// GE/Alch caption: hidden until the client thread fills it (blank for untradeable + non-alch).
-		JLabel price = new JLabel();
-		price.setFont(FontManager.getRunescapeSmallFont());
-		price.setForeground(GE_COLOR);
-		price.setAlignmentX(LEFT_ALIGNMENT);
-		price.setVisible(false);
-		centre.add(price);
+		rarity.setAlignmentX(LEFT_ALIGNMENT);
+		centre.add(Box.createRigidArea(new Dimension(0, 1)));
+		centre.add(rarity);
 
 		r.add(centre, BorderLayout.CENTER);
 		capHeight(r);
 
 		if (row.getItem() != null && !row.getItem().isEmpty())
 		{
-			cells.add(new PriceCell(row.getItem(), iconQuantity(qty), icon, price));
+			cells.add(new PriceCell(row.getItem(), iconQuantity(qty), isNoted(qty), icon, r));
 			makeClickable(r, row.getItem());
 		}
 		return r;
 	}
 
-	/** Make the whole row open the item's OSRS Wiki page on click (hand cursor + tooltip on hover). */
+	/** True when the wiki rendered this drop as noted (its quantity string carries "(noted)"). */
+	private static boolean isNoted(String qty)
+	{
+		return qty.toLowerCase(Locale.ROOT).contains("noted");
+	}
+
+	/** Make the whole row open the item's OSRS Wiki page on click (hand cursor + hover tooltip). */
 	private static void makeClickable(JComponent row, String item)
 	{
 		String url = "https://oldschool.runescape.wiki/w/" + item.replace(' ', '_');
-		String tip = "Open " + item + " on the OSRS Wiki";
 		MouseAdapter open = new MouseAdapter()
 		{
 			@Override
@@ -232,13 +232,26 @@ public class DropsCard extends JPanel
 			}
 		};
 		// Swing doesn't bubble mouse events, so attach to the row and every child it contains.
-		applyClick(row, open, tip);
+		applyClick(row, open);
+		setRowTooltip(row, tooltip(item, ""));
 	}
 
-	private static void applyClick(Component c, MouseAdapter open, String tip)
+	private static void applyClick(Component c, MouseAdapter open)
 	{
 		c.addMouseListener(open);
 		c.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+		if (c instanceof Container)
+		{
+			for (Component child : ((Container) c).getComponents())
+			{
+				applyClick(child, open);
+			}
+		}
+	}
+
+	/** Set one tooltip across a component and all its descendants (Swing shows the child's, not the row's). */
+	private static void setRowTooltip(Component c, String tip)
+	{
 		if (c instanceof JComponent)
 		{
 			((JComponent) c).setToolTipText(tip);
@@ -247,9 +260,25 @@ public class DropsCard extends JPanel
 		{
 			for (Component child : ((Container) c).getComponents())
 			{
-				applyClick(child, open, tip);
+				setRowTooltip(child, tip);
 			}
 		}
+	}
+
+	/** The row's hover tooltip: item name, GE / High Alch (once priced), and the wiki hint. */
+	private static String tooltip(String item, String priceLine)
+	{
+		StringBuilder sb = new StringBuilder("<html>").append(esc(item));
+		if (!priceLine.isEmpty())
+		{
+			sb.append("<br>").append(esc(priceLine));
+		}
+		return sb.append("<br><span style='color:#9a9a9a'>Click to open on the OSRS Wiki</span></html>").toString();
+	}
+
+	private static String esc(String s)
+	{
+		return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
 	}
 
 	/** The leading integer of a quantity string (for the icon's stack number), or 1 when there's none. */
@@ -293,20 +322,23 @@ public class DropsCard extends JPanel
 				ItemComposition comp = itemManager.getItemComposition(id);
 				int ge = itemManager.getItemPrice(id);
 				int ha = comp == null ? 0 : comp.getHaPrice();
+				// A noted drop renders the item's noted graphic — a separate, stackable item id.
+				int iconId = id;
 				boolean stackable = comp != null && comp.isStackable();
-				AsyncBufferedImage img = itemManager.getImage(id, c.quantity, stackable);
+				if (c.noted && comp != null && comp.getLinkedNoteId() > 0)
+				{
+					iconId = comp.getLinkedNoteId();
+					stackable = true;
+				}
+				AsyncBufferedImage img = itemManager.getImage(iconId, c.quantity, stackable);
+				String tip = tooltip(c.itemName, DropFormat.priceLine(ge, ha));
 				SwingUtilities.invokeLater(() ->
 				{
-					String line = DropFormat.priceLine(ge, ha);
-					if (!line.isEmpty())
-					{
-						c.price.setText(line);
-						c.price.setVisible(true);
-					}
 					if (img != null)
 					{
 						img.addTo(c.icon);
 					}
+					setRowTooltip(c.row, tip);
 					revalidate();
 					repaint();
 				});
@@ -316,9 +348,10 @@ public class DropsCard extends JPanel
 
 	/**
 	 * Resolve an item name to a client item id, on the client thread. The bulk Bucket {@code item_id}
-	 * map is tried first (it covers untradeables the client's search index misses); when it has no
-	 * entry — e.g. dose potions like {@code "Strength potion(2)"} — fall back to
-	 * {@link ItemManager#search} on an exact name match.
+	 * map is tried first (it covers untradeables the client's search index misses); then a small hand
+	 * map for items the bucket can't pin to one id (clue scrolls, whose bucket id is {@code "N/A"});
+	 * finally {@link ItemManager#search} on an exact name match (covers tradeables the bucket misses,
+	 * e.g. dose potions like {@code "Strength potion(2)"}).
 	 */
 	private Integer resolveId(String name)
 	{
@@ -326,6 +359,11 @@ public class DropsCard extends JPanel
 		if (id != null)
 		{
 			return id;
+		}
+		Integer known = KNOWN_IDS.get(name);
+		if (known != null)
+		{
+			return known;
 		}
 		try
 		{
@@ -344,10 +382,20 @@ public class DropsCard extends JPanel
 		return null;
 	}
 
-	// ------------------------------------------------------------ small helpers
+	/** Items the Bucket {@code item_id} map returns {@code "N/A"} for (many ids) — pinned by hand. */
+	private static final Map<String, Integer> KNOWN_IDS = new HashMap<>();
 
-	/** The soft green used for coin values, matching the client's price colouring. */
-	private static final Color GE_COLOR = new Color(0x7e, 0xc7, 0x7e);
+	static
+	{
+		KNOWN_IDS.put("Clue scroll (beginner)", 23182);
+		KNOWN_IDS.put("Clue scroll (easy)", 2677);
+		KNOWN_IDS.put("Clue scroll (medium)", 2801);
+		KNOWN_IDS.put("Clue scroll (hard)", 2722);
+		KNOWN_IDS.put("Clue scroll (elite)", 12073);
+		KNOWN_IDS.put("Clue scroll (master)", 19835);
+	}
+
+	// ------------------------------------------------------------ small helpers
 
 	/** A fixed-size icon slot for the item, left blank (but width-preserving) when there's no id. */
 	private JLabel iconLabel(String itemName)
