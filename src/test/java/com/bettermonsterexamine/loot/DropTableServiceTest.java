@@ -78,4 +78,21 @@ public class DropTableServiceTest
 		assertNull(DropTableService.parseRows(null));
 		assertNull(DropTableService.parseRows(response("{\"bucketQuery\":\"…\"}")));
 	}
+
+	@Test
+	public void fallsBackToItemNameAndReadsVariantFromDropJson()
+	{
+		// A row whose drop_json has no "Dropped item" falls back to the enclosing row's item_name;
+		// the variant is read from the drop_json "Dropped from" field.
+		String json = "{\"bucket\":[{"
+			+ "\"item_name\":\"Coins\",\"page_name_sub\":\"Goblin\","
+			+ "\"drop_json\":\"{\\\"Rarity\\\":\\\"1/2\\\",\\\"Dropped from\\\":\\\"Goblin\\\"}\""
+			+ "}]}";
+
+		List<DropRow> rows = DropTableService.parseRows(response(json));
+
+		assertEquals(1, rows.size());
+		assertEquals("Coins", rows.get(0).getItem());
+		assertEquals("", rows.get(0).variant());
+	}
 }
