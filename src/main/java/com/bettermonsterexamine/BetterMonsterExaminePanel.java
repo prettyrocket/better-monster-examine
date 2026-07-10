@@ -67,6 +67,10 @@ public class BetterMonsterExaminePanel extends PluginPanel
 	private final JPanel cardArea = new JPanel();
 	/** The body region the tab strip swaps between {@link #card} and {@link #dropsCard}. */
 	private final JPanel tabDisplay = new JPanel(new BorderLayout());
+	/** The Stats | Drops tab strip and its two tabs, so a menu action can open straight to one. */
+	private MaterialTabGroup contentTabs;
+	private MaterialTab statsTab;
+	private MaterialTab dropsTab;
 	/** Empty-state hint, shown in place of {@link #cardArea} when nothing is selected. */
 	private final JPanel hintPanel = new JPanel();
 	private final JLabel hintLabel = new JLabel();
@@ -322,31 +326,46 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		cardArea.setVisible(false);
 		tabDisplay.setAlignmentX(LEFT_ALIGNMENT);
 
-		MaterialTabGroup tabGroup = new MaterialTabGroup(tabDisplay);
-		tabGroup.setAlignmentX(LEFT_ALIGNMENT);
-		MaterialTab statsTab = new MaterialTab("Stats", tabGroup, card);
-		MaterialTab dropsTab = new MaterialTab("Drops", tabGroup, dropsCard);
+		contentTabs = new MaterialTabGroup(tabDisplay);
+		contentTabs.setAlignmentX(LEFT_ALIGNMENT);
+		statsTab = new MaterialTab("Stats", contentTabs, card);
+		dropsTab = new MaterialTab("Drops", contentTabs, dropsCard);
 		statsTab.setOnSelectEvent(() ->
 		{
 			dropsTabActive = false;
+			header.setVariantSelectorVisible(true);
 			return true;
 		});
 		dropsTab.setOnSelectEvent(() ->
 		{
 			dropsTabActive = true;
+			header.setVariantSelectorVisible(false);
 			renderDrops();
 			return true;
 		});
-		tabGroup.addTab(statsTab);
-		tabGroup.addTab(dropsTab);
+		contentTabs.addTab(statsTab);
+		contentTabs.addTab(dropsTab);
 
 		cardArea.add(header);
 		cardArea.add(Box.createRigidArea(new Dimension(0, 6)));
-		cardArea.add(tabGroup);
+		cardArea.add(contentTabs);
 		cardArea.add(Box.createRigidArea(new Dimension(0, 6)));
 		cardArea.add(tabDisplay);
 
-		tabGroup.select(statsTab);
+		contentTabs.select(statsTab);
+	}
+
+	/**
+	 * Open a monster's card to a specific tab — the entry point for the in-game right-click Stats /
+	 * Drops menu options. Searches + selects the monster, then switches to the requested tab.
+	 */
+	public void openMonster(String name, String version, boolean drops)
+	{
+		search(name, true, version);
+		if (currentSelection != null)
+		{
+			contentTabs.select(drops ? dropsTab : statsTab);
+		}
 	}
 
 	/** Render the Drops tab for the current selection — one block per variant, or a loading hint. */

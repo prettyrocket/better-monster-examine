@@ -38,6 +38,10 @@ class MonsterHeader extends JPanel
 	private final Consumer<MonsterData> onToggleFavorite;
 	private final Consumer<MonsterData> onSelectVariant;
 
+	/** The variant dropdown wrapper (when the monster has >1 form), so it can be hidden on the Drops tab. */
+	private JComponent variantSelector;
+	private boolean showVariantSelector = true;
+
 	MonsterHeader(BetterMonsterExamineConfig config, IntSupplier playerCombatLevel,
 		Predicate<MonsterData> isFavorite, Consumer<MonsterData> onToggleFavorite,
 		Consumer<MonsterData> onSelectVariant)
@@ -65,6 +69,18 @@ class MonsterHeader extends JPanel
 		removeAll();
 		revalidate();
 		repaint();
+	}
+
+	/** Show or hide the variant dropdown — hidden on the Drops tab, which doesn't use it. */
+	void setVariantSelectorVisible(boolean visible)
+	{
+		showVariantSelector = visible;
+		if (variantSelector != null)
+		{
+			variantSelector.setVisible(visible);
+			revalidate();
+			repaint();
+		}
 	}
 
 	private JComponent header(MonsterData m, List<MonsterData> variants)
@@ -112,7 +128,9 @@ class MonsterHeader extends JPanel
 			block.add(wrappedLabel(examine, ColorScheme.LIGHT_GRAY_COLOR, true));
 		}
 
-		// Variant selector (only when >1 form shares the name)
+		// Variant selector (only when >1 form shares the name); hidden on the Drops tab, which shows
+		// every variant's drops regardless, so the dropdown doesn't apply there.
+		variantSelector = null;
 		if (variants != null && variants.size() > 1)
 		{
 			JComboBox<String> combo = new JComboBox<>();
@@ -135,8 +153,17 @@ class MonsterHeader extends JPanel
 				}
 			});
 			capHeight(combo);
-			block.add(Box.createRigidArea(new Dimension(0, 4)));
-			block.add(combo);
+
+			JPanel selector = new JPanel();
+			selector.setLayout(new BoxLayout(selector, BoxLayout.Y_AXIS));
+			selector.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+			selector.setAlignmentX(LEFT_ALIGNMENT);
+			selector.add(Box.createRigidArea(new Dimension(0, 4)));
+			selector.add(combo);
+			capHeight(selector);
+			selector.setVisible(showVariantSelector);
+			variantSelector = selector;
+			block.add(selector);
 		}
 
 		// Wiki + DPS-calc links, side by side. DPS calc deep-links the monster by NPC id.
