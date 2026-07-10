@@ -92,4 +92,50 @@ public class DropRowTest
 		assertNull(DropRow.parseFraction("~"));
 		assertNull(DropRow.parseFraction("1/0"));
 	}
+
+	@Test
+	public void variantIsTheTextAfterTheHashInDroppedFrom()
+	{
+		// Vorkath's post-quest table row carries "Dropped from":"Vorkath#Post-quest".
+		DropRow variant = parse("{\"Dropped item\":\"Coins\",\"Dropped from\":\"Vorkath#Post-quest\"}");
+		assertEquals("Post-quest", variant.variant());
+
+		// A single-variant page has no '#', so the variant is empty.
+		DropRow plain = parse("{\"Dropped item\":\"Coins\",\"Dropped from\":\"Goblin\"}");
+		assertEquals("", plain.variant());
+
+		// A missing "Dropped from" is also the empty (single) variant.
+		assertEquals("", parse("{\"Dropped item\":\"Coins\"}").variant());
+	}
+
+	@Test
+	public void rarityProbabilityHandlesAlwaysTildeAndCommas()
+	{
+		assertEquals(1.0, DropRow.probabilityOf("Always"), 1e-9);
+		assertEquals(1.0 / 128.0, DropRow.probabilityOf("~1/128"), 1e-9);
+		assertEquals(1.0 / 4096.0, DropRow.probabilityOf("1/4,096"), 1e-9);
+		// "Varies"/blank/malformed sort to the bottom, not the top.
+		assertEquals(-1.0, DropRow.probabilityOf("Varies"), 1e-9);
+		assertEquals(-1.0, DropRow.probabilityOf(null), 1e-9);
+		assertEquals(-1.0, DropRow.probabilityOf("1/0"), 1e-9);
+	}
+
+	@Test
+	public void sectionFollowsBucketFlagsDeterministically()
+	{
+		DropRow always = parse("{\"Rarity\":\"Always\",\"Dropped item\":\"Big bones\"}");
+		assertEquals(DropTable.SECTION_HUNDRED, always.section());
+
+		DropRow other = parse("{\"Rarity\":\"1/128\",\"Dropped item\":\"Coins\"}");
+		assertEquals(DropTable.SECTION_OTHER, other.section());
+
+		DropRow rdt = parse("{\"Rarity\":\"1/512\",\"Dropped item\":\"Rune spear\"}");
+		rdt.setRareDropTable("");
+		assertEquals(DropTable.SECTION_RARE_DROP_TABLE, rdt.section());
+
+		// "Always" wins over the rare-drop-table flag (the 100% section is checked first).
+		DropRow alwaysAndFlagged = parse("{\"Rarity\":\"Always\",\"Dropped item\":\"Ashes\"}");
+		alwaysAndFlagged.setRareDropTable("");
+		assertEquals(DropTable.SECTION_HUNDRED, alwaysAndFlagged.section());
+	}
 }
