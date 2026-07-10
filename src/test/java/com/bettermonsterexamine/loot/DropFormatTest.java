@@ -70,4 +70,16 @@ public class DropFormatTest
 		// A multi-roll numerator counts: 5/128 ~ 1/26 -> common.
 		assertEquals(RarityTier.COMMON, DropFormat.tierOf("5/128"));
 	}
+
+	@Test
+	public void handlesMultiRollAndCombinedRarityCells()
+	{
+		// Vorkath's rune javelin cell (× is U+00D7): a combined per-kill rate after ';' wins.
+		String rune = "2 × 1/24,576 ; 1/12,480";
+		assertEquals("1/12480", DropFormat.rarity(new DropRow("Item", "50", rune, "Other")));
+		assertEquals(RarityTier.ULTRA_RARE, DropFormat.tierOf(rune));
+
+		// Adamant javelin: "N × 1/M" with no combined value -> N/M for the tier (~2/1920 = rare).
+		assertEquals(RarityTier.RARE, DropFormat.tierOf("2 × 1/1,920"));
+	}
 }

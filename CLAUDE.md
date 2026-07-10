@@ -138,7 +138,8 @@ The **data layer** is `#41`; the **panel** (this branch) is `#45`, stacked on it
   clean list: one row per drop, two lines — **icon** + name (with the **quantity right-aligned**) on
   top, the **rarity/odds right-aligned** below, **colour-coded by rarity tier** (common grey →
   uncommon → rare → ultra-rare, via `DropFormat.tierOf`; the palette follows `statHighlighting` and
-  has a colour-blind-safe Okabe-Ito set). Icons carry **no stack-number badge**. Each row is
+  has a colour-blind-safe Okabe-Ito set). Rarity handles the wiki's compound cells — multi-roll
+  `N × 1/M` and a `;`-separated combined per-kill rate (`DropFormat.effective`). Each row is
   **clickable** (opens the item's wiki page) and its **hover tooltip** carries the **GE / High Alch**,
   with the **larger of the two highlighted** (colour-blind-aware). Item id resolves on the client
   thread:

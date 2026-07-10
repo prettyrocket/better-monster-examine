@@ -37,8 +37,9 @@ final class DropFormat
 	}
 
 	/**
-	 * Rarity as a probability in {@code (0, 1]}: {@code "Always"} → 1, an {@code "a/b"} fraction → a/b
-	 * (tolerating a leading {@code ~} and thousands commas), or {@code -1} when unparseable.
+	 * Rarity as a probability in {@code (0, 1]}: {@code "Always"} → 1, an {@code "a/b"} fraction → a/b,
+	 * a multi-roll {@code "N × 1/M"} → N/M, or {@code -1} when unparseable. The wiki's compound cells
+	 * ({@code "2 × 1/24,576 ; 1/12,480 [d 2]"}) reduce to their combined per-kill rate first.
 	 */
 	static double probability(String rarity)
 	{
@@ -46,7 +47,7 @@ final class DropFormat
 		{
 			return -1;
 		}
-		String r = rarity.trim();
+		String r = effective(rarity);
 		if (r.equalsIgnoreCase("Always"))
 		{
 			return 1.0;
@@ -55,7 +56,27 @@ final class DropFormat
 		{
 			r = r.substring(1).trim();
 		}
-		r = r.replace(",", "");
+		// "N × 1/M" (N rolls) — approximate the per-kill rate as N × the per-roll fraction.
+		int mult = r.indexOf('×');
+		if (mult >= 0)
+		{
+			try
+			{
+				double rolls = Double.parseDouble(r.substring(0, mult).replace(",", "").trim());
+				return rolls * fraction(r.substring(mult + 1));
+			}
+			catch (NumberFormatException e)
+			{
+				return -1;
+			}
+		}
+		return fraction(r);
+	}
+
+	/** Parse a plain {@code "a/b"} fraction (or a bare number), tolerating commas; {@code -1} on failure. */
+	private static double fraction(String s)
+	{
+		String r = s.replace(",", "").trim();
 		int slash = r.indexOf('/');
 		try
 		{
@@ -73,7 +94,22 @@ final class DropFormat
 		}
 	}
 
-	/** Rarity as the wiki shows it: {@code "Always"}, or the fraction; a plain dash when unknown. */
+	/**
+	 * Reduce a wiki rarity cell to its effective per-kill value: strip any footnote ({@code "[d 2]"})
+	 * and, when the cell states a combined rate after a {@code ';'} ({@code "2 × 1/24,576 ; 1/12,480"}),
+	 * keep that combined part. Otherwise the cell is returned trimmed.
+	 */
+	static String effective(String rarity)
+	{
+		String r = rarity.replaceAll("\\[[^\\]]*\\]", "").trim();
+		int semi = r.lastIndexOf(';');
+		return semi >= 0 ? r.substring(semi + 1).trim() : r;
+	}
+
+	/**
+	 * Rarity as the wiki shows it, reduced to its effective per-kill value: {@code "Always"}, a
+	 * fraction, or a plain dash when unknown.
+	 */
 	static String rarity(DropRow row)
 	{
 		if (row.isAlways())
@@ -81,7 +117,7 @@ final class DropFormat
 			return "Always";
 		}
 		String r = row.getRarity();
-		return r == null || r.trim().isEmpty() ? "-" : display(r.trim());
+		return r == null || r.trim().isEmpty() ? "-" : display(effective(r));
 	}
 
 	/**

@@ -15,6 +15,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.JComponent;
@@ -48,6 +50,7 @@ public class DropsCard extends JPanel
 {
 	/** On-screen size of each item icon (native OSRS item sprites are ~36×32). */
 	private static final int ICON_BOX = 28;
+	private static final Pattern LEADING_INT = Pattern.compile("(\\d[\\d,]*)");
 
 	// Rarity palette — common stays grey; rarer tiers warm up. The colour-blind set is Okabe-Ito, so
 	// the four tiers stay distinguishable under red-green colour blindness.
@@ -77,13 +80,15 @@ public class DropsCard extends JPanel
 	private static final class PriceCell
 	{
 		private final String itemName;
+		private final int quantity;
 		private final boolean noted;
 		private final JLabel icon;
 		private final JComponent row;
 
-		private PriceCell(String itemName, boolean noted, JLabel icon, JComponent row)
+		private PriceCell(String itemName, int quantity, boolean noted, JLabel icon, JComponent row)
 		{
 			this.itemName = itemName;
+			this.quantity = quantity;
 			this.noted = noted;
 			this.icon = icon;
 			this.row = row;
@@ -218,10 +223,28 @@ public class DropsCard extends JPanel
 
 		if (row.getItem() != null && !row.getItem().isEmpty())
 		{
-			cells.add(new PriceCell(row.getItem(), isNoted(qty), icon, r));
+			cells.add(new PriceCell(row.getItem(), iconQuantity(qty), isNoted(qty), icon, r));
 			makeClickable(r, row.getItem());
 		}
 		return r;
+	}
+
+	/** The leading integer of a quantity string, for the icon's stack number; 1 when there's none. */
+	private static int iconQuantity(String qty)
+	{
+		Matcher m = LEADING_INT.matcher(qty);
+		if (m.find())
+		{
+			try
+			{
+				return Math.max(1, Integer.parseInt(m.group(1).replace(",", "")));
+			}
+			catch (NumberFormatException e)
+			{
+				return 1;
+			}
+		}
+		return 1;
 	}
 
 	/** True when the wiki rendered this drop as noted (its quantity string carries "(noted)"). */
@@ -399,10 +422,16 @@ public class DropsCard extends JPanel
 				ItemComposition comp = itemManager.getItemComposition(id);
 				int ge = itemManager.getItemPrice(id);
 				int ha = comp == null ? 0 : comp.getHaPrice();
-				// A noted drop renders the item's noted graphic — a separate item id. Draw the plain
-				// icon with no stack-number badge (quantity 1, not stackable).
-				int iconId = c.noted && comp != null && comp.getLinkedNoteId() > 0 ? comp.getLinkedNoteId() : id;
-				AsyncBufferedImage img = itemManager.getImage(iconId, 1, false);
+				// A noted drop renders the item's noted graphic — a separate, stackable item id. The
+				// quantity draws the stack-number badge on the icon.
+				int iconId = id;
+				boolean stackable = comp != null && comp.isStackable();
+				if (c.noted && comp != null && comp.getLinkedNoteId() > 0)
+				{
+					iconId = comp.getLinkedNoteId();
+					stackable = true;
+				}
+				AsyncBufferedImage img = itemManager.getImage(iconId, c.quantity, stackable);
 				String tip = priceTooltip(c.itemName, ge, ha);
 				SwingUtilities.invokeLater(() ->
 				{
