@@ -147,15 +147,16 @@ public class DropsCard extends JPanel
 
 	private JComponent dropRow(DropRow row, List<PriceCell> cells)
 	{
-		JPanel r = new JPanel(new BorderLayout(6, 0));
+		JPanel r = new JPanel(new BorderLayout(8, 0));
 		r.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 		r.setAlignmentX(LEFT_ALIGNMENT);
-		r.setBorder(new EmptyBorder(1, 0, 1, 0));
+		r.setBorder(new EmptyBorder(3, 2, 3, 2));
 
 		JLabel icon = iconLabel(row.getItem());
 		r.add(icon, BorderLayout.WEST);
 
-		// Centre column: name + ×qty + rarity on line 1, the GE/Alch caption (async) on line 2.
+		// Centre column: name on the left, quantity + rarity together on the right (line 1); the
+		// GE/Alch caption fills in below (line 2, async).
 		JPanel centre = new JPanel();
 		centre.setLayout(new BoxLayout(centre, BoxLayout.Y_AXIS));
 		centre.setBackground(ColorScheme.DARKER_GRAY_COLOR);
@@ -169,20 +170,23 @@ public class DropsCard extends JPanel
 		JLabel name = new JLabel(row.getItem() == null ? "?" : row.getItem());
 		name.setFont(FontManager.getRunescapeSmallFont());
 		name.setForeground(Color.WHITE);
+		// Let the name shrink and truncate rather than crowd the numbers on the right.
+		name.setMinimumSize(new Dimension(24, name.getPreferredSize().height));
 		line1.add(name);
+		// A guaranteed gap between the name and the right-hand numbers, plus glue to hold them right.
+		line1.add(Box.createRigidArea(new Dimension(12, 0)));
+		line1.add(Box.createHorizontalGlue());
 
-		// Quantity trails the name as a subtle "×N" — but a plain single item (qty 1) needs no count.
+		// Quantity (when it isn't a plain single) then rarity, spaced apart so both can breathe.
 		String qty = DropFormat.quantity(row);
 		if (!qty.isEmpty() && !"1".equals(qty))
 		{
-			JLabel q = new JLabel(" ×" + qty);
+			JLabel q = new JLabel("×" + qty);
 			q.setFont(FontManager.getRunescapeSmallFont());
 			q.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
 			line1.add(q);
+			line1.add(Box.createRigidArea(new Dimension(14, 0)));
 		}
-
-		line1.add(Box.createRigidArea(new Dimension(6, 0)));
-		line1.add(Box.createHorizontalGlue());
 
 		JLabel rarity = new JLabel(DropFormat.rarity(row));
 		rarity.setFont(FontManager.getRunescapeSmallFont());
@@ -190,6 +194,7 @@ public class DropsCard extends JPanel
 		line1.add(rarity);
 		capHeight(line1);
 		centre.add(line1);
+		centre.add(Box.createRigidArea(new Dimension(0, 2)));
 
 		// GE/Alch caption: hidden until the client thread fills it (blank for untradeable + non-alch).
 		JLabel price = new JLabel();
