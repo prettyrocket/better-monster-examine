@@ -100,6 +100,7 @@ public class BetterMonsterExaminePlugin extends Plugin
 	private volatile int playerHpLevel = -1;
 	private volatile int playerSlayerLevel = -1;
 	private static final String STATS_OPTION = "Stats";
+	private static final String DROPS_OPTION = "Drops";
 
 	@Provides
 	BetterMonsterExamineConfig provideConfig(ConfigManager configManager)
@@ -280,19 +281,17 @@ public class BetterMonsterExaminePlugin extends Plugin
 	@Subscribe
 	public void onMenuEntryAdded(MenuEntryAdded event)
 	{
-		// Anchor on the NPC's Examine entry — every NPC has exactly one, so the Stats option
-		// appears once per monster regardless of its other options (Attack, Talk-to, …).
-		// Only show the option when its action can actually do something: the overlay target is
-		// always available, but the panel target needs the side panel enabled.
-		if (!config.showStatsMenuOption() || !statsActionAvailable()
-			|| event.getType() != MenuAction.EXAMINE_NPC.getId())
+		// Anchor on the NPC's Examine entry — every NPC has exactly one, so the options appear once
+		// per monster regardless of its other entries (Attack, Talk-to, …).
+		MenuOption menu = config.menuOptions();
+		if (menu == MenuOption.NONE || event.getType() != MenuAction.EXAMINE_NPC.getId())
 		{
 			return;
 		}
 
 		// Resolve the NPC from the world view by the entry's identifier rather than
 		// getMenuEntry().getNpc(), which isn't reliably populated for examine entries — the
-		// approach the Loot Lookup plugin uses. Match by id or name so the option covers
+		// approach the Loot Lookup plugin uses. Match by id or name so the options cover
 		// variant ids the dataset lacks (e.g. Hellhounds in different dungeons).
 		NPC npc = client.getTopLevelWorldView().npcs().byIndex(event.getIdentifier());
 		if (npc == null || !dataService.isKnownMonster(npc.getId(), npc.getName()))
@@ -300,8 +299,24 @@ public class BetterMonsterExaminePlugin extends Plugin
 			return;
 		}
 
+		// Add each enabled option only when it can actually do something. Drops opens in the side
+		// panel; Stats can target the overlay or the panel (see statsActionAvailable). The entry
+		// created last sits on top, so add Drops first and Stats above it.
+		if (menu.showsDrops() && config.enableSidePanel())
+		{
+			addStatsEntry(DROPS_OPTION, event);
+		}
+		if (menu.showsStats() && statsActionAvailable())
+		{
+			addStatsEntry(STATS_OPTION, event);
+		}
+	}
+
+	/** Append a RUNELITE menu entry for one of our options, anchored on the NPC's Examine entry. */
+	private void addStatsEntry(String option, MenuEntryAdded event)
+	{
 		client.getMenu().createMenuEntry(client.getMenu().getMenuEntries().length)
-				.setOption(STATS_OPTION)
+				.setOption(option)
 				.setTarget(event.getTarget())
 				.setIdentifier(event.getIdentifier())
 				.setType(MenuAction.RUNELITE)
@@ -312,7 +327,9 @@ public class BetterMonsterExaminePlugin extends Plugin
 	@Subscribe
 	public void onMenuOptionClicked(MenuOptionClicked event)
 	{
-		if (!event.getMenuOption().equals(STATS_OPTION))
+		boolean stats = STATS_OPTION.equals(event.getMenuOption());
+		boolean drops = DROPS_OPTION.equals(event.getMenuOption());
+		if (!stats && !drops)
 		{
 			return;
 		}
@@ -335,40 +352,58 @@ public class BetterMonsterExaminePlugin extends Plugin
 			}
 			String version = entry != null ? entry.getVersion() : dataService.variantVersionForLevel(name, clickedNPC.getCombatLevel());
 
-			log.debug("Opening stats for {} (npc id {})", name, clickedNPC.getId());
-			RenderTarget target = config.statsRenderTarget();
-
-			// The overlay draws on the client thread, so update it here; the side panel is Swing,
-			// so hop to the EDT for it.
-			if (target.showsOverlay())
+			if (drops)
 			{
-				toggleOverlay(name, version);
+				log.debug("Opening drops for {} (npc id {})", name, clickedNPC.getId());
+				openInPanel(name, version, true);
 			}
-			boolean fedPanel = false;
-			if (target.showsPanel())
+			else
 			{
-				BetterMonsterExaminePanel panel = monsterStatsPanel;
-				if (panel != null && navButton != null)
-				{
-					// Feeding the panel records the lookup via its own select() choke point.
-					fedPanel = true;
-					SwingUtilities.invokeLater(() ->
-					{
-						panel.search(name, true, version);
-						clientToolbar.openPanel(navButton);
-					});
-				}
-			}
-			if (!fedPanel)
-			{
-				// Overlay-only target (or panel unavailable): still record so it lands in Recent.
-				BetterMonsterExaminePanel panel = monsterStatsPanel;
-				if (panel != null)
-				{
-					SwingUtilities.invokeLater(() -> panel.recordLookup(name, version));
-				}
+				log.debug("Opening stats for {} (npc id {})", name, clickedNPC.getId());
+				openStats(name, version);
 			}
 		});
+	}
+
+	/** Handle a Stats click: render to the overlay and/or side panel per the render target. */
+	private void openStats(String name, String version)
+	{
+		RenderTarget target = config.statsRenderTarget();
+		// The overlay draws on the client thread, so update it here; the panel is Swing (EDT).
+		if (target.showsOverlay())
+		{
+			toggleOverlay(name, version);
+		}
+		// Feeding the panel records the lookup via its own select() choke point.
+		if (target.showsPanel() && openInPanel(name, version, false))
+		{
+			return;
+		}
+		// Overlay-only target (or panel unavailable): still record so it lands in Recent.
+		BetterMonsterExaminePanel panel = monsterStatsPanel;
+		if (panel != null)
+		{
+			SwingUtilities.invokeLater(() -> panel.recordLookup(name, version));
+		}
+	}
+
+	/**
+	 * Open the side panel to the monster's Stats or Drops tab (on the EDT). Returns false when the
+	 * panel isn't available, so a Stats click can fall back to just recording the lookup.
+	 */
+	private boolean openInPanel(String name, String version, boolean drops)
+	{
+		BetterMonsterExaminePanel panel = monsterStatsPanel;
+		if (panel == null || navButton == null)
+		{
+			return false;
+		}
+		SwingUtilities.invokeLater(() ->
+		{
+			panel.openMonster(name, version, drops);
+			clientToolbar.openPanel(navButton);
+		});
+		return true;
 	}
 
 	/** True when a Stats click would do something given the current render target and config. */

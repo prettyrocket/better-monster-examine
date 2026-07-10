@@ -8,13 +8,13 @@ import net.runelite.client.config.ConfigItem;
 public interface BetterMonsterExamineConfig extends Config
 {
 	@ConfigItem(
-		keyName = "showStatsMenuOption",
-		name = "Show Stats Menu Option",
-		description = "Enable right-click 'Stats' option for NPCs, side panel must also be enabled."
+		keyName = "menuOptions",
+		name = "Right-click menu",
+		description = "Which right-click options to add on a monster's Examine: Stats, Drops, both, or none. Drops needs the side panel enabled."
 	)
-	default boolean showStatsMenuOption()
+	default MenuOption menuOptions()
 	{
-		return true;
+		return MenuOption.BOTH;
 	}
 
 	@ConfigItem(

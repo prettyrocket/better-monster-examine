@@ -135,15 +135,17 @@ The **data layer** is `#41`; the **panel** (this branch) is `#45`, stacked on it
   first-seen), preserving row order within each section. Pure, so it's unit-tested.
 
 - **`DropsCard`** (`JPanel`, the Drops-tab body) — renders the wiki's sections **in page order** as a
-  clean list: one row per drop, **icon + name ×qty** on the left and **rarity** on the right, with a
-  small grey **`GE · Alch`** caption underneath. Drop data (name/qty/rarity/section) is synchronous
-  from the cache; item id comes from `ItemIdService`, and price/high-alch/icon from the client with
-  zero network — the row is built on the EDT with a blank icon/caption, then a **single `ClientThread`
-  hop** reads `ItemManager`/`ItemComposition` by id and fills them back on the EDT (`getImage` returns
-  an `AsyncBufferedImage` that repaints on load). A blank caption means the client returned 0 for both
-  (untradeable + non-alchable); a missing name→id still shows the row without icon/price.
+  clean list: one row per drop, two lines — **icon** + **name ×qty** on top, the **rarity/odds**
+  below. Each row is **clickable** (opens the item's wiki page) and its **hover tooltip** carries the
+  **GE / High Alch** (kept off-screen to reduce clutter). Item id resolves on the client thread:
+  `ItemIdService` first, then a small hand map for items the bucket returns `"N/A"` for (clue scrolls),
+  then `ItemManager.search` for tradeables the bucket misses (e.g. dose potions). Icon/price come from
+  the client with zero network — built blank, filled via a **single `ClientThread` hop** that reads
+  `ItemManager`/`ItemComposition` by id (`getImage` returns an `AsyncBufferedImage` that repaints on
+  load); **noted** drops render the item's noted graphic via `getLinkedNoteId()`.
 - **`DropFormat`** — pure display shaping (rarity, quantity, compact `M`/`B` coin values, the
-  `GE · Alch` line), no Swing, unit-tested like `StatFormat`.
+  `GE · Alch` tooltip line), no Swing, unit-tested like `StatFormat`. Displayed numbers drop thousands
+  commas and normalise en/em dashes to a plain hyphen (the RuneScape font can't render `–`/`—`).
 
 Item icon / GE price / High Alch come from the **RuneLite client by item id** (zero network); only the
 *drop list + sections* come from the page parse.
@@ -164,10 +166,13 @@ Item icon / GE price / High Alch come from the **RuneLite client by item id** (z
   a Recent/Favorites list, or the empty-state hint). Stats render synchronously from the cached
   dataset; colour-codes player-relevant values (combat level vs yours, negative flat armour green /
   positive red, max hits above your HP red). Selecting/switching a monster warms its drops
-  (`DropTableService.request`) and re-renders the Drops tab when the page — or the bulk item-id map —
-  lands async.
+  (`DropPageService.request`) and re-renders the Drops tab when the page — or the bulk item-id map —
+  lands async. `openMonster(name, version, drops)` is the entry point for the right-click menu: it
+  selects the monster and opens straight to the Stats or Drops tab.
 - **`MonsterHeader`** — the monster-identity header shared by both tabs (extracted from `MonsterCard`
-  so it stays put across the tab swap); surfaces favouriting and variant switching as callbacks.
+  so it stays put across the tab swap); surfaces favouriting and variant switching as callbacks. The
+  variant dropdown is **hidden on the Drops tab** (drops show every variant regardless, so it doesn't
+  apply).
 - **`MonsterCard`** — the stats **body only** now (attribute / combat / max-hit / stat / immunity /
   slayer blocks); the header moved to `MonsterHeader`.
 - **`MonsterIcons`** (singleton) — loads the stat/attack/skill icons bundled in `resources/`.
@@ -184,11 +189,13 @@ Item icon / GE price / High Alch come from the **RuneLite client by item id** (z
 - **`StatColors`** — the shared `HighlightMode` palette (danger / good / combat-level gradient)
   used by both the side panel and the overlay, so both honour the same colour-blind settings.
 - **`BetterMonsterExamineConfig`** — config group `bettermonsterexamine`: `enableSidePanel`,
-  `showStatsMenuOption`, `statHighlighting`, and `statsRenderTarget` (`RenderTarget`:
-  panel / overlay / both — where the right-click **"Stats"** action renders). The Stats menu
-  entry shows when its action is actually available: the overlay target always works, the panel
-  target needs `enableSidePanel`. A second Stats click on the same monster toggles the overlay
-  off. The overlay updates on the **client thread** (it draws there); the side panel on the EDT.
+  `menuOptions`, `statHighlighting`, and `statsRenderTarget` (`RenderTarget`: panel / overlay / both —
+  where the right-click **"Stats"** action renders). **`menuOptions`** (`MenuOption`: Stats only /
+  Drops only / Both / None) picks which right-click entries appear on a monster's Examine: **Stats**
+  renders per `statsRenderTarget`, **Drops** opens the side panel to its Drops tab. Each entry shows
+  only when it can act — Stats needs the overlay target or (panel target + `enableSidePanel`); Drops
+  needs `enableSidePanel`. A second Stats click on the same monster toggles the overlay off. The
+  overlay updates on the **client thread** (it draws there); the side panel on the EDT.
 
 ### Threading model (important)
 
