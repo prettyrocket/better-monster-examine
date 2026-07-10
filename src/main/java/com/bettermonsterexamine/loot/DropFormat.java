@@ -13,7 +13,7 @@ final class DropFormat
 	{
 	}
 
-	/** Rarity as the wiki shows it: {@code "Always"}, or the raw fraction; an em dash when unknown. */
+	/** Rarity as the wiki shows it: {@code "Always"}, or the fraction; a plain dash when unknown. */
 	static String rarity(DropRow row)
 	{
 		if (row.isAlways())
@@ -21,20 +21,20 @@ final class DropFormat
 			return "Always";
 		}
 		String r = row.getRarity();
-		return r == null || r.trim().isEmpty() ? "—" : r.trim();
+		return r == null || r.trim().isEmpty() ? "-" : display(r.trim());
 	}
 
 	/**
-	 * Quantity as the wiki rendered it ({@code "1"}, {@code "35–55"}, {@code "60 (noted)"}), trimmed.
+	 * Quantity as the wiki rendered it ({@code "1"}, {@code "35-55"}, {@code "60 (noted)"}), trimmed.
 	 * Empty when the row carries none — the caller drops the "×N" suffix rather than showing a bare "0".
 	 */
 	static String quantity(DropRow row)
 	{
 		String q = row.getQuantity();
-		return q == null ? "" : q.trim();
+		return q == null ? "" : display(q.trim());
 	}
 
-	/** Compact coin value: grouped under a million, else one-decimal {@code M}/{@code B}; blank for ≤0. */
+	/** Compact coin value: plain digits under a million, else one-decimal {@code M}/{@code B}; blank for ≤0. */
 	static String price(int n)
 	{
 		if (n <= 0)
@@ -43,13 +43,23 @@ final class DropFormat
 		}
 		if (n < 1_000_000)
 		{
-			return String.format(Locale.US, "%,d", n);
+			return Integer.toString(n);
 		}
 		if (n < 1_000_000_000)
 		{
 			return trimDecimal(n / 1_000_000.0) + "M";
 		}
 		return trimDecimal(n / 1_000_000_000.0) + "B";
+	}
+
+	/**
+	 * Display cleanup for the numbers the wiki hands us: drop thousands commas ({@code "1,000"} →
+	 * {@code "1000"}) and turn en/em dashes into a plain hyphen (the RuneScape font renders "-", not
+	 * "–"/"—").
+	 */
+	private static String display(String s)
+	{
+		return s.replace(",", "").replace('–', '-').replace('—', '-');
 	}
 
 	/**

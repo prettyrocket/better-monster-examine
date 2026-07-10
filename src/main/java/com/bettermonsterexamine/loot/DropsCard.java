@@ -2,7 +2,12 @@ package com.bettermonsterexamine.loot;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Component;
+import java.awt.Container;
+import java.awt.Cursor;
 import java.awt.Dimension;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -21,6 +26,8 @@ import net.runelite.client.game.ItemManager;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.util.AsyncBufferedImage;
+import net.runelite.client.util.LinkBrowser;
+import net.runelite.http.api.item.ItemPrice;
 
 /**
  * The drops list for the currently-viewed monster, as a self-contained Swing component (the
@@ -57,14 +64,14 @@ public class DropsCard extends JPanel
 	/** One item's client-supplied cells, filled on the client thread after the structure is built. */
 	private static final class PriceCell
 	{
-		private final int itemId;
+		private final String itemName;
 		private final int quantity;
 		private final JLabel icon;
 		private final JLabel price;
 
-		private PriceCell(int itemId, int quantity, JLabel icon, JLabel price)
+		private PriceCell(String itemName, int quantity, JLabel icon, JLabel price)
 		{
-			this.itemId = itemId;
+			this.itemName = itemName;
 			this.quantity = quantity;
 			this.icon = icon;
 			this.price = price;
@@ -195,12 +202,49 @@ public class DropsCard extends JPanel
 		r.add(centre, BorderLayout.CENTER);
 		capHeight(r);
 
-		Integer id = itemIds.idFor(row.getItem());
-		if (id != null)
+		if (row.getItem() != null && !row.getItem().isEmpty())
 		{
-			cells.add(new PriceCell(id, iconQuantity(qty), icon, price));
+			cells.add(new PriceCell(row.getItem(), iconQuantity(qty), icon, price));
+			makeClickable(r, row.getItem());
 		}
 		return r;
+	}
+
+	/** Make the whole row open the item's OSRS Wiki page on click (hand cursor + tooltip on hover). */
+	private static void makeClickable(JComponent row, String item)
+	{
+		String url = "https://oldschool.runescape.wiki/w/" + item.replace(' ', '_');
+		String tip = "Open " + item + " on the OSRS Wiki";
+		MouseAdapter open = new MouseAdapter()
+		{
+			@Override
+			public void mouseClicked(MouseEvent e)
+			{
+				if (e.getButton() == MouseEvent.BUTTON1)
+				{
+					LinkBrowser.browse(url);
+				}
+			}
+		};
+		// Swing doesn't bubble mouse events, so attach to the row and every child it contains.
+		applyClick(row, open, tip);
+	}
+
+	private static void applyClick(Component c, MouseAdapter open, String tip)
+	{
+		c.addMouseListener(open);
+		c.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+		if (c instanceof JComponent)
+		{
+			((JComponent) c).setToolTipText(tip);
+		}
+		if (c instanceof Container)
+		{
+			for (Component child : ((Container) c).getComponents())
+			{
+				applyClick(child, open, tip);
+			}
+		}
 	}
 
 	/** The leading integer of a quantity string (for the icon's stack number), or 1 when there's none. */
@@ -236,11 +280,16 @@ public class DropsCard extends JPanel
 		{
 			for (PriceCell c : cells)
 			{
-				ItemComposition comp = itemManager.getItemComposition(c.itemId);
-				int ge = itemManager.getItemPrice(c.itemId);
+				Integer id = resolveId(c.itemName);
+				if (id == null)
+				{
+					continue;
+				}
+				ItemComposition comp = itemManager.getItemComposition(id);
+				int ge = itemManager.getItemPrice(id);
 				int ha = comp == null ? 0 : comp.getHaPrice();
 				boolean stackable = comp != null && comp.isStackable();
-				AsyncBufferedImage img = itemManager.getImage(c.itemId, c.quantity, stackable);
+				AsyncBufferedImage img = itemManager.getImage(id, c.quantity, stackable);
 				SwingUtilities.invokeLater(() ->
 				{
 					String line = DropFormat.priceLine(ge, ha);
@@ -258,6 +307,36 @@ public class DropsCard extends JPanel
 				});
 			}
 		});
+	}
+
+	/**
+	 * Resolve an item name to a client item id, on the client thread. The bulk Bucket {@code item_id}
+	 * map is tried first (it covers untradeables the client's search index misses); when it has no
+	 * entry — e.g. dose potions like {@code "Strength potion(2)"} — fall back to
+	 * {@link ItemManager#search} on an exact name match.
+	 */
+	private Integer resolveId(String name)
+	{
+		Integer id = itemIds.idFor(name);
+		if (id != null)
+		{
+			return id;
+		}
+		try
+		{
+			for (ItemPrice match : itemManager.search(name))
+			{
+				if (name.equalsIgnoreCase(match.getName()))
+				{
+					return match.getId();
+				}
+			}
+		}
+		catch (RuntimeException e)
+		{
+			return null;
+		}
+		return null;
 	}
 
 	// ------------------------------------------------------------ small helpers
