@@ -1,5 +1,7 @@
 package com.bettermonsterexamine.loot;
 
+import com.bettermonsterexamine.BetterMonsterExamineConfig;
+import com.bettermonsterexamine.HighlightMode;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
@@ -13,8 +15,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.JComponent;
@@ -48,17 +48,27 @@ public class DropsCard extends JPanel
 {
 	/** On-screen size of each item icon (native OSRS item sprites are ~36×32). */
 	private static final int ICON_BOX = 28;
-	private static final Pattern LEADING_INT = Pattern.compile("(\\d[\\d,]*)");
+
+	// Rarity palette — common stays grey; rarer tiers warm up. The colour-blind set is Okabe-Ito, so
+	// the four tiers stay distinguishable under red-green colour blindness.
+	private static final Color STD_UNCOMMON = new Color(0x5f, 0xc9, 0x6b);   // green
+	private static final Color STD_RARE = new Color(0x5a, 0xa9, 0xe6);       // blue
+	private static final Color STD_ULTRA = new Color(0xbb, 0x7f, 0xe0);      // purple
+	private static final Color CB_UNCOMMON = new Color(0x56, 0xb4, 0xe9);    // sky blue
+	private static final Color CB_RARE = new Color(0xe6, 0x9f, 0x00);        // orange
+	private static final Color CB_ULTRA = new Color(0xcc, 0x79, 0xa7);       // reddish purple
 
 	private final ItemManager itemManager;
 	private final ClientThread clientThread;
 	private final ItemIdService itemIds;
+	private final BetterMonsterExamineConfig config;
 
-	public DropsCard(ItemManager itemManager, ClientThread clientThread, ItemIdService itemIds)
+	public DropsCard(ItemManager itemManager, ClientThread clientThread, ItemIdService itemIds, BetterMonsterExamineConfig config)
 	{
 		this.itemManager = itemManager;
 		this.clientThread = clientThread;
 		this.itemIds = itemIds;
+		this.config = config;
 		setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
 		setAlignmentX(LEFT_ALIGNMENT);
 	}
@@ -67,15 +77,13 @@ public class DropsCard extends JPanel
 	private static final class PriceCell
 	{
 		private final String itemName;
-		private final int quantity;
 		private final boolean noted;
 		private final JLabel icon;
 		private final JComponent row;
 
-		private PriceCell(String itemName, int quantity, boolean noted, JLabel icon, JComponent row)
+		private PriceCell(String itemName, boolean noted, JLabel icon, JComponent row)
 		{
 			this.itemName = itemName;
-			this.quantity = quantity;
 			this.noted = noted;
 			this.icon = icon;
 			this.row = row;
@@ -159,8 +167,8 @@ public class DropsCard extends JPanel
 		JLabel icon = iconLabel(row.getItem());
 		r.add(icon, BorderLayout.WEST);
 
-		// Two lines: item name + quantity on top, the drop odds below. GE / High Alch go in the row's
-		// hover tooltip rather than on screen, to keep each row uncluttered.
+		// Two lines: item name (left) with quantity right-aligned on top, the drop odds right-aligned
+		// below. GE / High Alch go in the row's hover tooltip, to keep each row uncluttered.
 		JPanel centre = new JPanel();
 		centre.setLayout(new BoxLayout(centre, BoxLayout.Y_AXIS));
 		centre.setBackground(ColorScheme.DARKER_GRAY_COLOR);
@@ -177,6 +185,8 @@ public class DropsCard extends JPanel
 		// Let the name shrink and truncate rather than overflow the row width.
 		name.setMinimumSize(new Dimension(24, name.getPreferredSize().height));
 		nameLine.add(name);
+		nameLine.add(Box.createRigidArea(new Dimension(8, 0)));
+		nameLine.add(Box.createHorizontalGlue());
 
 		String qty = DropFormat.quantity(row);
 		if (!qty.isEmpty() && !"1".equals(qty))
@@ -184,27 +194,31 @@ public class DropsCard extends JPanel
 			JLabel q = new JLabel("×" + qty);
 			q.setFont(FontManager.getRunescapeSmallFont());
 			q.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-			nameLine.add(Box.createRigidArea(new Dimension(6, 0)));
 			nameLine.add(q);
 		}
-		nameLine.add(Box.createHorizontalGlue());
 		capHeight(nameLine);
 		centre.add(nameLine);
 
-		// Line 2: the drop odds, directly under the name.
+		// Line 2: the drop odds, right-aligned and colour-coded by rarity tier.
+		JPanel rarityLine = new JPanel();
+		rarityLine.setLayout(new BoxLayout(rarityLine, BoxLayout.X_AXIS));
+		rarityLine.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		rarityLine.setAlignmentX(LEFT_ALIGNMENT);
+		rarityLine.add(Box.createHorizontalGlue());
 		JLabel rarity = new JLabel(DropFormat.rarity(row));
 		rarity.setFont(FontManager.getRunescapeSmallFont());
-		rarity.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-		rarity.setAlignmentX(LEFT_ALIGNMENT);
+		rarity.setForeground(rarityColor(row.getRarity()));
+		rarityLine.add(rarity);
+		capHeight(rarityLine);
 		centre.add(Box.createRigidArea(new Dimension(0, 1)));
-		centre.add(rarity);
+		centre.add(rarityLine);
 
 		r.add(centre, BorderLayout.CENTER);
 		capHeight(r);
 
 		if (row.getItem() != null && !row.getItem().isEmpty())
 		{
-			cells.add(new PriceCell(row.getItem(), iconQuantity(qty), isNoted(qty), icon, r));
+			cells.add(new PriceCell(row.getItem(), isNoted(qty), icon, r));
 			makeClickable(r, row.getItem());
 		}
 		return r;
@@ -214,6 +228,28 @@ public class DropsCard extends JPanel
 	private static boolean isNoted(String qty)
 	{
 		return qty.toLowerCase(Locale.ROOT).contains("noted");
+	}
+
+	/** The rarity-tier colour for the current highlight mode (grey when highlighting is off). */
+	private Color rarityColor(String rarity)
+	{
+		HighlightMode mode = config.statHighlighting();
+		if (mode == HighlightMode.OFF)
+		{
+			return ColorScheme.LIGHT_GRAY_COLOR;
+		}
+		boolean cb = mode == HighlightMode.COLOUR_BLIND;
+		switch (DropFormat.tierOf(rarity))
+		{
+			case UNCOMMON:
+				return cb ? CB_UNCOMMON : STD_UNCOMMON;
+			case RARE:
+				return cb ? CB_RARE : STD_RARE;
+			case ULTRA_RARE:
+				return cb ? CB_ULTRA : STD_ULTRA;
+			default:
+				return ColorScheme.LIGHT_GRAY_COLOR;
+		}
 	}
 
 	/** Make the whole row open the item's OSRS Wiki page on click (hand cursor + hover tooltip). */
@@ -233,7 +269,7 @@ public class DropsCard extends JPanel
 		};
 		// Swing doesn't bubble mouse events, so attach to the row and every child it contains.
 		applyClick(row, open);
-		setRowTooltip(row, tooltip(item, ""));
+		setRowTooltip(row, baseTooltip(item));
 	}
 
 	private static void applyClick(Component c, MouseAdapter open)
@@ -265,38 +301,79 @@ public class DropsCard extends JPanel
 		}
 	}
 
-	/** The row's hover tooltip: item name, GE / High Alch (once priced), and the wiki hint. */
-	private static String tooltip(String item, String priceLine)
+	/** The row's tooltip before prices resolve: item name + the wiki hint. */
+	private static String baseTooltip(String item)
+	{
+		return "<html>" + esc(item) + wikiHint();
+	}
+
+	/** The row's tooltip once priced: name, GE / High Alch (higher one highlighted), and the wiki hint. */
+	private String priceTooltip(String item, int ge, int ha)
 	{
 		StringBuilder sb = new StringBuilder("<html>").append(esc(item));
-		if (!priceLine.isEmpty())
+		String line = priceLineHtml(ge, ha);
+		if (!line.isEmpty())
 		{
-			sb.append("<br>").append(esc(priceLine));
+			sb.append("<br>").append(line);
 		}
-		return sb.append("<br><span style='color:#9a9a9a'>Click to open on the OSRS Wiki</span></html>").toString();
+		return sb.append(wikiHint()).toString();
+	}
+
+	/** "GE x · Alch y" with the larger value highlighted (colour-blind-aware); empty when neither priced. */
+	private String priceLineHtml(int ge, int ha)
+	{
+		String geStr = DropFormat.price(ge);
+		String haStr = DropFormat.price(ha);
+		if (geStr.isEmpty() && haStr.isEmpty())
+		{
+			return "";
+		}
+		String hi = highlightHex();
+		boolean geWins = ge >= ha;
+		StringBuilder sb = new StringBuilder();
+		if (!geStr.isEmpty())
+		{
+			sb.append("GE ").append(colorize(geStr, geWins ? hi : null));
+		}
+		if (!haStr.isEmpty())
+		{
+			if (sb.length() > 0)
+			{
+				sb.append(" · ");
+			}
+			sb.append("Alch ").append(colorize(haStr, geWins ? null : hi));
+		}
+		return sb.toString();
+	}
+
+	/** The highlight colour (hex) for the higher GE/Alch value, per the highlight mode; null when off. */
+	private String highlightHex()
+	{
+		switch (config.statHighlighting())
+		{
+			case STANDARD:
+				return "#5fc96b";      // green (money)
+			case COLOUR_BLIND:
+				return "#56b4e9";      // sky blue — colour-blind safe
+			default:
+				return null;
+		}
+	}
+
+	private static String colorize(String value, String hex)
+	{
+		String v = esc(value);
+		return hex == null ? v : "<span style='color:" + hex + "'>" + v + "</span>";
+	}
+
+	private static String wikiHint()
+	{
+		return "<br><span style='color:#9a9a9a'>Click to open on the OSRS Wiki</span></html>";
 	}
 
 	private static String esc(String s)
 	{
 		return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
-	}
-
-	/** The leading integer of a quantity string (for the icon's stack number), or 1 when there's none. */
-	private static int iconQuantity(String qty)
-	{
-		Matcher m = LEADING_INT.matcher(qty);
-		if (m.find())
-		{
-			try
-			{
-				return Math.max(1, Integer.parseInt(m.group(1).replace(",", "")));
-			}
-			catch (NumberFormatException e)
-			{
-				return 1;
-			}
-		}
-		return 1;
 	}
 
 	/**
@@ -322,16 +399,11 @@ public class DropsCard extends JPanel
 				ItemComposition comp = itemManager.getItemComposition(id);
 				int ge = itemManager.getItemPrice(id);
 				int ha = comp == null ? 0 : comp.getHaPrice();
-				// A noted drop renders the item's noted graphic — a separate, stackable item id.
-				int iconId = id;
-				boolean stackable = comp != null && comp.isStackable();
-				if (c.noted && comp != null && comp.getLinkedNoteId() > 0)
-				{
-					iconId = comp.getLinkedNoteId();
-					stackable = true;
-				}
-				AsyncBufferedImage img = itemManager.getImage(iconId, c.quantity, stackable);
-				String tip = tooltip(c.itemName, DropFormat.priceLine(ge, ha));
+				// A noted drop renders the item's noted graphic — a separate item id. Draw the plain
+				// icon with no stack-number badge (quantity 1, not stackable).
+				int iconId = c.noted && comp != null && comp.getLinkedNoteId() > 0 ? comp.getLinkedNoteId() : id;
+				AsyncBufferedImage img = itemManager.getImage(iconId, 1, false);
+				String tip = priceTooltip(c.itemName, ge, ha);
 				SwingUtilities.invokeLater(() ->
 				{
 					if (img != null)

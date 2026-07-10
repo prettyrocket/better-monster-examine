@@ -13,6 +13,66 @@ final class DropFormat
 	{
 	}
 
+	/**
+	 * The rarity tier for colour-coding, from the drop probability. {@code Always} (100%) and any
+	 * unknown / unparseable rarity are {@code COMMON}; thresholds: uncommon past 1/50, rare past
+	 * 1/500, ultra-rare past 1/5000.
+	 */
+	static RarityTier tierOf(String rarity)
+	{
+		double p = probability(rarity);
+		if (p <= 0 || p >= 1.0 / 50)
+		{
+			return RarityTier.COMMON;
+		}
+		if (p >= 1.0 / 500)
+		{
+			return RarityTier.UNCOMMON;
+		}
+		if (p >= 1.0 / 5000)
+		{
+			return RarityTier.RARE;
+		}
+		return RarityTier.ULTRA_RARE;
+	}
+
+	/**
+	 * Rarity as a probability in {@code (0, 1]}: {@code "Always"} → 1, an {@code "a/b"} fraction → a/b
+	 * (tolerating a leading {@code ~} and thousands commas), or {@code -1} when unparseable.
+	 */
+	static double probability(String rarity)
+	{
+		if (rarity == null)
+		{
+			return -1;
+		}
+		String r = rarity.trim();
+		if (r.equalsIgnoreCase("Always"))
+		{
+			return 1.0;
+		}
+		if (r.startsWith("~"))
+		{
+			r = r.substring(1).trim();
+		}
+		r = r.replace(",", "");
+		int slash = r.indexOf('/');
+		try
+		{
+			if (slash < 0)
+			{
+				return Double.parseDouble(r);
+			}
+			double num = Double.parseDouble(r.substring(0, slash).trim());
+			double den = Double.parseDouble(r.substring(slash + 1).trim());
+			return den == 0 ? -1 : num / den;
+		}
+		catch (NumberFormatException e)
+		{
+			return -1;
+		}
+	}
+
 	/** Rarity as the wiki shows it: {@code "Always"}, or the fraction; a plain dash when unknown. */
 	static String rarity(DropRow row)
 	{

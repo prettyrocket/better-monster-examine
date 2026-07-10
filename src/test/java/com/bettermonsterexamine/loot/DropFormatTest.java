@@ -53,4 +53,21 @@ public class DropFormatTest
 		assertEquals("Alch 450000", DropFormat.priceLine(0, 450_000));
 		assertEquals("", DropFormat.priceLine(0, 0));
 	}
+
+	@Test
+	public void tierOfMapsProbabilityToRarityBands()
+	{
+		// Always (100%) and unknown/unparseable rarities are common.
+		assertEquals(RarityTier.COMMON, DropFormat.tierOf("Always"));
+		assertEquals(RarityTier.COMMON, DropFormat.tierOf("-"));
+		assertEquals(RarityTier.COMMON, DropFormat.tierOf(null));
+		// 1/20 is above the 1/50 threshold -> common; 1/128 -> uncommon.
+		assertEquals(RarityTier.COMMON, DropFormat.tierOf("1/20"));
+		assertEquals(RarityTier.UNCOMMON, DropFormat.tierOf("1/128"));
+		assertEquals(RarityTier.RARE, DropFormat.tierOf("1/1000"));
+		// A leading ~ and thousands commas are tolerated; 1/13000 -> ultra rare.
+		assertEquals(RarityTier.ULTRA_RARE, DropFormat.tierOf("~1/13,000"));
+		// A multi-roll numerator counts: 5/128 ~ 1/26 -> common.
+		assertEquals(RarityTier.COMMON, DropFormat.tierOf("5/128"));
+	}
 }

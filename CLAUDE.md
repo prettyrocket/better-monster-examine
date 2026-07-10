@@ -135,9 +135,13 @@ The **data layer** is `#41`; the **panel** (this branch) is `#45`, stacked on it
   first-seen), preserving row order within each section. Pure, so it's unit-tested.
 
 - **`DropsCard`** (`JPanel`, the Drops-tab body) — renders the wiki's sections **in page order** as a
-  clean list: one row per drop, two lines — **icon** + **name ×qty** on top, the **rarity/odds**
-  below. Each row is **clickable** (opens the item's wiki page) and its **hover tooltip** carries the
-  **GE / High Alch** (kept off-screen to reduce clutter). Item id resolves on the client thread:
+  clean list: one row per drop, two lines — **icon** + name (with the **quantity right-aligned**) on
+  top, the **rarity/odds right-aligned** below, **colour-coded by rarity tier** (common grey →
+  uncommon → rare → ultra-rare, via `DropFormat.tierOf`; the palette follows `statHighlighting` and
+  has a colour-blind-safe Okabe-Ito set). Icons carry **no stack-number badge**. Each row is
+  **clickable** (opens the item's wiki page) and its **hover tooltip** carries the **GE / High Alch**,
+  with the **larger of the two highlighted** (colour-blind-aware). Item id resolves on the client
+  thread:
   `ItemIdService` first, then a small hand map for items the bucket returns `"N/A"` for (clue scrolls),
   then `ItemManager.search` for tradeables the bucket misses (e.g. dose potions). Icon/price come from
   the client with zero network — built blank, filled via a **single `ClientThread` hop** that reads
