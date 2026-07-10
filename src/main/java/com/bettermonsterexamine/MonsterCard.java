@@ -8,71 +8,53 @@ import java.awt.Font;
 import java.awt.Graphics2D;
 import java.awt.GridLayout;
 import java.awt.Image;
-import java.awt.Insets;
 import java.awt.image.BufferedImage;
 import java.util.List;
 import java.util.Locale;
-import java.util.function.Consumer;
 import java.util.function.IntSupplier;
-import java.util.function.Predicate;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.ImageIcon;
-import javax.swing.JButton;
-import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.border.EmptyBorder;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
-import net.runelite.client.util.LinkBrowser;
 
 /**
- * The wiki-style stats infobox, as a self-contained Swing component. Given a monster, its
- * variants, and (possibly null) wiki fields, it builds the card — name + variant dropdown +
- * links header, then attribute / combat / max-hit / stat / immunity blocks — colour-coding
- * player-relevant values via {@link StatColors}. It owns only the visuals: favouriting and
- * variant switching are surfaced as callbacks so the host panel keeps that state.
+ * The wiki-style stats infobox body, as a self-contained Swing component: the attribute / combat /
+ * max-hit / stat / immunity / slayer blocks, colour-coding player-relevant values via
+ * {@link StatColors}. The monster-identity header (name, variant selector, links) is drawn
+ * separately by {@link MonsterHeader}, which sits above the Stats|Drops tab strip so it stays put
+ * while this body swaps with the drops list.
  */
 class MonsterCard extends JPanel
 {
-	private static final String DPS_CALC_URL = "https://tools.runescape.wiki/osrs-dps/";
 	/** Uniform on-screen size every stat-grid icon is scaled to. */
 	private static final int ICON_BOX = 22;
 
 	private final MonsterIcons icons;
 	private final BetterMonsterExamineConfig config;
-	private final IntSupplier playerCombatLevel;
 	private final IntSupplier playerHpLevel;
 	private final IntSupplier playerSlayerLevel;
-	private final Predicate<MonsterData> isFavorite;
-	private final Consumer<MonsterData> onToggleFavorite;
-	private final Consumer<MonsterData> onSelectVariant;
 
-	MonsterCard(MonsterIcons icons, BetterMonsterExamineConfig config, IntSupplier playerCombatLevel,
-		IntSupplier playerHpLevel, IntSupplier playerSlayerLevel, Predicate<MonsterData> isFavorite,
-		Consumer<MonsterData> onToggleFavorite, Consumer<MonsterData> onSelectVariant)
+	MonsterCard(MonsterIcons icons, BetterMonsterExamineConfig config,
+		IntSupplier playerHpLevel, IntSupplier playerSlayerLevel)
 	{
 		this.icons = icons;
 		this.config = config;
-		this.playerCombatLevel = playerCombatLevel;
 		this.playerHpLevel = playerHpLevel;
 		this.playerSlayerLevel = playerSlayerLevel;
-		this.isFavorite = isFavorite;
-		this.onToggleFavorite = onToggleFavorite;
-		this.onSelectVariant = onSelectVariant;
 		setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
 		setAlignmentX(LEFT_ALIGNMENT);
 	}
 
-	/** Render {@code m}, with its {@code variants} (for the dropdown). */
-	void show(MonsterData m, List<MonsterData> variants)
+	/** Render the stat blocks for {@code m} (the header is drawn separately by {@link MonsterHeader}). */
+	void show(MonsterData m)
 	{
 		removeAll();
 		MonsterStats stats = new MonsterStats(m, config.statHighlighting(), playerHpLevel.getAsInt(), playerSlayerLevel.getAsInt());
-		add(header(m, variants, stats));
-		add(Box.createRigidArea(new Dimension(0, 6)));
 		buildWiki(stats);
 		revalidate();
 		repaint();
@@ -96,122 +78,6 @@ class MonsterCard extends JPanel
 		removeAll();
 		revalidate();
 		repaint();
-	}
-
-	private JComponent header(MonsterData m, List<MonsterData> variants, MonsterStats stats)
-	{
-		JPanel block = block();
-
-		// Name on the left, combat level on the right of the same row — smaller and colour-coded
-		// against the player's level like the in-game monster hover.
-		JPanel nameRow = rowX();
-		JLabel name = new JLabel(m.getName());
-		name.setFont(FontManager.getRunescapeBoldFont());
-		name.setForeground(Color.WHITE);
-		nameRow.add(name);
-		// Favourite toggle sits right next to the name (only when the feature is enabled).
-		if (config.enableHistory())
-		{
-			nameRow.add(Box.createRigidArea(new Dimension(4, 0)));
-			nameRow.add(makeStarButton(m));
-		}
-		if (m.getLevel() > 0)
-		{
-			nameRow.add(Box.createHorizontalGlue());
-			int pl = playerCombatLevel.getAsInt();
-			// In colour-blind mode a level above yours also gets an up-triangle, since orange
-			// alone can't be told apart from blue.
-			boolean above = config.statHighlighting() == HighlightMode.COLOUR_BLIND
-				&& pl > 0 && m.getLevel() > pl;
-			JLabel lvl = new JLabel("(level-" + m.getLevel() + ")" + (above ? " ▲" : ""));
-			lvl.setFont(FontManager.getRunescapeSmallFont());
-			lvl.setForeground(levelColor(pl, m.getLevel()));
-			if (above)
-			{
-				lvl.setToolTipText("Combat level above yours (" + pl + ").");
-			}
-			nameRow.add(lvl);
-		}
-		capHeight(nameRow);
-		block.add(nameRow);
-
-		// Examine text (wiki, async): subtle italic line directly under the name.
-		String examine = stats.examine();
-		if (examine != null)
-		{
-			block.add(Box.createRigidArea(new Dimension(0, 2)));
-			block.add(wrappedLabel(examine, ColorScheme.LIGHT_GRAY_COLOR, true));
-		}
-
-		// Variant selector (only when >1 form shares the name)
-		if (variants != null && variants.size() > 1)
-		{
-			JComboBox<String> combo = new JComboBox<>();
-			for (MonsterData v : variants)
-			{
-				String v2 = (v.getVersion() == null || v.getVersion().isEmpty()) ? "Standard" : v.getVersion();
-				combo.addItem(v2);
-			}
-			combo.setSelectedIndex(variants.indexOf(m));
-			combo.setFont(FontManager.getRunescapeSmallFont());
-			combo.setAlignmentX(LEFT_ALIGNMENT);
-			combo.addActionListener(e ->
-			{
-				int i = combo.getSelectedIndex();
-				// setSelectedIndex above runs before this listener is attached, so rebuilding the
-				// card never re-fires it — only a real user change reaches the host.
-				if (i >= 0 && i < variants.size())
-				{
-					onSelectVariant.accept(variants.get(i));
-				}
-			});
-			capHeight(combo);
-			block.add(Box.createRigidArea(new Dimension(0, 4)));
-			block.add(combo);
-		}
-
-		// Wiki + DPS-calc links, side by side. DPS calc deep-links the monster by NPC id.
-		JButton wikiBtn = new JButton("Wiki");
-		wikiBtn.setFont(FontManager.getRunescapeSmallFont());
-		wikiBtn.addActionListener(e -> LinkBrowser.browse(wikiUrl(m)));
-
-		JButton dpsBtn = new JButton("DPS Calc");
-		dpsBtn.setFont(FontManager.getRunescapeSmallFont());
-		// The link only sets the target monster. Gear comes from the separate WikiSync plugin,
-		// which the user loads by clicking the calc's own "RuneLite" button — not via our URL.
-		dpsBtn.setToolTipText("<html>Opens the DPS calculator for this monster.<br>"
-			+ "To load your current gear, click the 'RuneLite' button in the<br>"
-			+ "calculator (requires the WikiSync plugin).</html>");
-		dpsBtn.addActionListener(e -> LinkBrowser.browse(DPS_CALC_URL + "?monster=" + m.getId()));
-
-		JPanel buttons = new JPanel(new GridLayout(1, 2, 4, 0));
-		buttons.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		buttons.setAlignmentX(LEFT_ALIGNMENT);
-		buttons.add(wikiBtn);
-		buttons.add(dpsBtn);
-		capHeight(buttons);
-		block.add(Box.createRigidArea(new Dimension(0, 6)));
-		block.add(buttons);
-
-		capHeight(block);
-		return block;
-	}
-
-	private JButton makeStarButton(MonsterData m)
-	{
-		boolean fav = isFavorite.test(m);
-		JButton b = new JButton(fav ? "★" : "☆");
-		b.setToolTipText(fav ? "Remove from favorites" : "Add to favorites");
-		b.setForeground(fav ? ColorScheme.BRAND_ORANGE : ColorScheme.LIGHT_GRAY_COLOR);
-		b.setFocusable(false);
-		b.setMargin(new Insets(0, 4, 0, 4));
-		b.addActionListener(e -> onToggleFavorite.accept(m));
-		return b;
-	}
-
-	private static String wikiUrl(MonsterData m)
-	{
-		return "https://oldschool.runescape.wiki/w/" + m.getName().replace(' ', '_');
 	}
 
 	// ---- Wiki: faithful to the OSRS Wiki monster infobox --------------------
@@ -671,11 +537,5 @@ class MonsterCard extends JPanel
 	private Color resolve(ColourRole role)
 	{
 		return StatColors.resolve(role, config.statHighlighting());
-	}
-
-	/** Combat-level colour for the active mode: the in-game gradient (Standard) or orange/blue (CB). */
-	private Color levelColor(int playerLevel, int npcLevel)
-	{
-		return StatColors.levelColor(config.statHighlighting(), playerLevel, npcLevel);
 	}
 }

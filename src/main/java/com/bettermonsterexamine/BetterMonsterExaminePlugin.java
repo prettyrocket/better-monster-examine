@@ -6,6 +6,9 @@ import javax.swing.SwingUtilities;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 
+import com.bettermonsterexamine.loot.DropTableService;
+import com.bettermonsterexamine.loot.DropsCard;
+import com.bettermonsterexamine.loot.ItemIdService;
 import com.google.gson.Gson;
 import com.google.inject.Provides;
 import lombok.extern.slf4j.Slf4j;
@@ -18,6 +21,7 @@ import net.runelite.api.events.GameTick;
 import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
+import net.runelite.client.game.ItemManager;
 import net.runelite.client.input.MouseAdapter;
 import net.runelite.client.input.MouseManager;
 import net.runelite.client.plugins.Plugin;
@@ -58,6 +62,15 @@ public class BetterMonsterExaminePlugin extends Plugin
 
 	@Inject
 	private MonsterDataService dataService;
+
+	@Inject
+	private DropTableService dropTableService;
+
+	@Inject
+	private ItemIdService itemIdService;
+
+	@Inject
+	private ItemManager itemManager;
 
 	@Inject
 	private OverlayManager overlayManager;
@@ -158,7 +171,8 @@ public class BetterMonsterExaminePlugin extends Plugin
 	{
 		log.debug("Adding side panel navigation button");
 		BufferedImage icon = titleIcon;
-		monsterStatsPanel = new BetterMonsterExaminePanel(monsterIcons, dataService, config, configManager, gson, () -> playerCombatLevel, () -> playerHpLevel, () -> playerSlayerLevel, icon);
+		DropsCard dropsCard = new DropsCard(itemManager, clientThread, itemIdService);
+		monsterStatsPanel = new BetterMonsterExaminePanel(monsterIcons, dataService, dropTableService, itemIdService, dropsCard, config, configManager, gson, () -> playerCombatLevel, () -> playerHpLevel, () -> playerSlayerLevel, icon);
 		// Mirror whatever the panel is showing into the overlay (when the overlay is a target).
 		monsterStatsPanel.setSelectionListener(this::showInOverlay);
 		navButton = NavigationButton.builder()
