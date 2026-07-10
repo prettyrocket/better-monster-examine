@@ -103,49 +103,40 @@ poison/venom resistance) — tracked in #30.
 
 ### Drops data layer (`loot/`, #41 · epic #39)
 
-Drops live in the `com.bettermonsterexamine.loot` sub-package. The design is deliberately **simple
-and correct-by-construction** (see `bucket-api-playground/PLUGIN_DESIGN.md`): exact per-kill odds
-straight from Bucket, **deterministic** sections stated by Bucket flags — never inferred — and (once
-the panel lands, on the stacked `#45` branch) price/alch/icon from the RuneLite client for free. No
-HTML scraping, no shared-sub-table reconstruction, no odds-consistency heuristics, nothing to tune or
-that can drift. This branch (`#41`) is **data only** — the view is `#45`.
+Drops live in the `com.bettermonsterexamine.loot` sub-package. The goal is the **wiki's own drop
+tables** — 100% / Weapons and armour / Runes / Herbs / **Gem drop table** / **Rare drop table** /
+**Catacombs of Kourend** / **Wilderness Slayer Cave** / Tertiary / … — grouped exactly as a player
+sees them on the wiki. That editorial grouping lives **only in the rendered wiki page**, not in the
+structured Bucket data: the `dropsline` bucket has no section field and can't even see the region
+tables (a Catacombs/Wilderness monster emits none of those rows). So drops are sourced by **parsing
+the monster's page**, not the bucket. (An earlier `dropsline`-based `tables` mode from
+`bucket-api-playground/PLUGIN_DESIGN.md` was tried and dropped — it can't produce these sections.)
+This branch (`#41`) is **data only** — the view is `#45`.
 
-**Data-source split.** Two Bucket buckets (same `api.php?action=bucket` endpoint as stats) + the
-client:
-- **`dropsline`** (drop list, quantity, compound rarity, RDT flag, variant) — **on demand per
-  monster**, cached per page. `page_name` is the only queryable filter (the monster lives in the
-  non-indexed `drop_json`), so filter by the emitting page and read the variant back out of
-  `drop_json`'s `Dropped from` (`<Page>#<Variant>`). ~10× the size of stats; the API hard-caps
-  queries at 5000 rows.
-- **`item_id`** (item page name → numeric client id) — **bulk**, cached once. Bridges wiki item
-  names to the client ids the price/alch/icon lookups key on, and fixes untradeables that
-  `ItemManager.search` misses.
+- **`DropPageService`** (singleton) — the source. `request(pageName)` fetches the monster's rendered
+  wiki page via the MediaWiki **`action=parse`** API off-thread (client-thread/EDT safe), caches the
+  raw response per page under `.runelite/better-monster-examine/droppages/`, and publishes parsed
+  rows into a concurrent by-page index; `tableFor(pageName)` reads it without blocking (null until
+  loaded). On-demand **per monster**, refreshed weekly (`MAX_AGE = 7 days`) — the same cache pattern
+  the drops fetch always used, just from the page instead of the bucket. Its static `parse(html)` is
+  pure (unit-tested): it restricts to the Drops section (`id="Drops"` → next `<h2>`), merges
+  `<h3>/<h4>` headings and drop-table rows by document position so each row inherits the heading
+  above it, and pulls `[item · quantity · rarity]` from the row's `item-col` / quantity / `table-bg`
+  cells. Concurrent requests coalesce; an update listener notifies when a page lands.
+- **`ItemIdService`** (singleton) — bulk OSRS Wiki Bucket `item_id` name→id map (the one Bucket use
+  that remains), cached under `.runelite/better-monster-examine/item-ids.json`, paginated + refreshed
+  weekly. Bridges the parsed item **name** to the client **id** so the RuneLite client can supply
+  price / high-alch / **icon** for free; also covers untradeables `ItemManager.search` misses.
+  `idFor(name)` returns null until it lands.
+- **`DropRow`** — a plain DTO for one parsed row: item, quantity + rarity (as the wiki renders them),
+  and the **section** heading it sits under. Price/alch/icon are not stored — they come from the
+  client by id at render time.
+- **`DropTable`** — a monster's rows grouped into sections **in wiki page order** (`of(rows)`,
+  first-seen), preserving row order within each section. Pure, so it's unit-tested.
 
-So **stats = bulk index, drops = on-demand detail, item_id = bulk bridge**; don't unify.
-
-- **`DropTableService`** (singleton) — `request(pageName)` fetches that page's drops off-thread
-  (client-thread/EDT safe) and caches the merged response per page under
-  `.runelite/better-monster-examine/drops/`; the fetch runs **synchronously on the executor**,
-  **paginating** with `offset` past the 5000-row cap. `tableFor(pageName)` reads the concurrent
-  by-page index without blocking (null until loaded) and returns the page's `DropTable`s (one per
-  variant). Concurrent requests coalesce; an update listener notifies when a page lands. Apostrophes
-  in the page name are escaped by **doubling** (`Vorkath's` → `Vorkath''s`). `MAX_AGE = 7 days`.
-- **`ItemIdService`** (singleton) — bulk `item_id` name→id map, cached under
-  `.runelite/better-monster-examine/item-ids.json`, paginated + refreshed weekly. Mirrors
-  `MonsterDataService`'s bulk cache/refresh; `idFor(name)` returns null until it lands.
-- **`DropRow`** — a Gson DTO for one drop, mapped from the row's nested `drop_json` **string**. Adds
-  `variant()` (the part after `#` in `Dropped from`), `rarityProbability()` (`Always`→1.0, `a/b`
-  fraction tolerating a leading `~` and commas, unparseable→`-1.0` so it sorts last), and `section()`
-  (the deterministic label). `item` falls back to the row's `item_name`; `pageNameSub`, the
-  `rareDropTable` flag (`""`/null sentinel, like `MonsterData.default_version`) and the resolved
-  client `itemId` are stamped on post-parse.
-- **`DropTable`** — one variant's rows grouped into the fixed **section order 100% → Other → Rare
-  drop table** (a row is `100%` when `Always`, `Rare drop table` when the flag is set, else `Other`;
-  100% wins over the flag), each section sorted most-common first. `group(rows)` splits a page's rows
-  into one table per variant in first-seen order. Pure, so the engine is unit-tested.
-
-Variant handling follows the design: the view will **render one block per variant** (split on
-`drop_json`'s `#variant`), which sidesteps the fragile stats-side `page_name#version_anchor` join.
+Item icon / GE price / High Alch still come from the **RuneLite client by item id** (zero network) —
+that part of the original design stands; only the *drop list + sections* moved from the bucket to the
+page parse.
 
 ### Plugin + UI
 
@@ -194,6 +185,8 @@ state reads on the client thread (`clientThread.invoke`), Swing updates on the E
 JUnit 4 under `src/test/java`. Pure-logic tests exercise the static helpers and the view-model:
 `MonsterDataServiceTest` (name matching), `WikiSanitizerTest` (the Bucket field-cleaning shapes),
 `MonsterStatsTest` (view-model semantics), `StatFormatTest`, `StatColorsTest`, `LookupHistoryTest`.
-The `loot/` layer adds `DropRowTest` (the `drop_json` parsing shapes) and `DropTableServiceTest`
-(the two-stage row → nested-`drop_json` parse). `BetterMonsterExaminePluginTest` and `OverlayPreview`
+The `loot/` layer adds `DropPageServiceTest` (the rendered-page HTML parse: rows inherit their
+`<h3>/<h4>` section, the Drops region stops at the next `<h2>`, entity/footnote cleaning),
+`DropTableTest` (section grouping in wiki page order), `ItemIdServiceTest` (the `item_id` name→id
+parse) and `DropRowTest` (the `isAlways` helper). `BetterMonsterExaminePluginTest` and `OverlayPreview`
 are dev launchers, not assertions.
