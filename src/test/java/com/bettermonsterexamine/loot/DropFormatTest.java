@@ -74,9 +74,10 @@ public class DropFormatTest
 	@Test
 	public void handlesMultiRollAndCombinedRarityCells()
 	{
-		// Vorkath's rune javelin cell (× is U+00D7): a combined per-kill rate after ';' wins.
+		// Vorkath's rune javelin cell (× is U+00D7): the DISPLAY keeps the full compound value
+		// (commas tidied), but the tier COLOUR uses the combined per-kill rate after ';'.
 		String rune = "2 × 1/24,576 ; 1/12,480";
-		assertEquals("1/12480", DropFormat.rarity(new DropRow("Item", "50", rune, "Other")));
+		assertEquals("2 × 1/24576 ; 1/12480", DropFormat.rarity(new DropRow("Item", "50", rune, "Other")));
 		assertEquals(RarityTier.ULTRA_RARE, DropFormat.tierOf(rune));
 
 		// Adamant javelin: "N × 1/M" with no combined value -> N/M for the tier (~2/1920 = rare).

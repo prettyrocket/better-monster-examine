@@ -107,8 +107,9 @@ final class DropFormat
 	}
 
 	/**
-	 * Rarity as the wiki shows it, reduced to its effective per-kill value: {@code "Always"}, a
-	 * fraction, or a plain dash when unknown.
+	 * Rarity as the wiki shows it — the <b>full</b> value, including a multi-roll {@code "N × 1/M"} and
+	 * any {@code ';'}-separated combined rate; only commas/dashes are tidied. {@code "Always"}, or a
+	 * plain dash when unknown. (Colour-coding reduces this to its effective rate; the display keeps it.)
 	 */
 	static String rarity(DropRow row)
 	{
@@ -117,7 +118,7 @@ final class DropFormat
 			return "Always";
 		}
 		String r = row.getRarity();
-		return r == null || r.trim().isEmpty() ? "-" : display(effective(r));
+		return r == null || r.trim().isEmpty() ? "-" : display(r.trim());
 	}
 
 	/**
