@@ -2,7 +2,6 @@ package com.bettermonsterexamine;
 
 import java.awt.Color;
 import java.awt.Dimension;
-import java.awt.Font;
 import java.awt.GridLayout;
 import java.awt.Insets;
 import java.util.List;
@@ -16,10 +15,13 @@ import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
-import javax.swing.border.EmptyBorder;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.util.LinkBrowser;
+import static com.bettermonsterexamine.PanelStyle.block;
+import static com.bettermonsterexamine.PanelStyle.capHeight;
+import static com.bettermonsterexamine.PanelStyle.rowX;
+import static com.bettermonsterexamine.PanelStyle.wrappedLabel;
 
 /**
  * The monster-identity header shared by the side panel's Stats and Drops tabs: name + favourite
@@ -211,43 +213,6 @@ class MonsterHeader extends JPanel
 	}
 
 	// --------------------------------------------------------------- layout helpers
-
-	private JPanel block()
-	{
-		JPanel p = new JPanel();
-		p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
-		p.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		p.setBorder(new EmptyBorder(6, 8, 6, 8));
-		p.setAlignmentX(LEFT_ALIGNMENT);
-		return p;
-	}
-
-	private JPanel rowX()
-	{
-		JPanel r = new JPanel();
-		r.setLayout(new BoxLayout(r, BoxLayout.X_AXIS));
-		r.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		r.setAlignmentX(LEFT_ALIGNMENT);
-		r.setBorder(new EmptyBorder(1, 0, 1, 0));
-		return r;
-	}
-
-	/** A full-width, wrapping value label (used for the examine text). */
-	private JLabel wrappedLabel(String text, Color color, boolean italic)
-	{
-		JLabel l = new JLabel("<html><body style='width:200px'>" + StatFormat.esc(text).replace("\n", "<br>") + "</body></html>");
-		Font f = FontManager.getRunescapeSmallFont();
-		l.setFont(italic ? f.deriveFont(Font.ITALIC) : f);
-		l.setForeground(color);
-		l.setAlignmentX(LEFT_ALIGNMENT);
-		return l;
-	}
-
-	private void capHeight(JComponent c)
-	{
-		c.setMaximumSize(new Dimension(Integer.MAX_VALUE, c.getPreferredSize().height));
-		c.setAlignmentX(LEFT_ALIGNMENT);
-	}
 
 	private Color levelColor(int playerLevel, int npcLevel)
 	{

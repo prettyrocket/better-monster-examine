@@ -2,6 +2,9 @@ package com.bettermonsterexamine.loot;
 
 import com.bettermonsterexamine.BetterMonsterExamineConfig;
 import com.bettermonsterexamine.HighlightMode;
+import static com.bettermonsterexamine.PanelStyle.block;
+import static com.bettermonsterexamine.PanelStyle.capHeight;
+import static com.bettermonsterexamine.PanelStyle.sectionHeader;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
@@ -530,29 +533,4 @@ public class DropsCard extends JPanel
 		add(l);
 	}
 
-	private JPanel block()
-	{
-		JPanel p = new JPanel();
-		p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
-		p.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		p.setBorder(new EmptyBorder(6, 8, 6, 8));
-		p.setAlignmentX(LEFT_ALIGNMENT);
-		return p;
-	}
-
-	private JLabel sectionHeader(String text)
-	{
-		JLabel h = new JLabel(text.toUpperCase(Locale.ROOT));
-		h.setFont(FontManager.getRunescapeSmallFont());
-		h.setForeground(ColorScheme.BRAND_ORANGE);
-		h.setAlignmentX(LEFT_ALIGNMENT);
-		h.setBorder(new EmptyBorder(0, 0, 3, 0));
-		return h;
-	}
-
-	private void capHeight(JComponent c)
-	{
-		c.setMaximumSize(new Dimension(Integer.MAX_VALUE, c.getPreferredSize().height));
-		c.setAlignmentX(LEFT_ALIGNMENT);
-	}
 }

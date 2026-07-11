@@ -4,13 +4,11 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
-import java.awt.Font;
 import java.awt.Graphics2D;
 import java.awt.GridLayout;
 import java.awt.Image;
 import java.awt.image.BufferedImage;
 import java.util.List;
-import java.util.Locale;
 import java.util.function.IntSupplier;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
@@ -21,6 +19,12 @@ import javax.swing.JPanel;
 import javax.swing.border.EmptyBorder;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
+import static com.bettermonsterexamine.PanelStyle.block;
+import static com.bettermonsterexamine.PanelStyle.capHeight;
+import static com.bettermonsterexamine.PanelStyle.headerLabel;
+import static com.bettermonsterexamine.PanelStyle.rowX;
+import static com.bettermonsterexamine.PanelStyle.sectionHeader;
+import static com.bettermonsterexamine.PanelStyle.wrappedLabel;
 
 /**
  * The wiki-style stats infobox body, as a self-contained Swing component: the attribute / combat /
@@ -372,26 +376,6 @@ class MonsterCard extends JPanel
 
 	// --------------------------------------------------------------- layout helpers
 
-	private JPanel block()
-	{
-		JPanel p = new JPanel();
-		p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
-		p.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		p.setBorder(new EmptyBorder(6, 8, 6, 8));
-		p.setAlignmentX(LEFT_ALIGNMENT);
-		return p;
-	}
-
-	private JPanel rowX()
-	{
-		JPanel r = new JPanel();
-		r.setLayout(new BoxLayout(r, BoxLayout.X_AXIS));
-		r.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		r.setAlignmentX(LEFT_ALIGNMENT);
-		r.setBorder(new EmptyBorder(1, 0, 1, 0));
-		return r;
-	}
-
 	private JPanel kv(String k, String v, Color valueColor)
 	{
 		return kv(k, v, valueColor, null);
@@ -495,40 +479,6 @@ class MonsterCard extends JPanel
 			l.setToolTipText("Max hit exceeds your hitpoints level (" + playerHpLevel.getAsInt() + ").");
 		}
 		return l;
-	}
-
-	/** A full-width, wrapping value label (used for examine text and the attribute list). */
-	private JLabel wrappedLabel(String text, Color color, boolean italic)
-	{
-		JLabel l = new JLabel("<html><body style='width:200px'>" + StatFormat.esc(text).replace("\n", "<br>") + "</body></html>");
-		Font f = FontManager.getRunescapeSmallFont();
-		l.setFont(italic ? f.deriveFont(Font.ITALIC) : f);
-		l.setForeground(color);
-		l.setAlignmentX(LEFT_ALIGNMENT);
-		return l;
-	}
-
-	/** The orange uppercase section-title label, without the trailing gap (for inline header rows). */
-	private JLabel headerLabel(String text)
-	{
-		JLabel h = new JLabel(text.toUpperCase(Locale.ROOT));
-		h.setFont(FontManager.getRunescapeSmallFont());
-		h.setForeground(ColorScheme.BRAND_ORANGE);
-		h.setAlignmentX(LEFT_ALIGNMENT);
-		return h;
-	}
-
-	private JLabel sectionHeader(String text)
-	{
-		JLabel h = headerLabel(text);
-		h.setBorder(new EmptyBorder(0, 0, 3, 0));
-		return h;
-	}
-
-	private void capHeight(JComponent c)
-	{
-		c.setMaximumSize(new Dimension(Integer.MAX_VALUE, c.getPreferredSize().height));
-		c.setAlignmentX(LEFT_ALIGNMENT);
 	}
 
 	// ---- player-relevant colours (delegate to the shared palette) -----------
