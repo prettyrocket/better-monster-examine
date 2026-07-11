@@ -236,18 +236,20 @@ public class DropPageService
 		{
 			return null;
 		}
-		String region = html;
 		int di = html.indexOf("id=\"Drops\"");
-		if (di >= 0)
+		if (di < 0)
 		{
-			// Start at the Drops heading's id (its opening <h2 sits just before it), then cut the
-			// region at the next <h2> so only the Drops section is parsed.
-			region = html.substring(di);
-			Matcher h2 = Pattern.compile("<h2").matcher(region);
-			if (h2.find())
-			{
-				region = region.substring(0, h2.start());
-			}
+			// No Drops section on the page — fail closed with an empty table rather than scanning the
+			// whole page, which could surface unrelated tables (store, spawns, …) as bogus drops.
+			return new ArrayList<>();
+		}
+		// Start at the Drops heading's id (its opening <h2 sits just before it), then cut the region
+		// at the next <h2> so only the Drops section is parsed.
+		String region = html.substring(di);
+		Matcher h2 = Pattern.compile("<h2").matcher(region);
+		if (h2.find())
+		{
+			region = region.substring(0, h2.start());
 		}
 
 		// Merge headings and rows by position, so each row inherits the heading above it.

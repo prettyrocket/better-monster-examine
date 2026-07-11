@@ -84,6 +84,17 @@ public class DropPageServiceTest
 	}
 
 	@Test
+	public void pageWithoutADropsSectionYieldsEmpty()
+	{
+		// No id="Drops" anchor: fail closed rather than scanning the whole page — an unrelated table
+		// (here a store list under its own heading) must not be mistaken for drops.
+		String html = "<h2 id=\"Store_locations\">Store locations</h2>"
+			+ "<h4 id=\"Shop\">Shop</h4>"
+			+ "<table>" + row("Some_item", "Some item", "1", "table-bg", "1/1") + "</table>";
+		assertTrue(DropPageService.parse(html).isEmpty());
+	}
+
+	@Test
 	public void cleanStripsTagsAndUnescapesEntities()
 	{
 		assertEquals("A & B", DropPageService.clean("<b>A</b> &amp; B"));
