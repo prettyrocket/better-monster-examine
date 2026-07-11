@@ -304,16 +304,16 @@ public class BetterMonsterExaminePlugin extends Plugin
 		// created last sits on top, so add Drops first and Stats above it.
 		if (menu.showsDrops() && config.enableSidePanel())
 		{
-			addStatsEntry(DROPS_OPTION, event);
+			addMenuEntry(DROPS_OPTION, event);
 		}
 		if (menu.showsStats() && statsActionAvailable())
 		{
-			addStatsEntry(STATS_OPTION, event);
+			addMenuEntry(STATS_OPTION, event);
 		}
 	}
 
 	/** Append a RUNELITE menu entry for one of our options, anchored on the NPC's Examine entry. */
-	private void addStatsEntry(String option, MenuEntryAdded event)
+	private void addMenuEntry(String option, MenuEntryAdded event)
 	{
 		client.getMenu().createMenuEntry(client.getMenu().getMenuEntries().length)
 				.setOption(option)

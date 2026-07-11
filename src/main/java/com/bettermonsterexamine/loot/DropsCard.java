@@ -35,14 +35,15 @@ import net.runelite.http.api.item.ItemPrice;
 
 /**
  * The drops list for the currently-viewed monster, as a self-contained Swing component (the
- * Drops-tab counterpart to {@code MonsterCard}). Given a page's {@link DropTable}s (one per variant)
- * it renders one row per drop — item icon + name + <code>×qty</code> on the left, rarity on the
- * right, and a small grey <code>GE · Alch</code> caption underneath — grouped into the deterministic
- * sections (100% → Other → Rare drop table), one block per variant.
+ * Drops-tab counterpart to {@code MonsterCard}). Given the page's {@link DropTable} it renders one
+ * row per drop — item icon + name with the quantity right-aligned on top, the rarity/odds
+ * right-aligned below — grouped into the wiki's own sections in page order (Herbs, Gem/Rare drop
+ * table, Catacombs/Wilderness tables, …). Each row's GE / High Alch go in its hover tooltip.
  *
- * <p>Drop data (names, quantities, rarities, sections) is synchronous from the cached Bucket layer.
- * Item id comes from {@link ItemIdService}; price, high-alch and icon come from the RuneLite client
- * with zero network. The structure is built on the EDT with blank icon/price cells, then a single
+ * <p>The drop list is parsed from the monster's wiki page ({@link DropPageService}), so it arrives
+ * asynchronously — {@link #show} is re-called as the page (and the bulk item-id map) land. Item id
+ * comes from {@link ItemIdService}; price, high-alch and icon come from the RuneLite client with zero
+ * network. The structure is built on the EDT with blank icon/price cells, then a single
  * {@link ClientThread} hop reads {@code ItemManager}/{@code ItemComposition} by id and fills them
  * back on the EDT ({@code getImage} returns an {@link AsyncBufferedImage} that repaints on load).
  */
@@ -412,6 +413,7 @@ public class DropsCard extends JPanel
 		}
 		clientThread.invoke(() ->
 		{
+			List<Runnable> updates = new ArrayList<>();
 			for (PriceCell c : cells)
 			{
 				Integer id = resolveId(c.itemName);
@@ -433,17 +435,26 @@ public class DropsCard extends JPanel
 				}
 				AsyncBufferedImage img = itemManager.getImage(iconId, c.quantity, stackable);
 				String tip = priceTooltip(c.itemName, ge, ha);
-				SwingUtilities.invokeLater(() ->
+				updates.add(() ->
 				{
 					if (img != null)
 					{
 						img.addTo(c.icon);
 					}
 					setRowTooltip(c.row, tip);
-					revalidate();
-					repaint();
 				});
 			}
+			if (updates.isEmpty())
+			{
+				return;
+			}
+			// Apply every resolved row in a single EDT hop, then lay out once.
+			SwingUtilities.invokeLater(() ->
+			{
+				updates.forEach(Runnable::run);
+				revalidate();
+				repaint();
+			});
 		});
 	}
 

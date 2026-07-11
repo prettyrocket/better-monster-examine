@@ -5,8 +5,8 @@ import org.junit.Test;
 
 /**
  * Locks {@link DropFormat}'s pure display shaping: rarity (Always / fraction / plain dash), the wiki
- * quantity string, comma-free compact coin values, and the GE/Alch caption line. Displayed numbers
- * drop thousands commas and en/em dashes become a plain hyphen.
+ * quantity string, comma-free compact coin values, and rarity-tier banding. Displayed numbers drop
+ * thousands commas and en/em dashes become a plain hyphen.
  */
 public class DropFormatTest
 {
@@ -43,15 +43,6 @@ public class DropFormatTest
 		assertEquals("3.9M", DropFormat.price(3_900_000));
 		assertEquals("2M", DropFormat.price(2_000_000));
 		assertEquals("2.1B", DropFormat.price(2_100_000_000));
-	}
-
-	@Test
-	public void priceLineShowsOnlyThePartsThatArePriced()
-	{
-		assertEquals("GE 480 · Alch 90", DropFormat.priceLine(480, 90));
-		assertEquals("GE 3.9M", DropFormat.priceLine(3_900_000, 0));
-		assertEquals("Alch 450000", DropFormat.priceLine(0, 450_000));
-		assertEquals("", DropFormat.priceLine(0, 0));
 	}
 
 	@Test

@@ -368,7 +368,7 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		}
 	}
 
-	/** Render the Drops tab for the current selection — one block per variant, or a loading hint. */
+	/** Render the Drops tab for the current selection — the wiki's sections, or a loading hint. */
 	private void renderDrops()
 	{
 		MonsterData m = currentSelection;
@@ -377,8 +377,8 @@ public class BetterMonsterExaminePanel extends PluginPanel
 			dropsCard.showMessage("Select a monster to see its drops.");
 			return;
 		}
-		// The design renders every variant's table (split inside drop_json), so no stats-side join:
-		// just request the page and show all its variant tables. A null table means "still loading".
+		// Ensure the page is loading, then show whatever's parsed so far. A null table means the
+		// page hasn't landed yet; the update listener re-renders when it does.
 		drops.request(m.getName());
 		dropsCard.show(drops.tableFor(m.getName()));
 	}
@@ -487,35 +487,32 @@ public class BetterMonsterExaminePanel extends PluginPanel
 
 	private void showList()
 	{
-		listPanel.setVisible(true);
-		resultsPanel.setVisible(false);
-		cardArea.setVisible(false);
-		hintPanel.setVisible(false);
+		showOnly(listPanel);
 	}
 
 	private void showSearchResults()
 	{
-		listPanel.setVisible(false);
-		resultsPanel.setVisible(true);
-		cardArea.setVisible(false);
-		hintPanel.setVisible(false);
+		showOnly(resultsPanel);
 	}
 
 	private void showCardArea()
 	{
-		listPanel.setVisible(false);
-		resultsPanel.setVisible(false);
-		cardArea.setVisible(true);
-		hintPanel.setVisible(false);
+		showOnly(cardArea);
 	}
 
 	private void showHint(String msg)
 	{
 		hintLabel.setText("<html><body style='width:180px'>" + msg + "</body></html>");
-		listPanel.setVisible(false);
-		resultsPanel.setVisible(false);
-		cardArea.setVisible(false);
-		hintPanel.setVisible(true);
+		showOnly(hintPanel);
+	}
+
+	/** Show exactly one of the four sibling regions, hiding the other three. */
+	private void showOnly(JPanel region)
+	{
+		listPanel.setVisible(region == listPanel);
+		resultsPanel.setVisible(region == resultsPanel);
+		cardArea.setVisible(region == cardArea);
+		hintPanel.setVisible(region == hintPanel);
 	}
 
 	/** In normal mode, show exactly one body: live results while searching, the card, else the hint. */

@@ -159,28 +159,6 @@ final class DropFormat
 		return s.replace(",", "").replace('–', '-').replace('—', '-');
 	}
 
-	/**
-	 * The GE / High-Alch caption line under an item, showing only the parts the client priced
-	 * ({@code "GE 3.9M · Alch 450K"}), or empty when the item is both untradeable and non-alchable.
-	 */
-	static String priceLine(int ge, int alch)
-	{
-		StringBuilder sb = new StringBuilder();
-		if (ge > 0)
-		{
-			sb.append("GE ").append(price(ge));
-		}
-		if (alch > 0)
-		{
-			if (sb.length() > 0)
-			{
-				sb.append(" · ");
-			}
-			sb.append("Alch ").append(price(alch));
-		}
-		return sb.toString();
-	}
-
 	private static String trimDecimal(double v)
 	{
 		String s = String.format(Locale.US, "%.1f", v);
