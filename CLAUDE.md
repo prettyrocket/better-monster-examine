@@ -101,7 +101,7 @@ which fields to show and their colour roles, so the panel and overlay stay in sy
 the old wikitext layer showed have **no usable Bucket source and were dropped** (aggressive,
 poison/venom resistance) — tracked in #30.
 
-### Drops data layer (`loot/`, #41 · epic #39)
+### Drops feature (`loot/`, data #41 · panel #45 · epic #39)
 
 Drops live in the `com.bettermonsterexamine.loot` sub-package. The goal is the **wiki's own drop
 tables** — 100% / Weapons and armour / Runes / Herbs / **Gem drop table** / **Rare drop table** /
@@ -111,7 +111,7 @@ structured Bucket data: the `dropsline` bucket has no section field and can't ev
 tables (a Catacombs/Wilderness monster emits none of those rows). So drops are sourced by **parsing
 the monster's page**, not the bucket. (An earlier `dropsline`-based `tables` mode from
 `bucket-api-playground/PLUGIN_DESIGN.md` was tried and dropped — it can't produce these sections.)
-This branch (`#41`) is **data only** — the view is `#45`.
+The **data layer** is `#41`; the **panel** (this branch) is `#45`, stacked on it.
 
 - **`DropPageService`** (singleton) — the source. `request(pageName)` fetches the monster's rendered
   wiki page via the MediaWiki **`action=parse`** API off-thread (client-thread/EDT safe), caches the
@@ -134,9 +134,26 @@ This branch (`#41`) is **data only** — the view is `#45`.
 - **`DropTable`** — a monster's rows grouped into sections **in wiki page order** (`of(rows)`,
   first-seen), preserving row order within each section. Pure, so it's unit-tested.
 
-Item icon / GE price / High Alch still come from the **RuneLite client by item id** (zero network) —
-that part of the original design stands; only the *drop list + sections* moved from the bucket to the
-page parse.
+- **`DropsCard`** (`JPanel`, the Drops-tab body) — renders the wiki's sections **in page order** as a
+  clean list: one row per drop, two lines — **icon** + name (with the **quantity right-aligned**) on
+  top, the **rarity/odds right-aligned** below, **colour-coded by rarity tier** (common grey →
+  uncommon → rare → ultra-rare, via `DropFormat.tierOf`; the palette follows `statHighlighting` and
+  has a colour-blind-safe Okabe-Ito set). Rarity handles the wiki's compound cells — multi-roll
+  `N × 1/M` and a `;`-separated combined per-kill rate (`DropFormat.effective`). Each row is
+  **clickable** (opens the item's wiki page) and its **hover tooltip** carries the **GE / High Alch**,
+  with the **larger of the two highlighted** (colour-blind-aware). Item id resolves on the client
+  thread:
+  `ItemIdService` first, then a small hand map for items the bucket returns `"N/A"` for (clue scrolls),
+  then `ItemManager.search` for tradeables the bucket misses (e.g. dose potions). Icon/price come from
+  the client with zero network — built blank, filled via a **single `ClientThread` hop** that reads
+  `ItemManager`/`ItemComposition` by id (`getImage` returns an `AsyncBufferedImage` that repaints on
+  load); **noted** drops render the item's noted graphic via `getLinkedNoteId()`.
+- **`DropFormat`** — pure display shaping (rarity, quantity, compact `M`/`B` coin values, the
+  `GE · Alch` tooltip line), no Swing, unit-tested like `StatFormat`. Displayed numbers drop thousands
+  commas and normalise en/em dashes to a plain hyphen (the RuneScape font can't render `–`/`—`).
+
+Item icon / GE price / High Alch come from the **RuneLite client by item id** (zero network); only the
+*drop list + sections* come from the page parse.
 
 ### Plugin + UI
 
@@ -146,11 +163,23 @@ page parse.
   name + matching in-game combat level to a variant** — so it covers variant spawn ids the
   dataset doesn't carry (e.g. Hellhounds across dungeons). Caches the player's combat and HP
   levels each `GameTick` so the panel can read them safely off-thread.
-- **`BetterMonsterExaminePanel`** (`PluginPanel`) — search field + variant dropdown + the
-  wiki-style infobox card (built by **`MonsterCard`**), all in one vertical scroll. All fields
-  render synchronously from the cached dataset (no async patch-in). Colour-codes player-relevant
-  values (combat level vs yours, negative flat armour green / positive red, max hits above your
-  HP red).
+- **`BetterMonsterExaminePanel`** (`PluginPanel`) — search field over a card area: a shared
+  **`MonsterHeader`** (name, favourite star, combat level, examine, variant selector, Wiki/DPS
+  links) sits above a `MaterialTabGroup` **`Stats | Drops`** tab strip, whose body swaps between the
+  stats **`MonsterCard`** and the **`DropsCard`** — so the selected monster + variant stay put while
+  you toggle tabs. Exactly one of four sibling regions shows at a time (live results, the card area,
+  a Recent/Favorites list, or the empty-state hint). Stats render synchronously from the cached
+  dataset; colour-codes player-relevant values (combat level vs yours, negative flat armour green /
+  positive red, max hits above your HP red). Selecting/switching a monster warms its drops
+  (`DropPageService.request`) and re-renders the Drops tab when the page — or the bulk item-id map —
+  lands async. `openMonster(name, version, drops)` is the entry point for the right-click menu: it
+  selects the monster and opens straight to the Stats or Drops tab.
+- **`MonsterHeader`** — the monster-identity header shared by both tabs (extracted from `MonsterCard`
+  so it stays put across the tab swap); surfaces favouriting and variant switching as callbacks. The
+  variant dropdown is **hidden on the Drops tab** (drops show every variant regardless, so it doesn't
+  apply).
+- **`MonsterCard`** — the stats **body only** now (attribute / combat / max-hit / stat / immunity /
+  slayer blocks); the header moved to `MonsterHeader`.
 - **`MonsterIcons`** (singleton) — loads the stat/attack/skill icons bundled in `resources/`.
 - **`MonsterCardOverlay`** (`Overlay`) — the in-game overlay option, modelled on the Monster
   Examine spell: a compact, tabbed box drawn directly with `Graphics2D` (not a snapshot of the
@@ -165,11 +194,13 @@ page parse.
 - **`StatColors`** — the shared `HighlightMode` palette (danger / good / combat-level gradient)
   used by both the side panel and the overlay, so both honour the same colour-blind settings.
 - **`BetterMonsterExamineConfig`** — config group `bettermonsterexamine`: `enableSidePanel`,
-  `showStatsMenuOption`, `statHighlighting`, and `statsRenderTarget` (`RenderTarget`:
-  panel / overlay / both — where the right-click **"Stats"** action renders). The Stats menu
-  entry shows when its action is actually available: the overlay target always works, the panel
-  target needs `enableSidePanel`. A second Stats click on the same monster toggles the overlay
-  off. The overlay updates on the **client thread** (it draws there); the side panel on the EDT.
+  `menuOptions`, `statHighlighting`, and `statsRenderTarget` (`RenderTarget`: panel / overlay / both —
+  where the right-click **"Stats"** action renders). **`menuOptions`** (`MenuOption`: Stats only /
+  Drops only / Both / None) picks which right-click entries appear on a monster's Examine: **Stats**
+  renders per `statsRenderTarget`, **Drops** opens the side panel to its Drops tab. Each entry shows
+  only when it can act — Stats needs the overlay target or (panel target + `enableSidePanel`); Drops
+  needs `enableSidePanel`. A second Stats click on the same monster toggles the overlay off. The
+  overlay updates on the **client thread** (it draws there); the side panel on the EDT.
 
 ### Threading model (important)
 
@@ -188,5 +219,5 @@ JUnit 4 under `src/test/java`. Pure-logic tests exercise the static helpers and 
 The `loot/` layer adds `DropPageServiceTest` (the rendered-page HTML parse: rows inherit their
 `<h3>/<h4>` section, the Drops region stops at the next `<h2>`, entity/footnote cleaning),
 `DropTableTest` (section grouping in wiki page order), `ItemIdServiceTest` (the `item_id` name→id
-parse) and `DropRowTest` (the `isAlways` helper). `BetterMonsterExaminePluginTest` and `OverlayPreview`
-are dev launchers, not assertions.
+parse), `DropRowTest` (the `isAlways` helper) and `DropFormatTest` (the drops display shaping).
+`BetterMonsterExaminePluginTest` and `OverlayPreview` are dev launchers, not assertions.

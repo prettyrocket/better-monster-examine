@@ -1,6 +1,10 @@
 package com.bettermonsterexamine;
 
+import com.bettermonsterexamine.loot.DropPageService;
+import com.bettermonsterexamine.loot.DropsCard;
+import com.bettermonsterexamine.loot.ItemIdService;
 import com.google.gson.Gson;
+import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.Insets;
 import java.awt.Rectangle;
@@ -18,6 +22,7 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.Scrollable;
 import javax.swing.ScrollPaneConstants;
+import javax.swing.SwingUtilities;
 import javax.swing.border.EmptyBorder;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
@@ -26,12 +31,16 @@ import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
 import net.runelite.client.ui.components.IconTextField;
+import net.runelite.client.ui.components.materialtabs.MaterialTab;
+import net.runelite.client.ui.components.materialtabs.MaterialTabGroup;
 
 /**
  * The searchable monster side panel. Owns the search field, the Recent/Favorites views, and the
- * selection state machine; the wiki-style infobox itself is rendered by {@link MonsterCard}, and
- * the Recent/Favorites model lives in {@link LookupHistory}. One of three views shows at a time:
- * live search results, a {@code MonsterCard}, or a list view.
+ * selection state machine. A shared {@link MonsterHeader} sits above a {@code Stats | Drops} tab
+ * strip whose body swaps between the stats {@link MonsterCard} and the {@link DropsCard}, so the
+ * selected monster + variant stay put across both tabs. The Recent/Favorites model lives in
+ * {@link LookupHistory}. One of four sibling regions shows at a time: live search results, the card
+ * area, a list view, or the empty-state hint.
  */
 public class BetterMonsterExaminePanel extends PluginPanel
 {
@@ -44,12 +53,30 @@ public class BetterMonsterExaminePanel extends PluginPanel
 	private final BetterMonsterExamineConfig config;
 	private final ConfigManager configManager;
 	private final Gson gson;
+	private final DropPageService drops;
 
 	private final IconTextField searchField = new IconTextField();
 	private final JPanel resultsPanel = new JPanel();
-	/** The wiki-style infobox; built and themed entirely by MonsterCard. */
+	/** Shared monster-identity header (name, variant selector, links), above the tab strip. */
+	private final MonsterHeader header;
+	/** The Stats tab body: the wiki-style stat blocks. */
 	private final MonsterCard card;
-	/** Recent/Favorites list view, shown in place of results + card while a mode is active. */
+	/** The Drops tab body: the current monster's drop list. */
+	private final DropsCard dropsCard;
+	/** header + Stats|Drops tab strip + swappable body; shown once a monster is selected. */
+	private final JPanel cardArea = new JPanel();
+	/** The body region the tab strip swaps between {@link #card} and {@link #dropsCard}. */
+	private final JPanel tabDisplay = new JPanel(new BorderLayout());
+	/** The Stats | Drops tab strip and its two tabs, so a menu action can open straight to one. */
+	private MaterialTabGroup contentTabs;
+	private MaterialTab statsTab;
+	private MaterialTab dropsTab;
+	/** Empty-state hint, shown in place of {@link #cardArea} when nothing is selected. */
+	private final JPanel hintPanel = new JPanel();
+	private final JLabel hintLabel = new JLabel();
+	/** True while the Drops tab is the active one, so async drop loads know to re-render it. */
+	private boolean dropsTabActive;
+	/** Recent/Favorites list view, shown in place of the card area while a mode is active. */
 	private final JPanel listPanel = new JPanel();
 
 	/** Which view the panel is showing: normal search/card, or one of the two list modes. */
@@ -72,18 +99,26 @@ public class BetterMonsterExaminePanel extends PluginPanel
 	 */
 	private Consumer<MonsterData> selectionListener;
 
-	public BetterMonsterExaminePanel(MonsterIcons icons, MonsterDataService data, BetterMonsterExamineConfig config, ConfigManager configManager, Gson gson, IntSupplier playerCombatLevel, IntSupplier playerHpLevel, IntSupplier playerSlayerLevel, BufferedImage titleIcon)
+	public BetterMonsterExaminePanel(MonsterIcons icons, MonsterDataService data, DropPageService drops, ItemIdService itemIds, DropsCard dropsCard, BetterMonsterExamineConfig config, ConfigManager configManager, Gson gson, IntSupplier playerCombatLevel, IntSupplier playerHpLevel, IntSupplier playerSlayerLevel, BufferedImage titleIcon)
 	{
 		super(false);
 		this.data = data;
+		this.drops = drops;
+		this.dropsCard = dropsCard;
 		this.config = config;
 		this.configManager = configManager;
 		this.gson = gson;
 		this.history = LookupHistory.fromJson(gson, configManager.getConfiguration(CONFIG_GROUP, HISTORY_KEY));
-		this.card = new MonsterCard(icons, config, playerCombatLevel, playerHpLevel, playerSlayerLevel,
+		this.header = new MonsterHeader(config, playerCombatLevel,
 			m -> history.isFavorite(m.getName(), m.getVersion()),
 			this::toggleFavorite,
 			this::selectVariant);
+		this.card = new MonsterCard(icons, config, playerHpLevel, playerSlayerLevel);
+
+		// Re-render the Drops tab when a page's drops — or the bulk item-id map that supplies its
+		// icons/prices — land in the background (background thread → EDT).
+		drops.setUpdateListener(page -> SwingUtilities.invokeLater(() -> onDropsLoaded(page)));
+		itemIds.setUpdateListener(() -> SwingUtilities.invokeLater(this::onItemIdsLoaded));
 
 		setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
 		setBorder(new EmptyBorder(8, 8, 8, 8));
@@ -129,18 +164,29 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		add(searchRow);
 		add(Box.createRigidArea(new Dimension(0, 6)));
 
-		// Single scroll holding results + the stats card, plus the list view (one shown at a time)
+		// Single scroll holding results + the card area, plus the list view (one shown at a time)
 		resultsPanel.setLayout(new BoxLayout(resultsPanel, BoxLayout.Y_AXIS));
 		resultsPanel.setAlignmentX(LEFT_ALIGNMENT);
 		listPanel.setLayout(new BoxLayout(listPanel, BoxLayout.Y_AXIS));
 		listPanel.setAlignmentX(LEFT_ALIGNMENT);
 		listPanel.setVisible(false);
 
+		buildCardArea();
+
+		hintPanel.setLayout(new BoxLayout(hintPanel, BoxLayout.Y_AXIS));
+		hintPanel.setAlignmentX(LEFT_ALIGNMENT);
+		hintLabel.setFont(FontManager.getRunescapeSmallFont());
+		hintLabel.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+		hintLabel.setAlignmentX(LEFT_ALIGNMENT);
+		hintPanel.add(hintLabel);
+		hintPanel.setVisible(false);
+
 		JPanel scrollContent = new WidthTrackingPanel();
 		scrollContent.setLayout(new BoxLayout(scrollContent, BoxLayout.Y_AXIS));
 		scrollContent.add(resultsPanel);
 		scrollContent.add(Box.createRigidArea(new Dimension(0, 6)));
-		scrollContent.add(card);
+		scrollContent.add(cardArea);
+		scrollContent.add(hintPanel);
 		scrollContent.add(listPanel);
 		scrollContent.add(Box.createVerticalGlue());
 
@@ -187,6 +233,10 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		{
 			select(names.get(0), preferredVersion);
 		}
+		else
+		{
+			showSearchResults();
+		}
 
 		revalidate();
 		repaint();
@@ -213,7 +263,6 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		if (mode != Mode.NORMAL)
 		{
 			mode = Mode.NORMAL;
-			setListVisible(false);
 			updateTabButtons();
 		}
 
@@ -248,7 +297,15 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		{
 			return;
 		}
-		card.show(m, currentVariants);
+		header.show(m, currentVariants);
+		card.show(m);
+		// Warm this monster's drops so the Drops tab is ready; render now if it's the active tab.
+		drops.request(m.getName());
+		if (dropsTabActive)
+		{
+			renderDrops();
+		}
+		showCardArea();
 		revalidate();
 		repaint();
 
@@ -256,6 +313,92 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		if (selectionListener != null)
 		{
 			selectionListener.accept(m);
+		}
+	}
+
+	// --------------------------------------------------------------------- drops
+
+	/** Build the card area: shared header + the Stats|Drops tab strip over the swappable body. */
+	private void buildCardArea()
+	{
+		cardArea.setLayout(new BoxLayout(cardArea, BoxLayout.Y_AXIS));
+		cardArea.setAlignmentX(LEFT_ALIGNMENT);
+		cardArea.setVisible(false);
+		tabDisplay.setAlignmentX(LEFT_ALIGNMENT);
+
+		contentTabs = new MaterialTabGroup(tabDisplay);
+		contentTabs.setAlignmentX(LEFT_ALIGNMENT);
+		statsTab = new MaterialTab("Stats", contentTabs, card);
+		dropsTab = new MaterialTab("Drops", contentTabs, dropsCard);
+		statsTab.setOnSelectEvent(() ->
+		{
+			dropsTabActive = false;
+			header.setVariantSelectorVisible(true);
+			return true;
+		});
+		dropsTab.setOnSelectEvent(() ->
+		{
+			dropsTabActive = true;
+			header.setVariantSelectorVisible(false);
+			renderDrops();
+			return true;
+		});
+		contentTabs.addTab(statsTab);
+		contentTabs.addTab(dropsTab);
+
+		cardArea.add(header);
+		cardArea.add(Box.createRigidArea(new Dimension(0, 6)));
+		cardArea.add(contentTabs);
+		cardArea.add(Box.createRigidArea(new Dimension(0, 6)));
+		cardArea.add(tabDisplay);
+
+		contentTabs.select(statsTab);
+	}
+
+	/**
+	 * Open a monster's card to a specific tab — the entry point for the in-game right-click Stats /
+	 * Drops menu options. Searches + selects the monster, then switches to the requested tab.
+	 */
+	public void openMonster(String name, String version, boolean drops)
+	{
+		search(name, true, version);
+		if (currentSelection != null)
+		{
+			contentTabs.select(drops ? dropsTab : statsTab);
+		}
+	}
+
+	/** Render the Drops tab for the current selection — the wiki's sections, or a loading hint. */
+	private void renderDrops()
+	{
+		MonsterData m = currentSelection;
+		if (m == null)
+		{
+			dropsCard.showMessage("Select a monster to see its drops.");
+			return;
+		}
+		// Ensure the page is loading, then show whatever's parsed so far. A null table means the
+		// page hasn't landed yet; the update listener re-renders when it does.
+		drops.request(m.getName());
+		dropsCard.show(drops.tableFor(m.getName()));
+	}
+
+	/** A page's drops landed async: re-render the Drops tab if it's showing this monster. */
+	private void onDropsLoaded(String page)
+	{
+		MonsterData m = currentSelection;
+		if (dropsTabActive && m != null && m.getName().equalsIgnoreCase(page))
+		{
+			renderDrops();
+		}
+	}
+
+	/** The bulk item-id map landed: re-render the Drops tab so icons and prices resolve. */
+	private void onItemIdsLoaded()
+	{
+		if (dropsTabActive && currentSelection != null)
+		{
+			renderDrops();
 		}
 	}
 
@@ -280,12 +423,13 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		if (mode != Mode.NORMAL)
 		{
 			mode = Mode.NORMAL;
-			setListVisible(false);
 			updateTabButtons();
 		}
 		// Don't trail the previously-viewed card beneath the live results — a fresh query is a
 		// clean slate until the user picks a result.
+		header.clear();
 		card.clear();
+		dropsCard.clear();
 		currentSelection = null;
 		search(text, false, null);
 	}
@@ -293,19 +437,15 @@ public class BetterMonsterExaminePanel extends PluginPanel
 	/** The view for an empty search field: Recent by default, or the plain hint when history is off. */
 	private void showDefaultView()
 	{
+		resultsPanel.removeAll();
 		if (config.enableHistory())
 		{
 			enterMode(Mode.RECENT);
 			return;
 		}
 		mode = Mode.NORMAL;
-		setListVisible(false);
-		resultsPanel.removeAll();
 		// Keep whatever card is showing; only fall back to the hint when there's nothing at all.
-		if (currentSelection == null)
-		{
-			card.showMessage(HINT);
-		}
+		ensureNormalContent();
 		updateTabButtons();
 		revalidate();
 		repaint();
@@ -327,7 +467,7 @@ public class BetterMonsterExaminePanel extends PluginPanel
 	private void enterMode(Mode target)
 	{
 		mode = target;
-		setListVisible(true);
+		showList();
 		renderList();
 		updateTabButtons();
 		revalidate();
@@ -337,29 +477,60 @@ public class BetterMonsterExaminePanel extends PluginPanel
 	private void exitListMode()
 	{
 		mode = Mode.NORMAL;
-		setListVisible(false);
 		ensureNormalContent();
 		updateTabButtons();
 		revalidate();
 		repaint();
 	}
 
-	/** Show the list view, or the results + card pair — never both at once. */
-	private void setListVisible(boolean listShown)
+	// One of four sibling regions shows at a time: the list, live results, the card area, or the hint.
+
+	private void showList()
 	{
-		listPanel.setVisible(listShown);
-		resultsPanel.setVisible(!listShown);
-		card.setVisible(!listShown);
+		showOnly(listPanel);
 	}
 
-	/** Back in the normal view with nothing to show, fall back to the search hint. */
+	private void showSearchResults()
+	{
+		showOnly(resultsPanel);
+	}
+
+	private void showCardArea()
+	{
+		showOnly(cardArea);
+	}
+
+	private void showHint(String msg)
+	{
+		hintLabel.setText("<html><body style='width:180px'>" + msg + "</body></html>");
+		showOnly(hintPanel);
+	}
+
+	/** Show exactly one of the four sibling regions, hiding the other three. */
+	private void showOnly(JPanel region)
+	{
+		listPanel.setVisible(region == listPanel);
+		resultsPanel.setVisible(region == resultsPanel);
+		cardArea.setVisible(region == cardArea);
+		hintPanel.setVisible(region == hintPanel);
+	}
+
+	/** In normal mode, show exactly one body: live results while searching, the card, else the hint. */
 	private void ensureNormalContent()
 	{
 		String text = searchField.getText();
-		boolean hasSearch = text != null && !text.trim().isEmpty();
-		if (!hasSearch && currentSelection == null)
+		boolean searching = text != null && !text.trim().isEmpty();
+		if (searching)
 		{
-			card.showMessage(HINT);
+			showSearchResults();
+		}
+		else if (currentSelection != null)
+		{
+			showCardArea();
+		}
+		else
+		{
+			showHint(HINT);
 		}
 	}
 
@@ -555,7 +726,6 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		if (!config.enableHistory() && mode != Mode.NORMAL)
 		{
 			mode = Mode.NORMAL;
-			setListVisible(false);
 			ensureNormalContent();
 		}
 		updateTabButtons();

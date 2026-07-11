@@ -2,14 +2,21 @@
 
 A RuneLite side-panel plugin to search any Old School RuneScape monster and view its
 **full, wiki-style combat stats** — defences, offensive bonuses, weakness, immunities,
-max hits and more — without leaving the client.
+max hits and more — **and its complete drop tables**, without leaving the client.
 
 ## Screenshots
 
 ![Better Monster Examine in game](previews/Screenshot.png)
 
 *Examining Vorkath — the full **Search Panel** on the right and the compact, tabbed
-**in-game overlay** in the viewport.
+**in-game overlay** in the viewport.*
+
+### Drops
+
+![Drops panel demo](previews/Drops.gif)
+
+*The **Drops** tab — the wiki's own drop-table sections, with rarity-coloured odds and
+GE price / High Alch on hover.*
 
 ### In-game overlay
 
@@ -22,8 +29,13 @@ max hits and more — without leaving the client.
 ## Features
 
 - **Searchable side panel** — search for or right-click any monster in game and
-  pick **Stats**. Variants are selectable from a dropdown.
+  pick **Stats** or **Drops** (which entries appear is configurable). Variants are
+  selectable from a dropdown.
 - **Wiki-style infobox layout** — mirroring the OSRS Wiki with important values highlighted.
+- **Drop tables** — a **Drops** tab shows the monster's full loot, grouped into the wiki's
+  own sections (Herbs, Gem / Rare drop table, Catacombs of Kourend, Wilderness Slayer Cave,
+  Tertiary, …) in page order. Each drop shows its quantity and odds — **colour-coded by
+  rarity** — with **GE price & High Alch** on hover, and clicks through to the item's wiki page.
 - **In-game overlay** — show the stats as a compact, tabbed card in the viewport instead of
   (or alongside) the side panel.
 - **Recent & favorites** — the side panel's **↺** and **★** buttons hold your recently viewed
