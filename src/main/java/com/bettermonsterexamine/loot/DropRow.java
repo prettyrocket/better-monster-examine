@@ -9,8 +9,8 @@ import lombok.RequiredArgsConstructor;
  * {@code "Gem drop table"}, {@code "Catacombs tertiary"}, {@code "Wilderness Slayer Cave tertiary"}).
  *
  * <p>The section is the whole point: it's the wiki's own editorial grouping, which the structured
- * {@code dropsline} Bucket can't express (it can't even see the region tables). Price, high-alch and
- * icon aren't stored here — they come from the RuneLite client by item id at render time.
+ * drop data can't express (it carries no section field). Price, high-alch and icon aren't stored
+ * here — they come from the RuneLite client by item id at render time.
  */
 @Getter
 @RequiredArgsConstructor

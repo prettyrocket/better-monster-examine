@@ -34,7 +34,8 @@ import okhttp3.Response;
  * MediaWiki {@code action=parse} API), grouping rows under the wiki's own section headings. This is
  * the only source that carries the wiki's editorial drop tables — Herbs, Gem/Rare drop table,
  * <b>Catacombs of Kourend</b> and <b>Wilderness Slayer Cave</b> tables, Tertiary, … — which the
- * structured {@code dropsline} Bucket cannot express (it can't even see the region tables).
+ * structured drop data cannot express (it carries no section field, and can't even see the region
+ * tables).
  *
  * <p>Fetched <b>per monster</b> the first time it's looked up and cached under
  * {@code .runelite/better-monster-examine/droppages/}, refreshed weekly ({@link #MAX_AGE}) — the same
@@ -239,9 +240,11 @@ public class DropPageService
 		int di = html.indexOf("id=\"Drops\"");
 		if (di >= 0)
 		{
+			// Start at the Drops heading's id (its opening <h2 sits just before it), then cut the
+			// region at the next <h2> so only the Drops section is parsed.
 			region = html.substring(di);
 			Matcher h2 = Pattern.compile("<h2").matcher(region);
-			if (h2.find(8))
+			if (h2.find())
 			{
 				region = region.substring(0, h2.start());
 			}
@@ -340,7 +343,7 @@ public class DropPageService
 		t = t.replace("&nbsp;", " ").replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
 			.replace("&quot;", "\"").replace("&#39;", "'");
 		Matcher nm = NUMERIC_ENTITY.matcher(t);
-		StringBuffer sb = new StringBuffer();
+		StringBuilder sb = new StringBuilder();
 		while (nm.find())
 		{
 			int cp = Integer.parseInt(nm.group(1));
