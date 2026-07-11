@@ -25,8 +25,8 @@ import okhttp3.Response;
 
 /**
  * Bridges wiki item names to RuneLite client item ids via the OSRS Wiki <b>Bucket</b> {@code item_id}
- * bucket ({@code page_name → id}). The drops layer needs it because {@code dropsline} names its items
- * by wiki page title, while the client's price/alch/icon lookups key on the numeric item id; once we
+ * bucket ({@code page_name → id}). The drops layer needs it because the page parse yields item names
+ * as wiki page titles, while the client's price/alch/icon lookups key on the numeric item id; once we
  * have the id, {@code ItemManager}/{@code ItemComposition} supply everything else with zero network.
  *
  * <p>Bulk-loaded once (like {@link com.bettermonsterexamine.MonsterDataService}) — the map changes
