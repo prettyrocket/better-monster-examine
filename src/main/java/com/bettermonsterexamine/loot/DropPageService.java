@@ -64,6 +64,10 @@ public class DropPageService
 	private static final Pattern TAG = Pattern.compile("<[^>]+>");
 	private static final Pattern NUMERIC_ENTITY = Pattern.compile("&#(\\d+);");
 	private static final Pattern FOOTNOTE = Pattern.compile("\\[[^\\]]*\\]");
+	// Each rarity value is wrapped in a span carrying every form of the odds; the element's own text is
+	// the raw source fraction ("16/100") and data-drop-oneover is the 1/x the wiki actually shows.
+	private static final Pattern ONE_OVER =
+		Pattern.compile("<span[^>]*data-drop-oneover=\"([^\"]*)\"[^>]*>.*?</span>", Pattern.DOTALL);
 
 	private final Gson gson;
 	private final OkHttpClient http;
@@ -379,15 +383,34 @@ public class DropPageService
 			// The rarity cell is the one the wiki colours by rarity tier (class contains table-bg).
 			if (rarity.isEmpty() && tm.group(1).contains("table-bg"))
 			{
-				rarity = FOOTNOTE.matcher(clean(tm.group(2))).replaceAll("").trim();
+				rarity = rarityText(tm.group(2));
 			}
 		}
 		String quantity = tds.size() >= 3 ? clean(tds.get(2)) : "";
 		if (rarity.isEmpty() && tds.size() >= 4)
 		{
-			rarity = FOOTNOTE.matcher(clean(tds.get(3))).replaceAll("").trim();
+			rarity = rarityText(tds.get(3));
 		}
 		return new String[]{item, quantity, rarity};
+	}
+
+	/**
+	 * Read a rarity cell the way the wiki displays it. Each value sits in a span whose <b>text</b> is the
+	 * raw source fraction and whose {@code data-drop-oneover} is the same odds as 1/x — the form the wiki
+	 * renders, and the only one a player can compare at a glance ({@code 16/100} vs {@code 1/6.25}). So
+	 * take the attribute where there is one, and keep everything around it (a multi-roll {@code "2 × "}
+	 * prefix, a {@code ';'} joining a per-roll rate to the combined per-kill rate) as written.
+	 */
+	private static String rarityText(String cellHtml)
+	{
+		Matcher m = ONE_OVER.matcher(cellHtml);
+		StringBuilder sb = new StringBuilder();
+		while (m.find())
+		{
+			m.appendReplacement(sb, Matcher.quoteReplacement(m.group(1)));
+		}
+		m.appendTail(sb);
+		return FOOTNOTE.matcher(clean(sb.toString())).replaceAll("").trim();
 	}
 
 	/** A wiki page slug ({@code Grimy_ranarr_weed}) → a display name ({@code Grimy ranarr weed}). */
