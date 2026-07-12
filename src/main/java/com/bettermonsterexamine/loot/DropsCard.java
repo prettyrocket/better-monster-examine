@@ -62,6 +62,14 @@ public class DropsCard extends JPanel
 	private static final int ICON_BOX = 28;
 	/** Wrap width for a band's title, leaving its line's remainder to the collapse controls. */
 	private static final int BAND_TITLE_WIDTH = 130;
+
+	// Disclosure triangles, doubled for the act-on-everything variant. The RuneScape font does carry
+	// these glyphs (verified by rasterising them — Font.canDisplay lies here, it reports true for
+	// everything), so there's no need to fall back to ASCII.
+	private static final String OPEN = "▾";
+	private static final String CLOSED = "▸";
+	private static final String OPEN_ALL = "▾▾";
+	private static final String CLOSED_ALL = "▸▸";
 	private static final Pattern LEADING_INT = Pattern.compile("(\\d[\\d,]*)");
 
 	// High Alchemy costs 1 nature rune + 5 fire runes to cast; its value must clear that to be worthwhile.
@@ -224,6 +232,7 @@ public class DropsCard extends JPanel
 
 		// Read the state, not body.isVisible() — show() applies that only once the sections are in.
 		JLabel toggle = toggleMarker(Color.WHITE, !collapsed.contains(keyOf(label, null)));
+		band.setToolTipText(collapsed.contains(keyOf(label, null)) ? "Show" : "Hide");
 
 		JPanel controls = new JPanel();
 		controls.setLayout(new BoxLayout(controls, BoxLayout.X_AXIS));
@@ -250,13 +259,11 @@ public class DropsCard extends JPanel
 		boolean allCollapsed = group.getSections().stream()
 			.allMatch(s -> collapsed.contains(keyOf(group.getLabel(), s.getLabel())));
 
-		JLabel all = new JLabel(allCollapsed ? "ALL +" : "ALL -");
-		all.setFont(FontManager.getRunescapeSmallFont());
+		JLabel all = new JLabel(allCollapsed ? CLOSED_ALL : OPEN_ALL);
+		all.setFont(FontManager.getRunescapeBoldFont());
 		all.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
 		all.setCursor(new Cursor(Cursor.HAND_CURSOR));
-		all.setToolTipText(allCollapsed
-			? "Expand every table in this location"
-			: "Collapse every table in this location");
+		all.setToolTipText(allCollapsed ? "Expand all" : "Collapse all");
 
 		all.addMouseListener(new MouseAdapter()
 		{
@@ -353,10 +360,10 @@ public class DropsCard extends JPanel
 		return block;
 	}
 
-	/** The +/- marker. Plain ASCII: the RuneScape font has no glyph for the usual chevrons/triangles. */
+	/** Disclosure triangle: down when the thing under it is open, right when it's folded away. */
 	private static JLabel toggleMarker(Color colour, boolean expanded)
 	{
-		JLabel toggle = new JLabel(expanded ? "-" : "+");
+		JLabel toggle = new JLabel(expanded ? OPEN : CLOSED);
 		toggle.setFont(FontManager.getRunescapeBoldFont());
 		toggle.setForeground(colour);
 		toggle.setBorder(new EmptyBorder(0, 6, 0, 0));
