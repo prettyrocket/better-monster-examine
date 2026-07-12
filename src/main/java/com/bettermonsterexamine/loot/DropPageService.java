@@ -55,7 +55,8 @@ public class DropPageService
 
 	// Drop-table structure on a rendered monster page (see the Drops section):
 	//   <tr> [inventory-image] [item-col: <a href="/w/Item">] [qty] [table-bg-*: rarity] [ge] [alch]
-	// Rows inherit the <h3>/<h4> section heading above them; the Drops section runs to the next <h2>.
+	// Rows inherit the <h3>/<h4> section heading above them; a drops <h2> region runs to the next <h2>.
+	private static final Pattern H2 = Pattern.compile("<h2[^>]*>(.*?)</h2>", Pattern.DOTALL);
 	private static final Pattern HEADING = Pattern.compile("<h([34])[^>]*\\sid=\"[^\"]+\"[^>]*>(.*?)</h\\1>", Pattern.DOTALL);
 	private static final Pattern ROW = Pattern.compile("<tr[^>]*>(.*?)</tr>", Pattern.DOTALL);
 	private static final Pattern ITEM = Pattern.compile("class=\"item-col\"[^>]*>.*?<a href=\"/w/([^\"?#]+)\"", Pattern.DOTALL);
@@ -227,8 +228,10 @@ public class DropPageService
 
 	/**
 	 * Parse a rendered wiki page's HTML into ordered drop rows, each tagged with the section heading it
-	 * sits under. Restricted to the Drops section (from {@code id="Drops"} to the next {@code <h2>}).
-	 * Null when there's no HTML; empty when the page has no drop rows. Pure, so it's unit-testable.
+	 * sits under. Restricted to the page's <b>drops {@code <h2>} region(s)</b> — a single "Drops"
+	 * heading, or, for combat-level variants, several "Level <i>N</i> drops" headings each with their own
+	 * 100% / Tertiary / … subsections (e.g. Giant frog). Each region runs to the next {@code <h2>}. Null
+	 * when there's no HTML; empty when the page has no drops section. Pure, so it's unit-testable.
 	 */
 	static List<DropRow> parse(String html)
 	{
@@ -236,21 +239,41 @@ public class DropPageService
 		{
 			return null;
 		}
-		int di = html.indexOf("id=\"Drops\"");
-		if (di < 0)
+
+		// Locate every <h2> so a drops region can be cut from its heading to the next <h2> of any kind.
+		List<Heading2> h2s = new ArrayList<>();
+		Matcher h2m = H2.matcher(html);
+		while (h2m.find())
 		{
-			// No Drops section on the page — fail closed with an empty table rather than scanning the
-			// whole page, which could surface unrelated tables (store, spawns, …) as bogus drops.
-			return new ArrayList<>();
+			h2s.add(new Heading2(h2m.end(), clean(h2m.group(1))));
 		}
-		// Start at the Drops heading's id (its opening <h2 sits just before it), then cut the region
-		// at the next <h2> so only the Drops section is parsed.
-		String region = html.substring(di);
-		Matcher h2 = Pattern.compile("<h2").matcher(region);
-		if (h2.find())
+
+		// Drop tables live under an <h2> whose title mentions "drops" — one generic "Drops" heading on
+		// most pages, or per-level headings on combat-level variants. Anything else (store, spawns, …) is
+		// ignored, so unrelated tables never surface as bogus drops (we fail closed when there are none).
+		List<DropRow> out = new ArrayList<>();
+		for (int i = 0; i < h2s.size(); i++)
 		{
-			region = region.substring(0, h2.start());
+			Heading2 h2 = h2s.get(i);
+			if (!h2.title.toLowerCase(Locale.ROOT).contains("drop"))
+			{
+				continue;
+			}
+			int end = i + 1 < h2s.size() ? h2s.get(i + 1).start : html.length();
+			parseRegion(html.substring(h2.start, end), h2.title, out);
 		}
+		return out;
+	}
+
+	/**
+	 * Parse one drops {@code <h2>} region, appending its rows to {@code out}. Rows inherit the
+	 * {@code <h3>/<h4>} heading above them; for a per-level region ("Level <i>N</i> drops") the level is
+	 * folded into the label so the level-13 and level-99 "100%" tables stay distinct rather than merging.
+	 */
+	private static void parseRegion(String region, String h2Title, List<DropRow> out)
+	{
+		// A generic "Drops" heading adds no grouping of its own — the subsection heading is the label.
+		boolean generic = h2Title.equalsIgnoreCase("Drops");
 
 		// Merge headings and rows by position, so each row inherits the heading above it.
 		List<Event> events = new ArrayList<>();
@@ -275,20 +298,24 @@ public class DropPageService
 		}
 		events.sort((a, b) -> Integer.compare(a.pos, b.pos));
 
-		List<DropRow> out = new ArrayList<>();
-		String section = null;
+		// A generic region skips rows before its first subheading (there should be none); a per-level
+		// region seeds the section from its <h2> title so those rows are still attributed to the level.
+		String sub = null;
 		for (Event e : events)
 		{
 			if (e.heading != null)
 			{
-				section = e.heading;
+				sub = e.heading;
 			}
-			else if (section != null)
+			else
 			{
-				out.add(new DropRow(e.cells[0], e.cells[1], e.cells[2], section));
+				String section = generic ? sub : (sub == null ? h2Title : h2Title + ": " + sub);
+				if (section != null)
+				{
+					out.add(new DropRow(e.cells[0], e.cells[1], e.cells[2], section));
+				}
 			}
 		}
-		return out;
 	}
 
 	/** Pull [item, quantity, rarity] out of one drop-table row, or null when it has no item link. */
@@ -373,6 +400,19 @@ public class DropPageService
 		catch (IOException e)
 		{
 			log.debug("Failed to cache drop page to {}", cacheFile, e);
+		}
+	}
+
+	/** An {@code <h2>} heading: where its content starts (just after {@code </h2>}) and its cleaned title. */
+	private static final class Heading2
+	{
+		private final int start;
+		private final String title;
+
+		private Heading2(int start, String title)
+		{
+			this.start = start;
+			this.title = title;
 		}
 	}
 
