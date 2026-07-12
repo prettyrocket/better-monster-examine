@@ -95,6 +95,34 @@ public class DropPageServiceTest
 	}
 
 	@Test
+	public void combatLevelVariantsSplitDropsAcrossPerLevelSections()
+	{
+		// Monsters with per-level drop tables (e.g. Giant frog) have no single id="Drops"; each combat
+		// level gets its own "Level N drops" <h2> with its own 100%/Tertiary/… subsections. The level is
+		// folded into the label so the two "100%" tables stay distinct rather than merging into one.
+		String html =
+			"<h2 id=\"Level_13_drops\">Level 13 drops</h2>"
+			+ "<h3 id=\"100%\">100%</h3>"
+			+ "<table>" + row("Big_bones", "Big bones", "1", "table-bg-always", "Always") + "</table>"
+			+ "<h2 id=\"Level_99_drops\">Level 99 drops</h2>"
+			+ "<h3 id=\"100%_2\">100%</h3>"
+			+ "<table>" + row("Big_bones", "Big bones", "1", "table-bg-always", "Always") + "</table>"
+			+ "<h3 id=\"Weapons\">Weapons</h3>"
+			+ "<table>" + row("Mithril_spear", "Mithril spear", "1", "table-bg-uncommon", "1/128") + "</table>"
+			+ "<h2 id=\"Changes\">Changes</h2>"
+			+ "<table>" + row("Should_not_appear", "x", "1", "table-bg", "1/1") + "</table>";
+
+		List<DropRow> rows = DropPageService.parse(html);
+
+		assertEquals(3, rows.size());
+		assertEquals("Level 13 drops: 100%", rows.get(0).getSection());
+		assertEquals("Level 99 drops: 100%", rows.get(1).getSection());
+		assertEquals("Level 99 drops: Weapons", rows.get(2).getSection());
+		assertEquals("Mithril spear", rows.get(2).getItem());
+		assertTrue(rows.stream().noneMatch(r -> "x".equals(r.getItem())));
+	}
+
+	@Test
 	public void cleanStripsTagsAndUnescapesEntities()
 	{
 		assertEquals("A & B", DropPageService.clean("<b>A</b> &amp; B"));
