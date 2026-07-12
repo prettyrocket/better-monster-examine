@@ -4,7 +4,8 @@ import com.bettermonsterexamine.BetterMonsterExamineConfig;
 import com.bettermonsterexamine.HighlightMode;
 import static com.bettermonsterexamine.PanelStyle.block;
 import static com.bettermonsterexamine.PanelStyle.capHeight;
-import static com.bettermonsterexamine.PanelStyle.sectionHeader;
+import static com.bettermonsterexamine.PanelStyle.headerLabel;
+import static com.bettermonsterexamine.PanelStyle.rowX;
 import static com.bettermonsterexamine.PanelStyle.wrappedLabel;
 import java.awt.BorderLayout;
 import java.awt.Color;
@@ -81,8 +82,9 @@ public class DropsCard extends JPanel
 	private final BetterMonsterExamineConfig config;
 
 	/**
-	 * Group labels the user has collapsed. Held on the card rather than the table so the choice
-	 * survives the re-renders that land as the page and the bulk item-id map arrive.
+	 * The group bands and section blocks the user has collapsed, by {@link #keyOf} key. Held on the card
+	 * rather than the table so the choice survives the re-renders that land as the page and the bulk
+	 * item-id map arrive.
 	 */
 	private final Set<String> collapsed = new HashSet<>();
 
@@ -168,10 +170,10 @@ public class DropsCard extends JPanel
 				{
 					body.add(Box.createRigidArea(new Dimension(0, 6)));
 				}
-				body.add(sectionBlock(sections.get(i), cells));
+				body.add(sectionBlock(sections.get(i), label, cells));
 			}
 
-			body.setVisible(label.isEmpty() || !collapsed.contains(label));
+			body.setVisible(label.isEmpty() || !collapsed.contains(keyOf(label, null)));
 			add(body);
 		}
 
@@ -207,38 +209,16 @@ public class DropsCard extends JPanel
 		JPanel band = new JPanel(new BorderLayout());
 		band.setBackground(ColorScheme.DARK_GRAY_COLOR);
 		band.setBorder(new EmptyBorder(5, 8, 5, 8));
-		band.setCursor(new Cursor(Cursor.HAND_CURSOR));
 		band.add(wrappedLabel(label.toUpperCase(Locale.ROOT), Color.WHITE, false), BorderLayout.CENTER);
 
-		// Plain ASCII: the RuneScape font has no glyph for the usual chevrons/triangles.
-		JLabel toggle = new JLabel(collapsed.contains(label) ? "+" : "-");
-		toggle.setFont(FontManager.getRunescapeBoldFont());
-		toggle.setForeground(Color.WHITE);
-		toggle.setBorder(new EmptyBorder(0, 6, 0, 0));
+		// Read the state, not body.isVisible() — show() applies that only once the sections are in.
+		JLabel toggle = toggleMarker(Color.WHITE, !collapsed.contains(keyOf(label, null)));
 		band.add(toggle, BorderLayout.EAST);
-
 		capHeight(band);
 
+		makeCollapsible(band, body, toggle, keyOf(label, null), null);
 		band.addMouseListener(new MouseAdapter()
 		{
-			@Override
-			public void mousePressed(MouseEvent e)
-			{
-				boolean nowCollapsed = body.isVisible();
-				if (nowCollapsed)
-				{
-					collapsed.add(label);
-				}
-				else
-				{
-					collapsed.remove(label);
-				}
-				body.setVisible(!nowCollapsed);
-				toggle.setText(nowCollapsed ? "+" : "-");
-				revalidate();
-				repaint();
-			}
-
 			@Override
 			public void mouseEntered(MouseEvent e)
 			{
@@ -254,18 +234,95 @@ public class DropsCard extends JPanel
 		return band;
 	}
 
-	/** A titled block of drop rows for one section, collecting each row's price cell to fill later. */
-	private JComponent sectionBlock(DropTable.Section section, List<PriceCell> cells)
+	/**
+	 * A titled block of drop rows for one section, collecting each row's price cell to fill later. The
+	 * header collapses the rows under it — a Rare drop table runs to 27 rows, and a player hunting one
+	 * drop wants the rest out of the way. Keyed by its group too, since section names ("100%", "Herbs")
+	 * repeat across a page's locations and each must collapse on its own.
+	 */
+	private JComponent sectionBlock(DropTable.Section section, String groupLabel, List<PriceCell> cells)
 	{
 		JPanel block = block();
-		block.add(sectionHeader(section.getLabel() + " (" + section.getRows().size() + ")"));
+
+		JPanel rows = new JPanel();
+		rows.setLayout(new BoxLayout(rows, BoxLayout.Y_AXIS));
+		rows.setBackground(block.getBackground());
+		rows.setAlignmentX(LEFT_ALIGNMENT);
 		for (DropRow row : section.getRows())
 		{
-			block.add(Box.createRigidArea(new Dimension(0, 3)));
-			block.add(dropRow(row, cells));
+			rows.add(Box.createRigidArea(new Dimension(0, 3)));
+			rows.add(dropRow(row, cells));
 		}
+		rows.setVisible(!collapsed.contains(keyOf(groupLabel, section.getLabel())));
+
+		JPanel header = rowX();
+		header.setBackground(block.getBackground());
+		header.add(headerLabel(section.getLabel() + " (" + section.getRows().size() + ")"));
+		header.add(Box.createHorizontalGlue());
+		JLabel toggle = toggleMarker(ColorScheme.BRAND_ORANGE, rows.isVisible());
+		header.add(toggle);
+		capHeight(header);
+
+		block.add(header);
+		block.add(rows);
 		capHeight(block);
+
+		makeCollapsible(header, rows, toggle, keyOf(groupLabel, section.getLabel()), block);
 		return block;
+	}
+
+	/** The +/- marker. Plain ASCII: the RuneScape font has no glyph for the usual chevrons/triangles. */
+	private static JLabel toggleMarker(Color colour, boolean expanded)
+	{
+		JLabel toggle = new JLabel(expanded ? "-" : "+");
+		toggle.setFont(FontManager.getRunescapeBoldFont());
+		toggle.setForeground(colour);
+		toggle.setBorder(new EmptyBorder(0, 6, 0, 0));
+		return toggle;
+	}
+
+	/**
+	 * Wire {@code header} to fold {@code body} away on click, remembering the choice under {@code key}.
+	 * {@code block} (when given) is the fixed-height container the body sits in, and is re-capped after
+	 * the toggle so it shrinks to the collapsed height instead of leaving a hole.
+	 */
+	private void makeCollapsible(JPanel header, JPanel body, JLabel toggle, String key, JPanel block)
+	{
+		header.setCursor(new Cursor(Cursor.HAND_CURSOR));
+		header.addMouseListener(new MouseAdapter()
+		{
+			@Override
+			public void mousePressed(MouseEvent e)
+			{
+				boolean nowCollapsed = body.isVisible();
+				if (nowCollapsed)
+				{
+					collapsed.add(key);
+				}
+				else
+				{
+					collapsed.remove(key);
+				}
+				body.setVisible(!nowCollapsed);
+				toggle.setText(nowCollapsed ? "+" : "-");
+				if (block != null)
+				{
+					block.setMaximumSize(null);
+					capHeight(block);
+				}
+				revalidate();
+				repaint();
+			}
+		});
+	}
+
+	/**
+	 * The collapse key for a group band ({@code section} null) or one section within a group. Sections
+	 * are scoped by their group so a Cyclops' two "100%" tables don't collapse as one.
+	 */
+	private static String keyOf(String group, String section)
+	{
+		return section == null ? "band|" + group : "section|" + group + '|' + section;
 	}
 
 	private JComponent dropRow(DropRow row, List<PriceCell> cells)
