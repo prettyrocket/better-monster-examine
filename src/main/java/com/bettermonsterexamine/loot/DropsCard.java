@@ -60,6 +60,8 @@ public class DropsCard extends JPanel
 {
 	/** On-screen size of each item icon (native OSRS item sprites are ~36×32). */
 	private static final int ICON_BOX = 28;
+	/** Wrap width for a band's title, leaving its line's remainder to the collapse controls. */
+	private static final int BAND_TITLE_WIDTH = 130;
 	private static final Pattern LEADING_INT = Pattern.compile("(\\d[\\d,]*)");
 
 	// High Alchemy costs 1 nature rune + 5 fire runes to cast; its value must clear that to be worthwhile.
@@ -87,6 +89,9 @@ public class DropsCard extends JPanel
 	 * item-id map arrive.
 	 */
 	private final Set<String> collapsed = new HashSet<>();
+
+	/** The table on screen, so a collapse-all can re-render through {@link #show} rather than by hand. */
+	private DropTable current;
 
 	public DropsCard(ItemManager itemManager, ClientThread clientThread, ItemIdService itemIds, BetterMonsterExamineConfig config)
 	{
@@ -124,6 +129,7 @@ public class DropsCard extends JPanel
 	public void show(DropTable table)
 	{
 		removeAll();
+		current = table;
 		if (table == null)
 		{
 			renderMessage("Loading drops…");
@@ -158,7 +164,7 @@ public class DropsCard extends JPanel
 			String label = group.getLabel();
 			if (!label.isEmpty())
 			{
-				add(groupBand(label, body));
+				add(groupBand(group, body));
 				// Inside the body, so the gap folds away with it.
 				body.add(Box.createRigidArea(new Dimension(0, 3)));
 			}
@@ -194,6 +200,7 @@ public class DropsCard extends JPanel
 	public void clear()
 	{
 		removeAll();
+		current = null;
 		revalidate();
 		repaint();
 	}
@@ -204,20 +211,96 @@ public class DropsCard extends JPanel
 	 * header: it's the difference between a drop this monster has and one only its other variant has.
 	 * Clicking it collapses {@code body}, so the location you aren't fighting can be folded away.
 	 */
-	private JComponent groupBand(String label, JPanel body)
+	private JComponent groupBand(DropTable.Group group, JPanel body)
 	{
+		String label = group.getLabel();
 		JPanel band = new JPanel(new BorderLayout());
 		band.setBackground(ColorScheme.DARK_GRAY_COLOR);
 		band.setBorder(new EmptyBorder(5, 8, 5, 8));
-		band.add(wrappedLabel(label.toUpperCase(Locale.ROOT), Color.WHITE, false), BorderLayout.CENTER);
+		// Narrower than the panel: the controls share this line, and a long location ("Standard and
+		// Catacombs of Kourend") has to wrap rather than push them off the edge.
+		band.add(wrappedLabel(label.toUpperCase(Locale.ROOT), Color.WHITE, false, BAND_TITLE_WIDTH),
+			BorderLayout.CENTER);
 
 		// Read the state, not body.isVisible() — show() applies that only once the sections are in.
 		JLabel toggle = toggleMarker(Color.WHITE, !collapsed.contains(keyOf(label, null)));
-		band.add(toggle, BorderLayout.EAST);
+
+		JPanel controls = new JPanel();
+		controls.setLayout(new BoxLayout(controls, BoxLayout.X_AXIS));
+		controls.setOpaque(false);
+		controls.add(allControl(group, band));
+		controls.add(Box.createRigidArea(new Dimension(6, 0)));
+		controls.add(toggle);
+		band.add(controls, BorderLayout.EAST);
 		capHeight(band);
 
 		makeCollapsible(band, body, toggle, keyOf(label, null), null);
-		band.addMouseListener(new MouseAdapter()
+		band.addMouseListener(hoverListener(band));
+		return band;
+	}
+
+	/**
+	 * The band's collapse-all / expand-all: folds every table in <b>this location</b> down to its header,
+	 * leaving them as an index you can open one of. Distinct from the band's own +/-, which hides the
+	 * location outright. Reflects state like the other markers — "+" once everything under it is folded,
+	 * so the same click expands it all back.
+	 */
+	private JLabel allControl(DropTable.Group group, JPanel band)
+	{
+		boolean allCollapsed = group.getSections().stream()
+			.allMatch(s -> collapsed.contains(keyOf(group.getLabel(), s.getLabel())));
+
+		JLabel all = new JLabel(allCollapsed ? "ALL +" : "ALL -");
+		all.setFont(FontManager.getRunescapeSmallFont());
+		all.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+		all.setCursor(new Cursor(Cursor.HAND_CURSOR));
+		all.setToolTipText(allCollapsed
+			? "Expand every table in this location"
+			: "Collapse every table in this location");
+
+		all.addMouseListener(new MouseAdapter()
+		{
+			@Override
+			public void mousePressed(MouseEvent e)
+			{
+				for (DropTable.Section s : group.getSections())
+				{
+					String key = keyOf(group.getLabel(), s.getLabel());
+					if (allCollapsed)
+					{
+						collapsed.remove(key);
+					}
+					else
+					{
+						collapsed.add(key);
+					}
+				}
+				// Rebuild from the table rather than walking the components — show() already renders the
+				// collapsed set, and it's the same path the async page/item-id updates re-render through.
+				show(current);
+			}
+
+			@Override
+			public void mouseEntered(MouseEvent e)
+			{
+				band.setBackground(ColorScheme.DARKER_GRAY_HOVER_COLOR);
+				all.setForeground(Color.WHITE);
+			}
+
+			@Override
+			public void mouseExited(MouseEvent e)
+			{
+				band.setBackground(ColorScheme.DARK_GRAY_COLOR);
+				all.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+			}
+		});
+		return all;
+	}
+
+	/** Light the band up on hover, so it reads as clickable. */
+	private static MouseAdapter hoverListener(JPanel band)
+	{
+		return new MouseAdapter()
 		{
 			@Override
 			public void mouseEntered(MouseEvent e)
@@ -230,8 +313,7 @@ public class DropsCard extends JPanel
 			{
 				band.setBackground(ColorScheme.DARK_GRAY_COLOR);
 			}
-		});
-		return band;
+		};
 	}
 
 	/**
