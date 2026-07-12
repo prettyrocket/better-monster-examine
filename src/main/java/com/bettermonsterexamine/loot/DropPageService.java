@@ -266,21 +266,29 @@ public class DropPageService
 	}
 
 	/**
-	 * Parse one drops {@code <h2>} region, appending its rows to {@code out}. Rows inherit the
-	 * {@code <h3>/<h4>} heading above them; for a per-level region ("Level <i>N</i> drops") the level is
-	 * folded into the label so the level-13 and level-99 "100%" tables stay distinct rather than merging.
+	 * Parse one drops {@code <h2>} region, appending its rows to {@code out}. Rows inherit the headings
+	 * above them, and the heading <b>depth</b> decides what is a group and what is a section.
+	 *
+	 * <p>The depth matters because the wiki uses the extra level to split a monster's drops by location
+	 * or combat level. On a Cyclops the {@code <h3>}s are the locations (Warriors' Guild top floor /
+	 * basement) and the {@code <h4>}s under each are that location's tables — so an {@code <h3>} with
+	 * {@code <h4>}s beneath it is a <i>group</i> and the {@code <h4>} is the section, while an
+	 * {@code <h3>} with no {@code <h4>}s (the common case) <i>is</i> the section. A non-generic
+	 * {@code <h2>} ("Level 99 drops", "Drop table 2") is itself a group. Collapsing these levels merges
+	 * the top floor's and basement's like-named tables — same names, different drops and rates — which
+	 * is what made the Dragon defender (basement "Pre-roll" only) look like a drop from every Cyclops.
 	 */
 	private static void parseRegion(String region, String h2Title, List<DropRow> out)
 	{
-		// A generic "Drops" heading adds no grouping of its own — the subsection heading is the label.
+		// A generic "Drops" heading adds no grouping of its own — the headings under it carry it all.
 		boolean generic = h2Title.equalsIgnoreCase("Drops");
 
-		// Merge headings and rows by position, so each row inherits the heading above it.
+		// Merge headings and rows by position, so each row inherits the headings above it.
 		List<Event> events = new ArrayList<>();
 		Matcher hm = HEADING.matcher(region);
 		while (hm.find())
 		{
-			events.add(new Event(hm.start(), clean(hm.group(2)), null));
+			events.add(new Event(hm.start(), Integer.parseInt(hm.group(1)), clean(hm.group(2)), null));
 		}
 		Matcher rm = ROW.matcher(region);
 		while (rm.find())
@@ -293,29 +301,60 @@ public class DropPageService
 			String[] cells = rowCells(rowHtml);
 			if (cells != null)
 			{
-				events.add(new Event(rm.start(), null, cells));
+				events.add(new Event(rm.start(), 0, null, cells));
 			}
 		}
 		events.sort((a, b) -> Integer.compare(a.pos, b.pos));
 
-		// A generic region skips rows before its first subheading (there should be none); a per-level
-		// region seeds the section from its <h2> title so those rows are still attributed to the level.
-		String sub = null;
+		String h3 = null;
+		String h4 = null;
 		for (Event e : events)
 		{
 			if (e.heading != null)
 			{
-				sub = e.heading;
-			}
-			else
-			{
-				String section = generic ? sub : (sub == null ? h2Title : h2Title + ": " + sub);
-				if (section != null)
+				if (e.level == 3)
 				{
-					out.add(new DropRow(e.cells[0], e.cells[1], e.cells[2], section));
+					h3 = e.heading;
+					// A new <h3> opens a new group; its rows must not inherit the last group's <h4>.
+					h4 = null;
 				}
+				else
+				{
+					h4 = e.heading;
+				}
+				continue;
 			}
+
+			// The deepest heading names the table; an <h3> is only a group once an <h4> sits under it.
+			String section = h4 != null ? h4 : h3;
+			String group = join(generic ? null : h2Title, h4 != null ? h3 : null);
+			if (section == null)
+			{
+				// No subheading at all: a generic region has nothing to attribute the rows to (there
+				// should be none); a per-level region falls back to its own <h2> title as the section.
+				if (generic)
+				{
+					continue;
+				}
+				section = h2Title;
+				group = "";
+			}
+			out.add(new DropRow(e.cells[0], e.cells[1], e.cells[2], group, section));
 		}
+	}
+
+	/** Join the heading levels scoping a row into one group label, skipping the ones it doesn't have. */
+	private static String join(String outer, String inner)
+	{
+		if (outer == null || outer.isEmpty())
+		{
+			return inner == null ? "" : inner;
+		}
+		if (inner == null || inner.isEmpty())
+		{
+			return outer;
+		}
+		return outer + ": " + inner;
 	}
 
 	/** Pull [item, quantity, rarity] out of one drop-table row, or null when it has no item link. */
@@ -420,12 +459,15 @@ public class DropPageService
 	private static final class Event
 	{
 		private final int pos;
+		/** Heading depth (3 or 4) — what separates a location/level group from a drop table. 0 for a row. */
+		private final int level;
 		private final String heading;
 		private final String[] cells;
 
-		private Event(int pos, String heading, String[] cells)
+		private Event(int pos, int level, String heading, String[] cells)
 		{
 			this.pos = pos;
+			this.level = level;
 			this.heading = heading;
 			this.cells = cells;
 		}

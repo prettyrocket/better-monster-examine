@@ -10,9 +10,9 @@ public class DropRowTest
 	@Test
 	public void isAlwaysMatchesTheAlwaysRarityCaseInsensitively()
 	{
-		assertTrue(new DropRow("Bones", "1", "Always", "100%").isAlways());
-		assertTrue(new DropRow("Bones", "1", "always", "100%").isAlways());
-		assertFalse(new DropRow("Coins", "5", "1/128", "Other").isAlways());
-		assertFalse(new DropRow("Coins", "5", null, "Other").isAlways());
+		assertTrue(new DropRow("Bones", "1", "Always", "", "100%").isAlways());
+		assertTrue(new DropRow("Bones", "1", "always", "", "100%").isAlways());
+		assertFalse(new DropRow("Coins", "5", "1/128", "", "Other").isAlways());
+		assertFalse(new DropRow("Coins", "5", null, "", "Other").isAlways());
 	}
 }

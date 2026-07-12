@@ -5,6 +5,7 @@ import com.bettermonsterexamine.HighlightMode;
 import static com.bettermonsterexamine.PanelStyle.block;
 import static com.bettermonsterexamine.PanelStyle.capHeight;
 import static com.bettermonsterexamine.PanelStyle.sectionHeader;
+import static com.bettermonsterexamine.PanelStyle.wrappedLabel;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
@@ -41,7 +42,9 @@ import net.runelite.http.api.item.ItemPrice;
  * Drops-tab counterpart to {@code MonsterCard}). Given the page's {@link DropTable} it renders one
  * row per drop — item icon + name with the quantity right-aligned on top, the rarity/odds
  * left-aligned under the name below — grouped into the wiki's own sections in page order (Herbs, Gem/Rare drop
- * table, Catacombs/Wilderness tables, …). Each row's GE / High Alch go in its hover tooltip.
+ * table, Catacombs/Wilderness tables, …). Where the wiki splits a monster's drops by location or combat
+ * level, each of those groups gets a band above its sections, so tables that belong to one variant are
+ * never read as the monster's drops as a whole. Each row's GE / High Alch go in its hover tooltip.
  *
  * <p>The drop list is parsed from the monster's wiki page ({@link DropPageService}), so it arrives
  * asynchronously — {@link #show} is re-called as the page (and the bulk item-id map) land. Item id
@@ -127,13 +130,28 @@ public class DropsCard extends JPanel
 		}
 
 		List<PriceCell> cells = new ArrayList<>();
-		for (DropTable.Section section : table.getSections())
+		for (DropTable.Group group : table.getGroups())
 		{
 			if (getComponentCount() > 0)
 			{
 				add(Box.createRigidArea(new Dimension(0, 6)));
 			}
-			add(sectionBlock(section, cells));
+			// A labelled group means the wiki splits this monster's drops by location or combat level;
+			// band it so its tables can't be read as the monster's drops as a whole.
+			if (!group.getLabel().isEmpty())
+			{
+				add(groupBand(group.getLabel()));
+				add(Box.createRigidArea(new Dimension(0, 3)));
+			}
+			List<DropTable.Section> sections = group.getSections();
+			for (int i = 0; i < sections.size(); i++)
+			{
+				if (i > 0)
+				{
+					add(Box.createRigidArea(new Dimension(0, 6)));
+				}
+				add(sectionBlock(sections.get(i), cells));
+			}
 		}
 
 		fill(cells);
@@ -155,6 +173,21 @@ public class DropsCard extends JPanel
 		removeAll();
 		revalidate();
 		repaint();
+	}
+
+	/**
+	 * The band naming a group of drop tables — the location or combat level the sections under it are
+	 * scoped to ("Warriors' Guild Basement", "Level 99 drops"). Deliberately heavier than a section
+	 * header: it's the difference between a drop this monster has and one only its other variant has.
+	 */
+	private JComponent groupBand(String label)
+	{
+		JPanel band = new JPanel(new BorderLayout());
+		band.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		band.setBorder(new EmptyBorder(5, 8, 5, 8));
+		band.add(wrappedLabel(label.toUpperCase(Locale.ROOT), Color.WHITE, false), BorderLayout.CENTER);
+		capHeight(band);
+		return band;
 	}
 
 	/** A titled block of drop rows for one section, collecting each row's price cell to fill later. */

@@ -120,22 +120,32 @@ The **data layer** is `#41`; the **panel** (this branch) is `#45`, stacked on it
   loaded). On-demand **per monster**, refreshed weekly (`MAX_AGE = 7 days`) — the same cache pattern
   the drops fetch always used, just from the page instead of the bucket. Its static `parse(html)` is
   pure (unit-tested): it restricts to the Drops section (`id="Drops"` → next `<h2>`), merges
-  `<h3>/<h4>` headings and drop-table rows by document position so each row inherits the heading
-  above it, and pulls `[item · quantity · rarity]` from the row's `item-col` / quantity / `table-bg`
-  cells. Concurrent requests coalesce; an update listener notifies when a page lands.
+  headings and drop-table rows by document position so each row inherits the headings above it, and
+  pulls `[item · quantity · rarity]` from the row's `item-col` / quantity / `table-bg` cells.
+  Heading **depth is load-bearing**: an `<h3>` with `<h4>`s under it is a **group** (a location or
+  combat level — Cyclops' Warriors' Guild top floor vs basement, Abyssal demon's Catacombs vs
+  Wilderness Slayer Cave) and the `<h4>` is the section, while an `<h3>` with no `<h4>`s *is* the
+  section; a non-generic `<h2>` ("Level 99 drops") is itself a group. Flattening the two levels
+  merges like-named tables across locations — same names, different drops and rates — which is what
+  made the basement-only Dragon defender read as a drop from every Cyclops. Concurrent requests
+  coalesce; an update listener notifies when a page lands.
 - **`ItemIdService`** (singleton) — bulk OSRS Wiki Bucket `item_id` name→id map (the one Bucket use
   that remains), cached under `.runelite/better-monster-examine/item-ids.json`, paginated + refreshed
   weekly. Bridges the parsed item **name** to the client **id** so the RuneLite client can supply
   price / high-alch / **icon** for free; also covers untradeables `ItemManager.search` misses.
   `idFor(name)` returns null until it lands.
 - **`DropRow`** — a plain DTO for one parsed row: item, quantity + rarity (as the wiki renders them),
-  and the **section** heading it sits under. Price/alch/icon are not stored — they come from the
-  client by id at render time.
-- **`DropTable`** — a monster's rows grouped into sections **in wiki page order** (`of(rows)`,
-  first-seen), preserving row order within each section. Pure, so it's unit-tested.
+  and the two headings it sits under — the **section** and its optional **group** (`""` when the page
+  doesn't split its drops). Price/alch/icon are not stored — they come from the client by id at
+  render time.
+- **`DropTable`** — a monster's rows grouped by **group → section**, both **in wiki page order**
+  (`of(rows)`, first-seen), preserving row order within each section. Sections only merge *within* a
+  group, so a Cyclops' two `100%`/`Herbs` tables stay distinct. Pure, so it's unit-tested.
 
 - **`DropsCard`** (`JPanel`, the Drops-tab body) — renders the wiki's sections **in page order** as a
-  clean list: one row per drop, two lines — **icon** + name (with the **quantity right-aligned**) on
+  clean list, each group under a **band** naming its location/level (so a table that belongs to one
+  variant is never read as the monster's drops as a whole): one row per drop, two lines — **icon** +
+  name (with the **quantity right-aligned**) on
   top, the **rarity/odds right-aligned** below, **colour-coded by rarity tier** (common grey →
   uncommon → rare → ultra-rare, via `DropFormat.tierOf`; the palette follows `statHighlighting` and
   has a colour-blind-safe Okabe-Ito set). Rarity handles the wiki's compound cells — multi-roll
@@ -218,6 +228,7 @@ JUnit 4 under `src/test/java`. Pure-logic tests exercise the static helpers and 
 `MonsterStatsTest` (view-model semantics), `StatFormatTest`, `StatColorsTest`, `LookupHistoryTest`.
 The `loot/` layer adds `DropPageServiceTest` (the rendered-page HTML parse: rows inherit their
 `<h3>/<h4>` section, the Drops region stops at the next `<h2>`, entity/footnote cleaning),
-`DropTableTest` (section grouping in wiki page order), `ItemIdServiceTest` (the `item_id` name→id
-parse), `DropRowTest` (the `isAlways` helper) and `DropFormatTest` (the drops display shaping).
+`DropTableTest` (group → section grouping in wiki page order; like-named sections in different groups
+stay distinct), `ItemIdServiceTest` (the `item_id` name→id parse), `DropRowTest` (the `isAlways`
+helper) and `DropFormatTest` (the drops display shaping).
 `BetterMonsterExaminePluginTest` and `OverlayPreview` are dev launchers, not assertions.
