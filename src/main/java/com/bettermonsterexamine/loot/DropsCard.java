@@ -56,6 +56,11 @@ public class DropsCard extends JPanel
 	private static final int ICON_BOX = 28;
 	private static final Pattern LEADING_INT = Pattern.compile("(\\d[\\d,]*)");
 
+	// High Alchemy costs 1 nature rune + 5 fire runes to cast; its value must clear that to be worthwhile.
+	private static final int NATURE_RUNE_ID = 561;
+	private static final int FIRE_RUNE_ID = 554;
+	private static final int FIRE_RUNES_PER_ALCH = 5;
+
 	// Rarity palette — common stays grey; rarer tiers warm up. The colour-blind set is Okabe-Ito, so
 	// the four tiers stay distinguishable under red-green colour blindness.
 	private static final Color STD_UNCOMMON = new Color(0x5f, 0xc9, 0x6b);   // green
@@ -335,10 +340,10 @@ public class DropsCard extends JPanel
 	}
 
 	/** The row's tooltip once priced: name, GE / High Alch (higher one highlighted), and the wiki hint. */
-	private String priceTooltip(String item, int ge, int ha)
+	private String priceTooltip(String item, int ge, int ha, int alchRuneCost)
 	{
 		StringBuilder sb = new StringBuilder("<html>").append(esc(item));
-		String line = priceLineHtml(ge, ha);
+		String line = priceLineHtml(ge, ha, alchRuneCost);
 		if (!line.isEmpty())
 		{
 			sb.append("<br>").append(line);
@@ -346,8 +351,14 @@ public class DropsCard extends JPanel
 		return sb.append(wikiHint()).toString();
 	}
 
-	/** "GE x · Alch y" with the larger value highlighted (colour-blind-aware); empty when neither priced. */
-	private String priceLineHtml(int ge, int ha)
+	/**
+	 * "GE x · Alch y" with the larger value highlighted (colour-blind-aware); empty when neither priced.
+	 * A value is only eligible for the highlight if it clears {@code alchRuneCost} (the runes to cast High
+	 * Alch): alching below that is a loss, and a GE value below it is pocket change. So junk drops (both
+	 * below the cost) get no highlight, while a big-GE/low-alch drop (e.g. a herb seed) still highlights
+	 * its GE. When both clear the cost, the larger wins as before.
+	 */
+	private String priceLineHtml(int ge, int ha, int alchRuneCost)
 	{
 		String geStr = DropFormat.price(ge);
 		String haStr = DropFormat.price(ha);
@@ -356,11 +367,14 @@ public class DropsCard extends JPanel
 			return "";
 		}
 		String hi = highlightHex();
-		boolean geWins = ge >= ha;
+		boolean geEligible = ge > alchRuneCost;
+		boolean haEligible = ha > alchRuneCost;
+		boolean highlightGe = geEligible && (!haEligible || ge >= ha);
+		boolean highlightHa = haEligible && !highlightGe;
 		StringBuilder sb = new StringBuilder();
 		if (!geStr.isEmpty())
 		{
-			sb.append("GE ").append(colorize(geStr, geWins ? hi : null));
+			sb.append("GE ").append(colorize(geStr, highlightGe ? hi : null));
 		}
 		if (!haStr.isEmpty())
 		{
@@ -368,7 +382,7 @@ public class DropsCard extends JPanel
 			{
 				sb.append(" · ");
 			}
-			sb.append("Alch ").append(colorize(haStr, geWins ? null : hi));
+			sb.append("Alch ").append(colorize(haStr, highlightHa ? hi : null));
 		}
 		return sb.toString();
 	}
@@ -416,6 +430,8 @@ public class DropsCard extends JPanel
 		}
 		clientThread.invoke(() ->
 		{
+			int alchRuneCost = itemManager.getItemPrice(NATURE_RUNE_ID)
+				+ FIRE_RUNES_PER_ALCH * itemManager.getItemPrice(FIRE_RUNE_ID);
 			List<Runnable> updates = new ArrayList<>();
 			for (PriceCell c : cells)
 			{
@@ -437,7 +453,7 @@ public class DropsCard extends JPanel
 					stackable = true;
 				}
 				AsyncBufferedImage img = itemManager.getImage(iconId, c.quantity, stackable);
-				String tip = priceTooltip(c.itemName, ge, ha);
+				String tip = priceTooltip(c.itemName, ge, ha, alchRuneCost);
 				updates.add(() ->
 				{
 					if (img != null)
