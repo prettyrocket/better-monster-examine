@@ -40,7 +40,7 @@ import net.runelite.http.api.item.ItemPrice;
  * The drops list for the currently-viewed monster, as a self-contained Swing component (the
  * Drops-tab counterpart to {@code MonsterCard}). Given the page's {@link DropTable} it renders one
  * row per drop — item icon + name with the quantity right-aligned on top, the rarity/odds
- * right-aligned below — grouped into the wiki's own sections in page order (Herbs, Gem/Rare drop
+ * left-aligned under the name below — grouped into the wiki's own sections in page order (Herbs, Gem/Rare drop
  * table, Catacombs/Wilderness tables, …). Each row's GE / High Alch go in its hover tooltip.
  *
  * <p>The drop list is parsed from the monster's wiki page ({@link DropPageService}), so it arrives
@@ -176,8 +176,8 @@ public class DropsCard extends JPanel
 		JLabel icon = iconLabel(row.getItem());
 		r.add(icon, BorderLayout.WEST);
 
-		// Two lines: item name (left) with quantity right-aligned on top, the drop odds right-aligned
-		// below. GE / High Alch go in the row's hover tooltip, to keep each row uncluttered.
+		// Two lines: item name (left) with quantity right-aligned on top, the drop odds left-aligned
+		// under the name below. GE / High Alch go in the row's hover tooltip, to keep each row uncluttered.
 		JPanel centre = new JPanel();
 		centre.setLayout(new BoxLayout(centre, BoxLayout.Y_AXIS));
 		centre.setBackground(ColorScheme.DARKER_GRAY_COLOR);
@@ -208,16 +208,16 @@ public class DropsCard extends JPanel
 		capHeight(nameLine);
 		centre.add(nameLine);
 
-		// Line 2: the drop odds, right-aligned and colour-coded by rarity tier.
+		// Line 2: the drop odds, left-aligned under the item name and colour-coded by rarity tier.
 		JPanel rarityLine = new JPanel();
 		rarityLine.setLayout(new BoxLayout(rarityLine, BoxLayout.X_AXIS));
 		rarityLine.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 		rarityLine.setAlignmentX(LEFT_ALIGNMENT);
-		rarityLine.add(Box.createHorizontalGlue());
 		JLabel rarity = new JLabel(DropFormat.rarity(row));
 		rarity.setFont(FontManager.getRunescapeSmallFont());
 		rarity.setForeground(rarityColor(row.getRarity()));
 		rarityLine.add(rarity);
+		rarityLine.add(Box.createHorizontalGlue());
 		capHeight(rarityLine);
 		centre.add(Box.createRigidArea(new Dimension(0, 1)));
 		centre.add(rarityLine);
