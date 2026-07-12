@@ -98,8 +98,8 @@ public class DropPageServiceTest
 	public void combatLevelVariantsSplitDropsAcrossPerLevelSections()
 	{
 		// Monsters with per-level drop tables (e.g. Giant frog) have no single id="Drops"; each combat
-		// level gets its own "Level N drops" <h2> with its own 100%/Tertiary/… subsections. The level is
-		// folded into the label so the two "100%" tables stay distinct rather than merging into one.
+		// level gets its own "Level N drops" <h2> with its own 100%/Tertiary/… subsections. The level
+		// becomes the group so the two "100%" tables stay distinct rather than merging into one.
 		String html =
 			"<h2 id=\"Level_13_drops\">Level 13 drops</h2>"
 			+ "<h3 id=\"100%\">100%</h3>"
@@ -115,11 +115,67 @@ public class DropPageServiceTest
 		List<DropRow> rows = DropPageService.parse(html);
 
 		assertEquals(3, rows.size());
-		assertEquals("Level 13 drops: 100%", rows.get(0).getSection());
-		assertEquals("Level 99 drops: 100%", rows.get(1).getSection());
-		assertEquals("Level 99 drops: Weapons", rows.get(2).getSection());
+		assertEquals("Level 13 drops", rows.get(0).getGroup());
+		assertEquals("100%", rows.get(0).getSection());
+		assertEquals("Level 99 drops", rows.get(1).getGroup());
+		assertEquals("100%", rows.get(1).getSection());
+		assertEquals("Level 99 drops", rows.get(2).getGroup());
+		assertEquals("Weapons", rows.get(2).getSection());
 		assertEquals("Mithril spear", rows.get(2).getItem());
 		assertTrue(rows.stream().noneMatch(r -> "x".equals(r.getItem())));
+	}
+
+	@Test
+	public void locationSubHeadingsBecomeGroupsSoLikeNamedTablesStayApart()
+	{
+		// The Cyclops shape: one "Drops" <h2>, <h3> locations, and each location's tables as <h4>s under
+		// it. Both locations have a "100%" table; only the basement's "Pre-roll" holds the Dragon
+		// defender. Treating <h3> and <h4> as one level merged them and implied every Cyclops drops it.
+		String html =
+			"<h2 id=\"Drops\">Drops</h2>"
+			+ "<h3 id=\"Top\">Warriors' Guild Top Floor</h3>"
+			+ "<h4 id=\"100%\">100%</h4>"
+			+ "<table>" + row("Big_bones", "Big bones", "1", "table-bg-always", "Always") + "</table>"
+			+ "<h4 id=\"Defenders\">Defenders</h4>"
+			+ "<table>" + row("Rune_defender", "Rune defender", "1", "table-bg-rare", "2/100") + "</table>"
+			+ "<h3 id=\"Basement\">Warriors' Guild Basement</h3>"
+			+ "<h4 id=\"100%_2\">100%</h4>"
+			+ "<table>" + row("Big_bones", "Big bones", "1", "table-bg-always", "Always") + "</table>"
+			+ "<h4 id=\"Pre-roll\">Pre-roll</h4>"
+			+ "<table>" + row("Dragon_defender", "Dragon defender", "1", "table-bg-rare", "1/100") + "</table>";
+
+		List<DropRow> rows = DropPageService.parse(html);
+
+		assertEquals(4, rows.size());
+		assertEquals("Warriors' Guild Top Floor", rows.get(0).getGroup());
+		assertEquals("100%", rows.get(0).getSection());
+		assertEquals("Warriors' Guild Top Floor", rows.get(1).getGroup());
+		assertEquals("Defenders", rows.get(1).getSection());
+
+		assertEquals("Warriors' Guild Basement", rows.get(2).getGroup());
+		assertEquals("100%", rows.get(2).getSection());
+
+		// The one that matters: the Dragon defender is scoped to the basement, not the whole page.
+		assertEquals("Dragon defender", rows.get(3).getItem());
+		assertEquals("Warriors' Guild Basement", rows.get(3).getGroup());
+		assertEquals("Pre-roll", rows.get(3).getSection());
+	}
+
+	@Test
+	public void anH3WithNoH4UnderItIsTheSectionNotAGroup()
+	{
+		// The common shape — a plain "Drops" <h2> whose <h3>s are the tables themselves. These must stay
+		// ungrouped, or every ordinary monster would grow a spurious band.
+		String html =
+			"<h2 id=\"Drops\">Drops</h2>"
+			+ "<h3 id=\"Herbs\">Herbs</h3>"
+			+ "<table>" + row("Grimy_guam_leaf", "Grimy guam leaf", "1", "table-bg-common", "1/30") + "</table>";
+
+		List<DropRow> rows = DropPageService.parse(html);
+
+		assertEquals(1, rows.size());
+		assertEquals("", rows.get(0).getGroup());
+		assertEquals("Herbs", rows.get(0).getSection());
 	}
 
 	@Test
