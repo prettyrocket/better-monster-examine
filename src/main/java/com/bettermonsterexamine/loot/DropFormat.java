@@ -151,8 +151,8 @@ final class DropFormat
 
 	/**
 	 * Display cleanup for the numbers the wiki hands us: drop thousands commas ({@code "1,000"} →
-	 * {@code "1000"}) and turn en/em dashes into a plain hyphen (the RuneScape font renders "-", not
-	 * "–"/"—").
+	 * {@code "1000"}) and turn en/em dashes into a plain hyphen. The RuneScape font <i>has</i> glyphs for
+	 * "–"/"—" — they just look bad at panel size, so a range reads better as a plain "4-13".
 	 */
 	private static String display(String s)
 	{
