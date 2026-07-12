@@ -13,6 +13,7 @@ import com.google.gson.Gson;
 import com.google.inject.Provides;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
+import net.runelite.api.KeyCode;
 import net.runelite.api.MenuAction;
 import net.runelite.api.NPC;
 import net.runelite.api.Player;
@@ -285,6 +286,12 @@ public class BetterMonsterExaminePlugin extends Plugin
 		// per monster regardless of its other entries (Attack, Talk-to, …).
 		MenuOption menu = config.menuOptions();
 		if (menu == MenuOption.NONE || event.getType() != MenuAction.EXAMINE_NPC.getId())
+		{
+			return;
+		}
+
+		// Optionally gate the entries behind Shift so they don't clutter every monster's menu.
+		if (config.requireShift() && !client.isKeyPressed(KeyCode.KC_SHIFT))
 		{
 			return;
 		}

@@ -18,6 +18,16 @@ public interface BetterMonsterExamineConfig extends Config
 	}
 
 	@ConfigItem(
+		keyName = "requireShift",
+		name = "Only show when Shift held",
+		description = "Add the Stats/Drops right-click options only while Shift is held, to keep the normal menu uncluttered."
+	)
+	default boolean requireShift()
+	{
+		return false;
+	}
+
+	@ConfigItem(
 		keyName = "enableSidePanel",
 		name = "Enable Side Panel",
 		description = "Enables the searchable side panel to display more monster stats."
