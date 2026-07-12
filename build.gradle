@@ -56,12 +56,27 @@ tasks.register('run', JavaExec) {
 // side-loaded hub plugins load and only the default-on built-ins start — a much lighter client for
 // testing this plugin in isolation. The home persists between runs (build/ is gitignored), so this
 // plugin's caches are only re-downloaded once.
+//
+// It seeds only your RuneLite-account session (credentials.properties + session) from your real home
+// so you stay logged in — deliberately NOT the config profile, which lists your side-loaded plugins
+// and would drag them back in. build/ is gitignored, so the copied session is never committed.
 tasks.register('runClean', JavaExec) {
 	classpath = sourceSets.test.runtimeClasspath
 	mainClass = 'com.bettermonsterexamine.BetterMonsterExaminePluginTest'
 
 	def devHome = layout.buildDirectory.dir('dev-home').get().asFile
-	doFirst { devHome.mkdirs() }
+	doFirst {
+		def devRl = new File(devHome, '.runelite')
+		devRl.mkdirs()
+		def realRl = new File(System.getProperty('user.home'), '.runelite')
+		['credentials.properties', 'session'].each { name ->
+			def src = new File(realRl, name)
+			if (src.isFile()) {
+				java.nio.file.Files.copy(src.toPath(), new File(devRl, name).toPath(),
+					java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+			}
+		}
+	}
 	jvmArgs "-ea", "-Duser.home=${devHome}"
 	args "--developer-mode", "--debug"
 }
