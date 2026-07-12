@@ -179,6 +179,55 @@ public class DropPageServiceTest
 	}
 
 	@Test
+	public void rarityPrefersTheWikisOneOverFormOverTheRawSourceFraction()
+	{
+		// The live cell shape: the span's text is the raw source fraction, data-drop-oneover is what the
+		// wiki actually renders. A Cyclops' Black knife is "16/100" in the source and "1/6.25" on screen.
+		String cell = "<td class=\"table-bg-green\" title=\"16%\">"
+			+ "<span data-drop-percent=\"16\" data-drop-fraction=\"16/100\" data-drop-oneover=\"1/6.25\">16/100</span>"
+			+ "</td>";
+		String html = "<h2 id=\"Drops\">Drops</h2>"
+			+ "<h3 id=\"Weapons\">Weapons</h3>"
+			+ "<table><tr>"
+			+ "<td class=\"inventory-image\"><img src=\"x\"></td>"
+			+ "<td class=\"item-col\"><a href=\"/w/Black_knife\">Black knife</a></td>"
+			+ "<td>4&#8211;13</td>"
+			+ cell
+			+ "</tr></table>";
+
+		List<DropRow> rows = DropPageService.parse(html);
+
+		assertEquals(1, rows.size());
+		assertEquals("1/6.25", rows.get(0).getRarity());
+	}
+
+	@Test
+	public void compoundRarityKeepsItsStructureAroundTheOneOverValues()
+	{
+		// A Gem drop table cell: a per-roll rate, then the combined per-kill rate after ';'. Both values
+		// are spans; the separator is not. Swapping the values must leave the ';' structure intact, since
+		// DropFormat reduces on it to pick the tier colour.
+		String cell = "<td class=\"table-bg-rare\">"
+			+ "<span data-drop-fraction=\"1/200\" data-drop-oneover=\"1/200\">1/200</span>"
+			+ "<span>; </span>"
+			+ "<span data-drop-fraction=\"1/101.56\" data-drop-oneover=\"1/101.56\">1/101.56</span>"
+			+ "</td>";
+		String html = "<h2 id=\"Drops\">Drops</h2>"
+			+ "<h3 id=\"Gem_drop_table\">Gem drop table</h3>"
+			+ "<table><tr>"
+			+ "<td class=\"inventory-image\"><img src=\"x\"></td>"
+			+ "<td class=\"item-col\"><a href=\"/w/Uncut_sapphire\">Uncut sapphire</a></td>"
+			+ "<td>1</td>"
+			+ cell
+			+ "</tr></table>";
+
+		List<DropRow> rows = DropPageService.parse(html);
+
+		assertEquals(1, rows.size());
+		assertEquals("1/200 ; 1/101.56", rows.get(0).getRarity());
+	}
+
+	@Test
 	public void cleanStripsTagsAndUnescapesEntities()
 	{
 		assertEquals("A & B", DropPageService.clean("<b>A</b> &amp; B"));
