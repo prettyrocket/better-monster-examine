@@ -114,7 +114,8 @@ the monster's page**, not the bucket. (An earlier `dropsline`-based `tables` mod
 The **data layer** is `#41`; the **panel** (this branch) is `#45`, stacked on it.
 
 - **`DropPageService`** (singleton) — the source. `request(pageName)` fetches the monster's rendered
-  wiki page via the MediaWiki **`action=parse`** API off-thread (client-thread/EDT safe), caches the
+  wiki page via the MediaWiki **`action=parse`** API off-thread (client-thread/EDT safe, `redirects=1`
+  so redirect page names like `Hill giant` → `Hill Giant` still resolve), caches the
   raw response per page under `.runelite/better-monster-examine/droppages/`, and publishes parsed
   rows into a concurrent by-page index; `tableFor(pageName)` reads it without blocking (null until
   loaded). On-demand **per monster**, refreshed weekly (`MAX_AGE = 7 days`) — the same cache pattern

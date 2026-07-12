@@ -174,6 +174,9 @@ public class DropPageService
 				.addQueryParameter("page", pageName)
 				.addQueryParameter("prop", "text")
 				.addQueryParameter("format", "json")
+				// Follow redirects: plenty of monster names are redirect pages ("Hill giant" →
+				// "Hill Giant"), and without this we'd parse the redirect stub and show no drops.
+				.addQueryParameter("redirects", "1")
 				.build();
 			Request req = new Request.Builder().url(url).header("User-Agent", USER_AGENT).build();
 			try (Response res = http.newCall(req).execute())
