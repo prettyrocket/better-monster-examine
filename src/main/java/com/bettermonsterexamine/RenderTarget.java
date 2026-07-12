@@ -9,7 +9,7 @@ public enum RenderTarget
 	/** Open the searchable side panel (the original behaviour). */
 	PANEL("Side panel"),
 	/** Draw the card as an in-game overlay; clicking Stats again on the same monster hides it. */
-	OVERLAY("In-game overlay"),
+	OVERLAY("Overlay"),
 	/** Both the side panel and the overlay. */
 	BOTH("Both");
 
