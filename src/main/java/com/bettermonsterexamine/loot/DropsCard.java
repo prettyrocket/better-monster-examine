@@ -16,9 +16,11 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.swing.Box;
@@ -78,6 +80,12 @@ public class DropsCard extends JPanel
 	private final ItemIdService itemIds;
 	private final BetterMonsterExamineConfig config;
 
+	/**
+	 * Group labels the user has collapsed. Held on the card rather than the table so the choice
+	 * survives the re-renders that land as the page and the bulk item-id map arrive.
+	 */
+	private final Set<String> collapsed = new HashSet<>();
+
 	public DropsCard(ItemManager itemManager, ClientThread clientThread, ItemIdService itemIds, BetterMonsterExamineConfig config)
 	{
 		this.itemManager = itemManager;
@@ -136,22 +144,35 @@ public class DropsCard extends JPanel
 			{
 				add(Box.createRigidArea(new Dimension(0, 6)));
 			}
+
+			JPanel body = new JPanel();
+			body.setLayout(new BoxLayout(body, BoxLayout.Y_AXIS));
+			body.setBackground(getBackground());
+			body.setAlignmentX(LEFT_ALIGNMENT);
+
 			// A labelled group means the wiki splits this monster's drops by location or combat level;
-			// band it so its tables can't be read as the monster's drops as a whole.
-			if (!group.getLabel().isEmpty())
+			// band it so its tables can't be read as the monster's drops as a whole. The band collapses
+			// its own tables, so the location you aren't fighting can be folded away.
+			String label = group.getLabel();
+			if (!label.isEmpty())
 			{
-				add(groupBand(group.getLabel()));
-				add(Box.createRigidArea(new Dimension(0, 3)));
+				add(groupBand(label, body));
+				// Inside the body, so the gap folds away with it.
+				body.add(Box.createRigidArea(new Dimension(0, 3)));
 			}
+
 			List<DropTable.Section> sections = group.getSections();
 			for (int i = 0; i < sections.size(); i++)
 			{
 				if (i > 0)
 				{
-					add(Box.createRigidArea(new Dimension(0, 6)));
+					body.add(Box.createRigidArea(new Dimension(0, 6)));
 				}
-				add(sectionBlock(sections.get(i), cells));
+				body.add(sectionBlock(sections.get(i), cells));
 			}
+
+			body.setVisible(label.isEmpty() || !collapsed.contains(label));
+			add(body);
 		}
 
 		fill(cells);
@@ -179,14 +200,57 @@ public class DropsCard extends JPanel
 	 * The band naming a group of drop tables — the location or combat level the sections under it are
 	 * scoped to ("Warriors' Guild Basement", "Level 99 drops"). Deliberately heavier than a section
 	 * header: it's the difference between a drop this monster has and one only its other variant has.
+	 * Clicking it collapses {@code body}, so the location you aren't fighting can be folded away.
 	 */
-	private JComponent groupBand(String label)
+	private JComponent groupBand(String label, JPanel body)
 	{
 		JPanel band = new JPanel(new BorderLayout());
 		band.setBackground(ColorScheme.DARK_GRAY_COLOR);
 		band.setBorder(new EmptyBorder(5, 8, 5, 8));
+		band.setCursor(new Cursor(Cursor.HAND_CURSOR));
 		band.add(wrappedLabel(label.toUpperCase(Locale.ROOT), Color.WHITE, false), BorderLayout.CENTER);
+
+		// Plain ASCII: the RuneScape font has no glyph for the usual chevrons/triangles.
+		JLabel toggle = new JLabel(collapsed.contains(label) ? "+" : "-");
+		toggle.setFont(FontManager.getRunescapeBoldFont());
+		toggle.setForeground(Color.WHITE);
+		toggle.setBorder(new EmptyBorder(0, 6, 0, 0));
+		band.add(toggle, BorderLayout.EAST);
+
 		capHeight(band);
+
+		band.addMouseListener(new MouseAdapter()
+		{
+			@Override
+			public void mousePressed(MouseEvent e)
+			{
+				boolean nowCollapsed = body.isVisible();
+				if (nowCollapsed)
+				{
+					collapsed.add(label);
+				}
+				else
+				{
+					collapsed.remove(label);
+				}
+				body.setVisible(!nowCollapsed);
+				toggle.setText(nowCollapsed ? "+" : "-");
+				revalidate();
+				repaint();
+			}
+
+			@Override
+			public void mouseEntered(MouseEvent e)
+			{
+				band.setBackground(ColorScheme.DARKER_GRAY_HOVER_COLOR);
+			}
+
+			@Override
+			public void mouseExited(MouseEvent e)
+			{
+				band.setBackground(ColorScheme.DARK_GRAY_COLOR);
+			}
+		});
 		return band;
 	}
 
