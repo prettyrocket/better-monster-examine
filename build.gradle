@@ -51,6 +51,21 @@ tasks.register('run', JavaExec) {
 	args "--developer-mode", "--debug"
 }
 
+// Like 'run', but against a throwaway RuneLite home (build/dev-home) instead of your real ~/.runelite.
+// RuneLite derives every dir from user.home, so overriding it gives a pristine profile: none of your
+// side-loaded hub plugins load and only the default-on built-ins start — a much lighter client for
+// testing this plugin in isolation. The home persists between runs (build/ is gitignored), so this
+// plugin's caches are only re-downloaded once.
+tasks.register('runClean', JavaExec) {
+	classpath = sourceSets.test.runtimeClasspath
+	mainClass = 'com.bettermonsterexamine.BetterMonsterExaminePluginTest'
+
+	def devHome = layout.buildDirectory.dir('dev-home').get().asFile
+	doFirst { devHome.mkdirs() }
+	jvmArgs "-ea", "-Duser.home=${devHome}"
+	args "--developer-mode", "--debug"
+}
+
 // Dev-only: render the in-game overlay states (all tabs / each highlight mode) to PNGs.
 tasks.register('previewOverlay', JavaExec) {
 	group = 'verification'

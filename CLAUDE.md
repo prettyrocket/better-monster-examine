@@ -35,7 +35,8 @@ A GitHub **Release** (publish a release, or run the `release.yml` workflow manua
 ## Commands
 
 ```
-./gradlew run            # launch a dev RuneLite client with the plugin loaded
+./gradlew run            # launch a dev RuneLite client with the plugin loaded (uses your real ~/.runelite profile)
+./gradlew runClean       # same, but a clean throwaway profile (build/dev-home) — no side-loaded hub plugins; lighter client
 ./gradlew build          # compile, run checkstyle, run tests
 ./gradlew test           # tests only
 ./gradlew checkstyleMain checkstyleTest   # lint only
