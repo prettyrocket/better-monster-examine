@@ -70,7 +70,13 @@ public final class PanelStyle
 	/** A full-width, wrapping value label (used for examine text and the attribute list). */
 	public static JLabel wrappedLabel(String text, Color color, boolean italic)
 	{
-		JLabel l = new JLabel("<html><body style='width:" + WRAP_WIDTH + "px'>"
+		return wrappedLabel(text, color, italic, WRAP_WIDTH);
+	}
+
+	/** A wrapping label at a given width, for rows that share their line with something else. */
+	public static JLabel wrappedLabel(String text, Color color, boolean italic, int width)
+	{
+		JLabel l = new JLabel("<html><body style='width:" + width + "px'>"
 			+ StatFormat.esc(text).replace("\n", "<br>") + "</body></html>");
 		Font f = FontManager.getRunescapeSmallFont();
 		l.setFont(italic ? f.deriveFont(Font.ITALIC) : f);
