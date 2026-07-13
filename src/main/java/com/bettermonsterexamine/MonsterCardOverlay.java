@@ -259,15 +259,17 @@ class MonsterCardOverlay extends Overlay
 	{
 		Color white = Color.WHITE;
 		// The combat level is already shown in the title row, so it's not repeated here.
-		List<String> levels = stats.combatLevels();
+		// A level Bucket can't carry arrives as a range ("270-360"); the overlay has no tooltips, so
+		// the footnote explaining it is panel-only.
+		List<MonsterStats.StatField> levels = stats.combatLevels();
 		if (!levels.isEmpty())
 		{
-			rows.add(Row.stat(icons.hitpointsIcon, "Hitpoints", levels.get(0), white));
-			rows.add(Row.stat(icons.attackIcon, "Attack", levels.get(1), white));
-			rows.add(Row.stat(icons.strengthIcon, "Strength", levels.get(2), white));
-			rows.add(Row.stat(icons.defenceIcon, "Defence", levels.get(3), white));
-			rows.add(Row.stat(icons.magicIcon, "Magic", levels.get(4), white));
-			rows.add(Row.stat(icons.rangedIcon, "Ranged", levels.get(5), white));
+			rows.add(Row.stat(icons.hitpointsIcon, "Hitpoints", levels.get(0).value(), white));
+			rows.add(Row.stat(icons.attackIcon, "Attack", levels.get(1).value(), white));
+			rows.add(Row.stat(icons.strengthIcon, "Strength", levels.get(2).value(), white));
+			rows.add(Row.stat(icons.defenceIcon, "Defence", levels.get(3).value(), white));
+			rows.add(Row.stat(icons.magicIcon, "Magic", levels.get(4).value(), white));
+			rows.add(Row.stat(icons.rangedIcon, "Ranged", levels.get(5).value(), white));
 		}
 		rows.add(Row.kv("Speed", stats.attackSpeed(), white));
 		rows.add(Row.kvWrap("Style", stats.attackStyle(), white));
