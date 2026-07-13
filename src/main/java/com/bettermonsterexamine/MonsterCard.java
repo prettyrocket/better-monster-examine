@@ -144,12 +144,12 @@ class MonsterCard extends JPanel
 		add(Box.createRigidArea(new Dimension(0, 6)));
 
 		// Combat stats: the monster's six levels as an icon-over-value row
-		List<String> combat = stats.combatLevels();
+		List<MonsterStats.StatField> combat = stats.combatLevels();
 		if (!combat.isEmpty())
 		{
-			add(gridBlock("Combat stats",
+			add(levelBlock("Combat stats",
 				new BufferedImage[]{icons.hitpointsIcon, icons.attackIcon, icons.strengthIcon, icons.defenceIcon, icons.magicIcon, icons.rangedIcon},
-				combat.toArray(new String[0]),
+				combat,
 				new String[]{"Hitpoints", "Attack", "Strength", "Defence", "Magic", "Ranged"}));
 			add(Box.createRigidArea(new Dimension(0, 6)));
 		}
@@ -266,6 +266,25 @@ class MonsterCard extends JPanel
 			add(Box.createRigidArea(new Dimension(0, 6)));
 			add(slayer);
 		}
+	}
+
+	/**
+	 * The combat-levels grid. Same cells as {@link #gridBlock}, but a level can carry a footnote:
+	 * the few Bucket can't hold render as the wiki's range ("270-360"), and the hover then explains
+	 * why — Vardorvis' Defence counting down as he loses HP is a mechanic, not a typo.
+	 */
+	private JPanel levelBlock(String title, BufferedImage[] cellIcons, List<MonsterStats.StatField> levels,
+		String[] labels)
+	{
+		String[] values = new String[levels.size()];
+		String[] tips = new String[levels.size()];
+		for (int i = 0; i < levels.size(); i++)
+		{
+			MonsterStats.StatField level = levels.get(i);
+			values[i] = level.value();
+			tips[i] = level.tooltip() == null ? labels[i] : labels[i] + " — " + level.tooltip();
+		}
+		return gridBlock(title, cellIcons, values, tips);
 	}
 
 	/** A titled block whose stats are laid out as icon-over-value cells (wiki style). */
