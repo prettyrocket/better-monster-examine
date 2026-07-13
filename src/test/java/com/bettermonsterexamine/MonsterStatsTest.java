@@ -2,6 +2,7 @@ package com.bettermonsterexamine;
 
 import com.google.gson.Gson;
 import java.util.List;
+import java.util.Map;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -196,9 +197,34 @@ public class MonsterStatsTest
 
 		assertEquals("7x7, Draconic, Undead", s.sizeAttr());
 		assertEquals(6, s.combatLevels().size());
-		assertEquals("600", s.combatLevels().get(0));
+		assertEquals("600", s.combatLevels().get(0).value());
+		assertEquals("255", s.combatLevels().get(2).value());
 		assertNull(s.poisonous());
 		assertNull(s.xpBonus());
 		assertNull(s.cannon());
+	}
+
+	/**
+	 * Vardorvis: Bucket omits a level it can't type as an integer, so the row arrives with no
+	 * strength_level at all and the level came out as a dash. The range the service recovers from
+	 * the page takes its place, and the wiki's footnote explains why Defence counts *down*.
+	 */
+	@Test
+	public void aLevelBucketDroppedRendersTheWikiRangeAndItsFootnote()
+	{
+		MonsterData m = monster("{\"hitpoints\":700,\"attack_level\":280,\"magic_level\":215}");
+		String note = "Scales linearly with Vardorvis' remaining HP.";
+		m.setLevelRanges(Map.of(
+			"strength_level", new InfoboxLevels.LevelText("270-360", note),
+			"defence_level", new InfoboxLevels.LevelText("215-145", note)));
+
+		MonsterStats s = stats(m);
+
+		assertEquals("270-360", s.combatLevels().get(2).value());
+		assertEquals("215-145", s.combatLevels().get(3).value());
+		assertEquals(note, s.combatLevels().get(3).tooltip());
+		// Levels Bucket does carry are untouched, and a genuinely absent one still reads as a dash.
+		assertEquals("280", s.combatLevels().get(1).value());
+		assertEquals("—", s.combatLevels().get(5).value());
 	}
 }

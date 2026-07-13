@@ -4,6 +4,7 @@ import com.google.gson.annotations.SerializedName;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.Setter;
@@ -42,16 +43,31 @@ public class MonsterData
 	private int hitpoints;
 	private int size;
 
+	// Boxed, unlike every other number here: Bucket types these as INTEGER, so a level the wiki
+	// writes as a range (Vardorvis' HP-scaling Strength/Defence) fails the module's tonumber() and
+	// the field is omitted from the row altogether. Null therefore means "Bucket dropped or lacks
+	// it" — distinct from a real 0 (a monster that genuinely cannot use the skill) — which is what
+	// lets the service tell the two apart and gap-fill only the former. See InfoboxLevels.
+	@Getter(AccessLevel.NONE)
 	@SerializedName("attack_level")
-	private int attackLevel;
+	private Integer attackLevel;
+	@Getter(AccessLevel.NONE)
 	@SerializedName("strength_level")
-	private int strengthLevel;
+	private Integer strengthLevel;
+	@Getter(AccessLevel.NONE)
 	@SerializedName("defence_level")
-	private int defenceLevel;
+	private Integer defenceLevel;
+	@Getter(AccessLevel.NONE)
 	@SerializedName("magic_level")
-	private int magicLevel;
+	private Integer magicLevel;
+	@Getter(AccessLevel.NONE)
 	@SerializedName("ranged_level")
-	private int rangedLevel;
+	private Integer rangedLevel;
+
+	/** The levels the wiki carries but Bucket dropped, by Bucket field name; filled by the service. */
+	@Getter(AccessLevel.NONE)
+	@Setter
+	private Map<String, InfoboxLevels.LevelText> levelRanges = Collections.emptyMap();
 
 	@SerializedName("attack_bonus")
 	private int attackBonus;
@@ -144,6 +160,48 @@ public class MonsterData
 	private String membersOnly;
 
 	// ---- derived accessors -------------------------------------------------
+
+	public int getAttackLevel()
+	{
+		return attackLevel == null ? 0 : attackLevel;
+	}
+
+	public int getStrengthLevel()
+	{
+		return strengthLevel == null ? 0 : strengthLevel;
+	}
+
+	public int getDefenceLevel()
+	{
+		return defenceLevel == null ? 0 : defenceLevel;
+	}
+
+	public int getMagicLevel()
+	{
+		return magicLevel == null ? 0 : magicLevel;
+	}
+
+	public int getRangedLevel()
+	{
+		return rangedLevel == null ? 0 : rangedLevel;
+	}
+
+	/**
+	 * True when Bucket carries no value at all for one of the five combat levels — either the wiki
+	 * leaves it blank, or (Vardorvis) its value is a range Bucket's INTEGER column can't hold. Only
+	 * these few monsters are worth fetching a page for; see {@link InfoboxLevels}.
+	 */
+	boolean hasMissingLevel()
+	{
+		return attackLevel == null || strengthLevel == null || defenceLevel == null
+			|| magicLevel == null || rangedLevel == null;
+	}
+
+	/** The wiki's value for a level Bucket dropped (e.g. {@code "270-360"}), or null if none. */
+	InfoboxLevels.LevelText getLevelRange(String bucketField)
+	{
+		return levelRanges.get(bucketField);
+	}
 
 	/** The first (primary) NPC id, or 0 when the row carries none — used for the DPS-calc deep link. */
 	public int getId()

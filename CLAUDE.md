@@ -96,6 +96,20 @@ scraping — cut over to Bucket in #26.)
    `<br>` line breaks, and `[[wikilinks]]`. This is what makes the old `{{template}}` max-hit
    garbage render correctly (#24).
 
+4. **`InfoboxLevels`** (static, unit-tested) — recovers the levels Bucket **structurally cannot
+   carry**. The wiki's `Module:Infobox Monster` writes each level with `tonumber()`, so a level that
+   isn't a plain integer yields `nil` and the field is **omitted from the row entirely** — there is
+   no Bucket field to widen or clean. **Vardorvis is the only monster in the bestiary this costs**
+   (his Strength and Defence are HP-scaling ranges, `|str1 = 270-<br />360`), and it's why they
+   rendered as a dash. So the five level fields on `MonsterData` are **boxed** (`Integer`): null =
+   "Bucket has no value", distinct from a real `0`. On load, `MonsterDataService` takes the rows with
+   such a hole (~18 pages bestiary-wide), pulls their wikitext in **one batched `action=query`**,
+   parses the infobox here, and re-indexes — so stats stay **offline-first and synchronously
+   rendered**, cached beside the dataset (`level-ranges.json`) and refreshed with it. The other ~17
+   are genuinely blank on the wiki and must keep rendering a dash; only a non-integer value is
+   recovered. The wiki's own `{{efn}}` footnote rides along as the panel tooltip — a Defence that
+   counts *down* (215→145) otherwise reads as a bug.
+
 The view-model (`MonsterStats`, from #23) sits between the DTO and both renderers: it resolves
 which fields to show and their colour roles, so the panel and overlay stay in sync. Three fields
 the old wikitext layer showed have **no usable Bucket source and were dropped** (aggressive,
@@ -215,6 +229,7 @@ state reads on the client thread (`clientThread.invoke`), Swing updates on the E
 
 JUnit 4 under `src/test/java`. Pure-logic tests exercise the static helpers and the view-model:
 `MonsterDataServiceTest` (name matching), `WikiSanitizerTest` (the Bucket field-cleaning shapes),
+`InfoboxLevelsTest` (recovering a level Bucket dropped; blanks stay a dash),
 `MonsterStatsTest` (view-model semantics), `StatFormatTest`, `StatColorsTest`, `LookupHistoryTest`.
 The `loot/` layer adds `DropPageServiceTest` (the rendered-page HTML parse: rows inherit their
 `<h3>/<h4>` section, the Drops region stops at the next `<h2>`, entity/footnote cleaning),

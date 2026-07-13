@@ -274,16 +274,33 @@ final class MonsterStats
 	// ---- Stat grids (values only; renderers supply icons + labels) -----------
 
 	/** Combat levels in icon order [Hitpoints, Attack, Strength, Defence, Magic, Ranged]. */
-	List<String> combatLevels()
+	List<StatField> combatLevels()
 	{
-		List<String> v = new ArrayList<>(6);
-		v.add(StatFormat.num(m.getHitpoints()));
-		v.add(StatFormat.num(m.getAttackLevel()));
-		v.add(StatFormat.num(m.getStrengthLevel()));
-		v.add(StatFormat.num(m.getDefenceLevel()));
-		v.add(StatFormat.num(m.getMagicLevel()));
-		v.add(StatFormat.num(m.getRangedLevel()));
+		List<StatField> v = new ArrayList<>(6);
+		v.add(level(m.getHitpoints(), null));
+		v.add(level(m.getAttackLevel(), "attack_level"));
+		v.add(level(m.getStrengthLevel(), "strength_level"));
+		v.add(level(m.getDefenceLevel(), "defence_level"));
+		v.add(level(m.getMagicLevel(), "magic_level"));
+		v.add(level(m.getRangedLevel(), "ranged_level"));
 		return v;
+	}
+
+	/**
+	 * One combat level. Bucket's INTEGER columns cannot hold a level the wiki writes as a range —
+	 * Vardorvis' Strength and Defence scale with his remaining HP ("270-360") — so the service
+	 * recovers those from the page wikitext and they arrive here as text instead of a number. The
+	 * wiki's own footnote rides along as the tooltip: a Defence that counts <em>down</em> (215-145)
+	 * otherwise reads as a bug rather than the mechanic it is.
+	 */
+	private StatField level(int value, String bucketField)
+	{
+		InfoboxLevels.LevelText range = bucketField == null ? null : m.getLevelRange(bucketField);
+		if (value <= 0 && range != null)
+		{
+			return new StatField(range.getValue(), ColourRole.NEUTRAL, range.getNote());
+		}
+		return new StatField(StatFormat.num(value), ColourRole.NEUTRAL, null);
 	}
 
 	/** Offensive bonuses in icon order [Attack, Strength, Magic, Magic dmg, Ranged, Ranged str]. */
