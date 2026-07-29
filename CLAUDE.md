@@ -103,9 +103,9 @@ scraping — cut over to Bucket in #26.)
    (his Strength and Defence are HP-scaling ranges, `|str1 = 270-<br />360`), and it's why they
    rendered as a dash. So the five level fields on `MonsterData` are **boxed** (`Integer`): null =
    "Bucket has no value", distinct from a real `0`. On load, `MonsterDataService` takes the rows with
-   such a hole (~18 pages bestiary-wide), pulls their wikitext in **one batched `action=query`**,
+   such a hole (~50 pages bestiary-wide), pulls their wikitext in **one batched `action=query`**,
    parses the infobox here, and re-indexes — so stats stay **offline-first and synchronously
-   rendered**, cached beside the dataset (`level-ranges.json`) and refreshed with it. The other ~17
+   rendered**, cached beside the dataset (`level-ranges.json`) and refreshed with it. The rest
    are genuinely blank on the wiki and must keep rendering a dash; only a non-integer value is
    recovered. The wiki's own `{{efn}}` footnote rides along as the panel tooltip — a Defence that
    counts *down* (215→145) otherwise reads as a bug.

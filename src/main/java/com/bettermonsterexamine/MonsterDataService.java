@@ -233,9 +233,9 @@ public class MonsterDataService
 	// as a dash. There is no Bucket field to fix, so the values come from the page wikitext instead.
 	//
 	// Rather than make stats fetch per monster — which would cost the whole layer its offline-first,
-	// synchronous render — we only ever look at rows Bucket left a hole in (~18 pages bestiary-wide,
+	// synchronous render — we only ever look at rows Bucket left a hole in (~50 pages bestiary-wide,
 	// the rest of which are genuinely blank on the wiki and rightly stay a dash) and pull those in
-	// one batched query, cached and refreshed alongside the dataset itself.
+	// batched queries, cached and refreshed alongside the dataset itself.
 
 	/** The Bucket row key a parsed page's levels are matched back to: name + version anchor. */
 	private static String levelKey(String name, String versionAnchor)
