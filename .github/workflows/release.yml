@@ -33,13 +33,42 @@ jobs:
           ref: master
 
       - name: Sync the fork's master with upstream
-        # create-pull-request force-pushes the branch (rebased onto upstream master) to the
-        # fork. If the fork trails upstream, that push carries upstream commits that touch
-        # .github/workflows/ — which GitHub rejects for a PAT lacking `workflow` scope. Bringing
-        # the fork's master up to date first means only the manifest commit is new on the push.
+        # create-pull-request force-pushes the branch (rebased onto upstream master) to the fork.
+        # Any upstream commit the fork lacks rides along on that push, and when one touches
+        # .github/workflows/ GitHub rejects the whole push for a PAT without `workflow` scope.
+        # Fast-forwarding the fork first means only the manifest commit is new.
+        #
+        # The catch (#59): this fast-forward is itself a workflow-file change, so it needs the very
+        # scope it exists to work around — the guard cannot guard itself. When that happens the only
+        # fixes are out-of-band, so say so precisely instead of dying on a bare 422. A sync that
+        # fails but wasn't needed is not fatal, so check before giving up.
         env:
           GH_TOKEN: ${{ secrets.PLUGIN_HUB_TOKEN }}
-        run: gh api -X POST repos/prettyrocket/plugin-hub/merge-upstream -f branch=master
+          FORK: prettyrocket/plugin-hub
+          UPSTREAM: runelite/plugin-hub
+        run: |
+          set -uo pipefail
+          if gh api -X POST "repos/$FORK/merge-upstream" -f branch=master; then
+            echo "Fork fast-forwarded to upstream master."
+            exit 0
+          fi
+
+          echo "::warning::Could not fast-forward $FORK automatically."
+          fork_sha="$(gh api "repos/$FORK/commits/master" --jq .sha 2>/dev/null || echo unknown)"
+          up_sha="$(gh api "repos/$UPSTREAM/commits/master" --jq .sha 2>/dev/null || echo unknown)"
+          if [ "$fork_sha" = "$up_sha" ] && [ "$fork_sha" != unknown ]; then
+            echo "Fork is already level with upstream ($fork_sha); the sync was unnecessary. Continuing."
+            exit 0
+          fi
+
+          # Only the first line of ::error:: becomes the annotation, so keep the remedy on it and
+          # put the detail in plain output below.
+          echo "::error::Fork trails upstream, so the release push would carry upstream workflow files and be rejected. Grant PLUGIN_HUB_TOKEN the 'workflow' scope, or fast-forward the fork by hand, then re-run this workflow."
+          echo "Fork $FORK is at $fork_sha"
+          echo "Upstream $UPSTREAM is at $up_sha"
+          echo "Manual fast-forward (needs a token with 'workflow' scope):"
+          echo "  gh api -X POST repos/$FORK/merge-upstream -f branch=master"
+          exit 1
 
       - name: Pin manifest to the released commit
         run: |
