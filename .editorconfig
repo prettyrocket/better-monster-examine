@@ -1,0 +1,21 @@
+root = true
+
+# Baseline for every file. Line endings are intentionally left to .gitattributes
+# (text=auto), so this file only owns indentation, charset, and whitespace.
+[*]
+charset = utf-8
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+# Java + Gradle indent with tabs — checkstyle fails the build on space indents.
+[*.{java,gradle}]
+indent_style = tab
+
+# YAML (CI, dependabot) and JSON require spaces.
+[*.{yml,yaml,json}]
+indent_style = space
+indent_size = 2
+
+# Markdown: two trailing spaces are a hard line break, so don't strip them.
+[*.md]
+trim_trailing_whitespace = false

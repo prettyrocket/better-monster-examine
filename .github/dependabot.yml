@@ -11,3 +11,16 @@ updates:
       github-actions:
         patterns:
           - "*"
+
+  - package-ecosystem: "gradle"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "build"
+    # The RuneLite client uses a dynamic `latest.release` version and is not
+    # managed here; this covers the pinned deps (Lombok, JUnit).
+    groups:
+      gradle:
+        patterns:
+          - "*"
