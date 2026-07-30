@@ -1,6 +1,7 @@
 package com.bettermonsterexamine;
 
 import com.google.gson.annotations.SerializedName;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -253,6 +254,79 @@ public class MonsterData
 	boolean isOwnPage()
 	{
 		return pageName != null && name != null && pageName.equalsIgnoreCase(name);
+	}
+
+	/**
+	 * True when this row's page marks it as a form removed from the game — the wiki keeps
+	 * {@code (historical)} pages for old sprites and stats no player can meet.
+	 *
+	 * <p>Deliberately narrow. It keys on the specific marker rather than on merely having a
+	 * parenthetical, because most parentheses mean a live location: {@code Goblin (Vault of War)} and
+	 * {@code Goblin (God Wars Dungeon)} are distinct, fightable monsters. {@code Realm of Memories} is
+	 * <b>not</b> counted either — despite reading like a flashback it is live quest content, and those
+	 * 19 rows carry real hitpoints and real spawn ids, so a player can fight and right-click them (#63).
+	 */
+	boolean isNonLive()
+	{
+		if (pageName == null)
+		{
+			return false;
+		}
+		String p = pageName.toLowerCase(Locale.ROOT);
+		return p.endsWith("(historical)") || p.endsWith("(removed)");
+	}
+
+	/**
+	 * A fingerprint of everything the plugin actually renders, so variants differing only in
+	 * appearance collapse together. The wiki carries a row per sprite — thirteen Hill Giants at level
+	 * 28 with identical stats, 124 Guards — and picking between them changes nothing a player can act
+	 * on (#62). Deliberately excludes the display label, ids and source page: those are what differ
+	 * between rows that are otherwise the same monster.
+	 */
+	String statKey()
+	{
+		return new StringBuilder(160)
+			.append(level).append('|').append(hitpoints).append('|').append(size).append('|')
+			.append(attackLevel).append('|').append(strengthLevel).append('|').append(defenceLevel)
+			.append('|').append(magicLevel).append('|').append(rangedLevel).append('|')
+			.append(attackBonus).append('|').append(strengthBonus).append('|')
+			.append(magicAttackBonus).append('|').append(magicDamageBonus).append('|')
+			.append(rangeAttackBonus).append('|').append(rangeStrengthBonus).append('|')
+			.append(stabAttackBonus).append('|').append(slashAttackBonus).append('|')
+			.append(crushAttackBonus).append('|')
+			.append(stabDefenceBonus).append('|').append(slashDefenceBonus).append('|')
+			.append(crushDefenceBonus).append('|').append(magicDefenceBonus).append('|')
+			.append(rangeDefenceBonus).append('|').append(lightRangeDefenceBonus).append('|')
+			.append(standardRangeDefenceBonus).append('|').append(heavyRangeDefenceBonus).append('|')
+			.append(flatArmour).append('|').append(attackSpeed).append('|')
+			.append(experienceBonus).append('|').append(weaknessElement).append('|')
+			.append(weaknessPercent).append('|').append(poisonous).append('|')
+			.append(cannonImmune).append('|').append(thrallImmune).append('|').append(burnImmune)
+			.append('|').append(freezeResistance).append('|').append(slayerLevel).append('|')
+			.append(attackStyles).append('|').append(maxHit).append('|').append(attributes)
+			.toString();
+	}
+
+	/**
+	 * Absorb another row's spawn ids when it collapses into this one. Without this, dropping a
+	 * duplicate would strand its ids (1,005 of them bestiary-wide) and right-clicking those spawns
+	 * would miss the id index entirely and fall back to the far weaker name+level match.
+	 */
+	void absorbIds(List<String> more)
+	{
+		if (more == null || more.isEmpty())
+		{
+			return;
+		}
+		List<String> merged = ids == null ? new ArrayList<>() : new ArrayList<>(ids);
+		for (String s : more)
+		{
+			if (!merged.contains(s))
+			{
+				merged.add(s);
+			}
+		}
+		ids = merged;
 	}
 
 	/**
