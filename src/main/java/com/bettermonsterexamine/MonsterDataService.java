@@ -614,9 +614,25 @@ public class MonsterDataService
 					label = group.size() == 1 ? "" : tier(m);
 				}
 			}
+			else if (counts.get(base) == 1)
+			{
+				label = base;
+			}
+			else if (!m.pageQualifier().isEmpty())
+			{
+				// Anchors collide across pages too, and there the combat level is no help: the wiki
+				// names these "Level 13", so appending the level restated it and the rows fell through
+				// to "Level 13 #2"/"#3". The page is what actually distinguishes them (#60).
+				label = base + " (" + m.pageQualifier() + ")";
+			}
+			else if (spansPages && m.isOwnPage())
+			{
+				// The monster's own article owns the bare anchor; the foreign rows carry a qualifier.
+				label = base;
+			}
 			else
 			{
-				label = counts.get(base) == 1 ? base : base + " (" + tierShort(m) + ")";
+				label = base + " (" + tierShort(m) + ")";
 			}
 			// Guarantee uniqueness even if level/hitpoints also coincide.
 			String unique = label;
