@@ -5,6 +5,7 @@ import javax.swing.SwingUtilities;
 
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
+import java.util.Collections;
 
 import com.bettermonsterexamine.loot.DropPageService;
 import com.bettermonsterexamine.loot.DropsCard;
@@ -34,6 +35,7 @@ import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
 import net.runelite.api.events.MenuEntryAdded;
 import net.runelite.client.util.ImageUtil;
+import net.runelite.client.util.LinkBrowser;
 
 @Slf4j
 @PluginDescriptor(
@@ -185,6 +187,10 @@ public class BetterMonsterExaminePlugin extends Plugin
 				// normal plugins rather than down with transient raid panels.
 				.priority(5)
 				.panel(monsterStatsPanel)
+				// Right-clicking the sidebar icon reaches the tracker without opening the panel, and
+				// costs no panel space; the footer link covers people who never try a right-click.
+				.popup(Collections.singletonMap("Report an issue",
+					() -> LinkBrowser.browse(BetterMonsterExaminePanel.ISSUES_URL)))
 				.build();
 
 		clientToolbar.addNavigation(navButton);

@@ -5,9 +5,12 @@ import com.bettermonsterexamine.loot.DropsCard;
 import com.bettermonsterexamine.loot.ItemIdService;
 import com.google.gson.Gson;
 import java.awt.BorderLayout;
+import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.Insets;
 import java.awt.Rectangle;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 import java.util.List;
 import java.util.Locale;
@@ -33,6 +36,7 @@ import net.runelite.client.ui.PluginPanel;
 import net.runelite.client.ui.components.IconTextField;
 import net.runelite.client.ui.components.materialtabs.MaterialTab;
 import net.runelite.client.ui.components.materialtabs.MaterialTabGroup;
+import net.runelite.client.util.LinkBrowser;
 
 /**
  * The searchable monster side panel. Owns the search field, the Recent/Favorites views, and the
@@ -48,6 +52,8 @@ public class BetterMonsterExaminePanel extends PluginPanel
 	private static final String CONFIG_GROUP = "bettermonsterexamine";
 	private static final String HISTORY_KEY = "historyData";
 	private static final String HINT = "Search a monster, or right-click one in game → Stats.";
+	/** Where the footer link and the nav button's right-click entry both send a reporter. */
+	static final String ISSUES_URL = "https://github.com/prettyrocket/better-monster-examine/issues";
 
 	private final MonsterDataService data;
 	private final BetterMonsterExamineConfig config;
@@ -198,8 +204,51 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		scroll.setAlignmentX(LEFT_ALIGNMENT);
 		add(scroll);
 
+		// Outside the scroll pane, so it stays put rather than scrolling away under a long drop list:
+		// a player who hits a wrong stat or a missing drop should never have to hunt for where to say so.
+		add(Box.createRigidArea(new Dimension(0, 6)));
+		add(issuesLink());
+
 		// Fresh panel opens into Recent by default (or the plain hint when history is disabled).
 		showDefaultView();
+	}
+
+	/**
+	 * The panel's footer: a quiet link to the issue tracker. Kept deliberately understated — it should
+	 * be findable the moment someone wants it and ignorable the rest of the time.
+	 */
+	private static JComponent issuesLink()
+	{
+		// A flag, not a bug: the RuneScape font has no bug glyph — 🐛 rasterises to a scribble and 🪲 to
+		// a tofu box (verified, as with the disclosure triangles, by rendering them). ⚑ reads as "flag
+		// this" and covers a feature request too, where ⚠ would look like the panel warning you.
+		JLabel link = new JLabel("⚑ Report a bug or request a feature");
+		link.setFont(FontManager.getRunescapeSmallFont());
+		link.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+		link.setToolTipText(ISSUES_URL);
+		link.setCursor(new Cursor(Cursor.HAND_CURSOR));
+		link.setAlignmentX(LEFT_ALIGNMENT);
+		link.addMouseListener(new MouseAdapter()
+		{
+			@Override
+			public void mousePressed(MouseEvent e)
+			{
+				LinkBrowser.browse(ISSUES_URL);
+			}
+
+			@Override
+			public void mouseEntered(MouseEvent e)
+			{
+				link.setForeground(ColorScheme.BRAND_ORANGE);
+			}
+
+			@Override
+			public void mouseExited(MouseEvent e)
+			{
+				link.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+			}
+		});
+		return link;
 	}
 
 	// ------------------------------------------------------------------ search
