@@ -39,13 +39,13 @@ jobs:
         # Fast-forwarding the fork first means only the manifest commit is new.
         #
         # The catch (#59): this fast-forward is itself a workflow-file change, so it needs the very
-        # scope it exists to work around — the guard cannot guard itself. When that happens the only
-        # fixes are out-of-band, so say so precisely instead of dying on a bare 422. A sync that
-        # fails but wasn't needed is not fatal, so check before giving up.
+        # scope it exists to work around — the guard cannot guard itself. So the fork is meant to be
+        # synced before publishing (see CLAUDE.md) and this step is really a fail-fast: it keeps the
+        # attempt in case the token ever gains the scope, and otherwise says what to run. Removing it
+        # would only push the same failure deeper into create-pull-request as a raw git error.
         env:
           GH_TOKEN: ${{ secrets.PLUGIN_HUB_TOKEN }}
           FORK: prettyrocket/plugin-hub
-          UPSTREAM: runelite/plugin-hub
         run: |
           set -uo pipefail
           if gh api -X POST "repos/$FORK/merge-upstream" -f branch=master; then
@@ -53,21 +53,10 @@ jobs:
             exit 0
           fi
 
-          echo "::warning::Could not fast-forward $FORK automatically."
-          fork_sha="$(gh api "repos/$FORK/commits/master" --jq .sha 2>/dev/null || echo unknown)"
-          up_sha="$(gh api "repos/$UPSTREAM/commits/master" --jq .sha 2>/dev/null || echo unknown)"
-          if [ "$fork_sha" = "$up_sha" ] && [ "$fork_sha" != unknown ]; then
-            echo "Fork is already level with upstream ($fork_sha); the sync was unnecessary. Continuing."
-            exit 0
-          fi
-
-          # Only the first line of ::error:: becomes the annotation, so keep the remedy on it and
-          # put the detail in plain output below.
-          echo "::error::Fork trails upstream, so the release push would carry upstream workflow files and be rejected. Grant PLUGIN_HUB_TOKEN the 'workflow' scope, or fast-forward the fork by hand, then re-run this workflow."
-          echo "Fork $FORK is at $fork_sha"
-          echo "Upstream $UPSTREAM is at $up_sha"
-          echo "Manual fast-forward (needs a token with 'workflow' scope):"
-          echo "  gh api -X POST repos/$FORK/merge-upstream -f branch=master"
+          # Only the first line of ::error:: becomes the annotation, so keep the remedy on it.
+          echo "::error::Could not fast-forward $FORK, so the release push would carry upstream workflow files and be rejected. Run 'gh repo sync $FORK' locally, then re-run this workflow."
+          echo "The fork must be level with upstream before a release; see the Releases section of CLAUDE.md."
+          echo "Durable fix: grant PLUGIN_HUB_TOKEN the 'workflow' scope so this step can sync on its own (#59)."
           exit 1
 
       - name: Pin manifest to the released commit

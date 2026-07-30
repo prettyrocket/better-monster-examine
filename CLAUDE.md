@@ -32,6 +32,21 @@ A GitHub **Release** (publish a release, or run the `release.yml` workflow manua
 `PLUGIN_HUB_TOKEN` secret) that pins `plugins/better-monster-examine` to the released commit.
 **No version bump** — the hub tracks the pinned commit, not a version string.
 
+**Sync the fork first** — this is a required step, not housekeeping:
+
+```
+gh repo sync prettyrocket/plugin-hub    # before publishing a release
+```
+
+The release branch is built on **upstream** master and force-pushed to the fork, so every upstream
+commit the fork lacks rides along on that push — and GitHub rejects the whole push when one of them
+touches `.github/workflows/`, which upstream changes often. Keeping the fork level means only the
+manifest commit is new, so the push is always clean. `release.yml` tries the fast-forward itself, but
+that call needs the `workflow` scope `PLUGIN_HUB_TOKEN` doesn't have (the fast-forward is itself a
+workflow-file change, so the guard can't guard itself — #59). A local `gh` token with the scope can do
+it, which is why the manual step works. Skip it and the release fails after tagging, with the fix
+printed in the log.
+
 ## Commands
 
 ```
