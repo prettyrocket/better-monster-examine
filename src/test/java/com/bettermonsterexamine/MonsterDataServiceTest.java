@@ -165,6 +165,40 @@ public class MonsterDataServiceTest
 	}
 
 	@Test
+	public void collidingAnchorsAreSplitByPageNotByLevel()
+	{
+		// The wiki names Goblin's variants "Level 13" on three different pages, so the old
+		// anchor-plus-level fallback restated the level and fell through to "#2"/"#3".
+		MonsterData main = monster("{\"name\":\"Goblin\",\"page_name\":\"Goblin\","
+			+ "\"version_anchor\":\"Level 13\",\"combat_level\":13,\"hitpoints\":20}");
+		MonsterData vault = monster("{\"name\":\"Goblin\",\"page_name\":\"Goblin (Vault of War)\","
+			+ "\"version_anchor\":\"Level 13\",\"combat_level\":13,\"hitpoints\":20}");
+		MonsterData gwd = monster("{\"name\":\"Goblin\",\"page_name\":\"Goblin (God Wars Dungeon)\","
+			+ "\"version_anchor\":\"Level 13\",\"combat_level\":13,\"hitpoints\":20}");
+
+		MonsterDataService.assignVersions(Arrays.asList(main, vault, gwd));
+
+		assertEquals("Level 13", main.getVersion());
+		assertEquals("Level 13 (Vault of War)", vault.getVersion());
+		assertEquals("Level 13 (God Wars Dungeon)", gwd.getVersion());
+	}
+
+	@Test
+	public void collidingAnchorsOnOnePageStillFallBackToTheLevel()
+	{
+		// No page to distinguish them, so the pre-existing level fallback must stay.
+		MonsterData a = monster("{\"name\":\"Guard\",\"page_name\":\"Guard\","
+			+ "\"version_anchor\":\"Falador\",\"combat_level\":21,\"hitpoints\":22}");
+		MonsterData b = monster("{\"name\":\"Guard\",\"page_name\":\"Guard\","
+			+ "\"version_anchor\":\"Falador\",\"combat_level\":22,\"hitpoints\":22}");
+
+		MonsterDataService.assignVersions(Arrays.asList(a, b));
+
+		assertEquals("Falador (lvl 21)", a.getVersion());
+		assertEquals("Falador (lvl 22)", b.getVersion());
+	}
+
+	@Test
 	public void aCachePredatingPageNameCountsAsStale()
 	{
 		// Parses fine, but carries none of the data the current build reasons over — serving it
