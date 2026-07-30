@@ -58,8 +58,12 @@ import net.runelite.http.api.item.ItemPrice;
  */
 public class DropsCard extends JPanel
 {
-	/** On-screen size of each item icon (native OSRS item sprites are ~36×32). */
-	private static final int ICON_BOX = 28;
+	// The icon cell must be at least the native OSRS item sprite (36×32), because a JLabel centres its
+	// icon and the row then crops what doesn't fit. At 28×28 that shaved 4px off each side and 2px off
+	// the top and bottom — and ItemManager draws the stack quantity into those very top-left pixels, so
+	// the tops of the numbers were cut off (#52).
+	private static final int ICON_W = 36;
+	private static final int ICON_H = 32;
 	/** Wrap width for a band's title, leaving its line's remainder to the collapse controls. */
 	private static final int BAND_TITLE_WIDTH = 130;
 
@@ -775,7 +779,7 @@ public class DropsCard extends JPanel
 	private JLabel iconLabel(String itemName)
 	{
 		JLabel l = new JLabel();
-		Dimension d = new Dimension(ICON_BOX, ICON_BOX);
+		Dimension d = new Dimension(ICON_W, ICON_H);
 		l.setPreferredSize(d);
 		l.setMinimumSize(d);
 		l.setMaximumSize(d);
