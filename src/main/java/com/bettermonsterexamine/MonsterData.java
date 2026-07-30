@@ -33,6 +33,13 @@ public class MonsterData
 	@Getter(AccessLevel.NONE)
 	@SerializedName("default_version")
 	private String defaultVersion;
+	/**
+	 * The wiki page this row came from. Distinct from {@link #name}: an infobox can set a name that
+	 * isn't its page title, so two pages (a boss article and its quest fight) can emit rows sharing
+	 * one name. Used to tell the monster's own article from a page that merely mentions it.
+	 */
+	@SerializedName("page_name")
+	private String pageName;
 
 	/** Unique display label among a name's variants; assigned by the service after indexing. */
 	@Setter
@@ -237,6 +244,36 @@ public class MonsterData
 	public boolean isDefaultVersion()
 	{
 		return defaultVersion != null;
+	}
+
+	/**
+	 * True when this row comes from the monster's own article rather than a page that reuses its
+	 * name (a quest fight, an instance). Such a row is the one a player means by the bare name.
+	 */
+	boolean isOwnPage()
+	{
+		return pageName != null && name != null && pageName.equalsIgnoreCase(name);
+	}
+
+	/**
+	 * How the wiki tells this row's page apart from the monster's own article — a title's
+	 * parenthetical ({@code "Shellbane gryphon (Troubled Tortugans)"} → {@code "Troubled
+	 * Tortugans"}), else the whole title. Empty when the page is the monster's own article, or
+	 * when Bucket gave no page.
+	 */
+	String pageQualifier()
+	{
+		if (pageName == null || isOwnPage())
+		{
+			return "";
+		}
+		int open = pageName.lastIndexOf('(');
+		int close = pageName.lastIndexOf(')');
+		if (open >= 0 && close > open)
+		{
+			return pageName.substring(open + 1, close).trim();
+		}
+		return pageName.trim();
 	}
 
 	public boolean isMembersOnly()
