@@ -102,6 +102,7 @@ public class MonsterDataService
 
 	private void init()
 	{
+		deleteLegacyCache();
 		// Load the gap-filled levels first, so the very first index() already applies them.
 		readLevelRanges();
 
@@ -130,7 +131,12 @@ public class MonsterDataService
 
 		// Use the cache immediately if it's recent; otherwise (missing or stale) pull a fresh
 		// copy. A stale cache still serves until the refresh lands, so we stay usable offline.
-		boolean fresh = haveCache && (System.currentTimeMillis() - CACHE_FILE.lastModified()) < MAX_AGE.toMillis();
+		// A cache written before a field was added to FIELDS is stale whatever its age: it parses
+		// fine but silently lacks the data the current build reasons over, so the feature that
+		// needed the field looks broken until MAX_AGE elapses (#60).
+		boolean fresh = haveCache
+			&& (System.currentTimeMillis() - CACHE_FILE.lastModified()) < MAX_AGE.toMillis()
+			&& hasCurrentFields(rows);
 		if (fresh)
 		{
 			log.debug("Cache hit. Skipping monster data fetch.");
@@ -145,6 +151,29 @@ public class MonsterDataService
 		{
 			log.debug("{} Fetching monster data.", haveCache ? "Cache stale." : "Cache miss.");
 			fetch();
+		}
+	}
+
+	/**
+	 * True when cached rows carry the fields this build expects. Only {@code page_name} is checked:
+	 * every Bucket row has a source page, so its total absence means the cache predates the field
+	 * being selected. Cheap and self-maintaining — a later field addition just moves this probe.
+	 */
+	static boolean hasCurrentFields(List<MonsterData> rows)
+	{
+		return rows != null && rows.stream().anyMatch(m -> m != null && m.getPageName() != null);
+	}
+
+	/** Remove the pre-Bucket Weirdgloop dataset left in every upgraded user's cache dir. */
+	private static void deleteLegacyCache()
+	{
+		try
+		{
+			Files.deleteIfExists(new File(CACHE_DIR, "monsters.json").toPath());
+		}
+		catch (IOException e)
+		{
+			log.debug("Failed to remove the legacy monsters.json cache", e);
 		}
 	}
 

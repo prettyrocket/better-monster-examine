@@ -2,8 +2,10 @@ package com.bettermonsterexamine;
 
 import com.google.gson.Gson;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import org.junit.Test;
@@ -160,5 +162,30 @@ public class MonsterDataServiceTest
 		MonsterDataService.assignVersions(Arrays.asList(only));
 
 		assertEquals("", only.getVersion());
+	}
+
+	@Test
+	public void aCachePredatingPageNameCountsAsStale()
+	{
+		// Parses fine, but carries none of the data the current build reasons over — serving it
+		// would make the fix look broken until MAX_AGE elapsed.
+		List<MonsterData> old = Arrays.asList(
+			monster("{\"name\":\"Cow\",\"combat_level\":2}"),
+			monster("{\"name\":\"Goblin\",\"combat_level\":2}"));
+
+		assertFalse(MonsterDataService.hasCurrentFields(old));
+	}
+
+	@Test
+	public void aCacheCarryingPageNameIsUsable()
+	{
+		assertTrue(MonsterDataService.hasCurrentFields(Arrays.asList(monster(BOSS), monster(QUEST))));
+	}
+
+	@Test
+	public void anEmptyOrNullCacheIsNotMistakenForCurrent()
+	{
+		assertFalse(MonsterDataService.hasCurrentFields(null));
+		assertFalse(MonsterDataService.hasCurrentFields(Collections.emptyList()));
 	}
 }
