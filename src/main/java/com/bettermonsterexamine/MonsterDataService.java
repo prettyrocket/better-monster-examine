@@ -530,10 +530,11 @@ public class MonsterDataService
 			name.computeIfAbsent(m.getName().toLowerCase(Locale.ROOT), k -> new ArrayList<>()).add(m);
 		}
 
-		// Give each variant a unique display label within its name group.
-		for (List<MonsterData> group : name.values())
+		// Reduce each name to the variants a player can actually act on, then label what's left.
+		for (Map.Entry<String, List<MonsterData>> e : name.entrySet())
 		{
-			assignVersions(group);
+			e.setValue(relevantVariants(e.getValue()));
+			assignVersions(e.getValue());
 		}
 
 		// Index by spawn id (each row may carry several). When ids collide across rows (e.g. Duke
@@ -567,6 +568,58 @@ public class MonsterDataService
 		this.byId = id;
 		this.byName = name;
 		log.debug("Indexed {} monster rows ({} unique names)", all.size(), name.size());
+	}
+
+	/**
+	 * Reduce a name's rows to the variants worth offering, in dataset order.
+	 *
+	 * <p>The wiki carries a row per <b>sprite</b>, so a quarter of the bestiary is variants that differ
+	 * in nothing the plugin renders: thirteen Hill Giants at level 28, 124 Guards, seventeen Crystal
+	 * implings. Those collapse onto one entry by {@link MonsterData#statKey()} (#62). It also keeps
+	 * {@code (historical)} pages for forms removed from the game, which are dropped (#63) — but only
+	 * when a live sibling remains, since a name whose every row is historical (Barbarian woman) would
+	 * otherwise disappear from search entirely, which is worse than showing an outdated form.
+	 *
+	 * <p>The survivor of a collapse <b>absorbs the others' spawn ids</b>, so right-clicking any of
+	 * those spawns still resolves by id rather than falling through to the name+level guess.
+	 */
+	static List<MonsterData> relevantVariants(List<MonsterData> group)
+	{
+		List<MonsterData> live = group.stream().filter(m -> !m.isNonLive()).collect(Collectors.toList());
+		List<MonsterData> pool = live.isEmpty() ? group : live;
+
+		Map<String, MonsterData> kept = new LinkedHashMap<>();
+		for (MonsterData m : pool)
+		{
+			MonsterData existing = kept.get(m.statKey());
+			if (existing == null)
+			{
+				kept.put(m.statKey(), m);
+				continue;
+			}
+			// Same monster, different sprite. Keep the more canonical row so the surviving label is
+			// the one a player would recognise, and carry the loser's ids across.
+			if (outranks(m, existing))
+			{
+				m.absorbIds(existing.getIds());
+				kept.put(m.statKey(), m);
+			}
+			else
+			{
+				existing.absorbIds(m.getIds());
+			}
+		}
+		return new ArrayList<>(kept.values());
+	}
+
+	/** Which of two stat-identical rows should represent them: Bucket's default form, else its own article. */
+	private static boolean outranks(MonsterData candidate, MonsterData incumbent)
+	{
+		if (candidate.isDefaultVersion() != incumbent.isDefaultVersion())
+		{
+			return candidate.isDefaultVersion();
+		}
+		return candidate.isOwnPage() && !incumbent.isOwnPage();
 	}
 
 	/**
@@ -781,14 +834,18 @@ public class MonsterDataService
 	/** The version string of the variant whose combat level matches {@code combatLevel}, or null. */
 	public String variantVersionForLevel(String name, int combatLevel)
 	{
-		for (MonsterData v : variantsForName(name))
+		List<MonsterData> atLevel = variantsForName(name).stream()
+			.filter(v -> v.getLevel() == combatLevel)
+			.collect(Collectors.toList());
+		if (atLevel.isEmpty())
 		{
-			if (v.getLevel() == combatLevel)
-			{
-				return v.getVersion();
-			}
+			return null;
 		}
-		return null;
+		// Several variants can share a level with genuinely different stats — Alchemical Hydra's four
+		// phases at 426, Abyssal Sire, Araxxor — so returning the first match showed whichever row
+		// Bucket happened to order first. Reuse the default-variant ranking instead (#62).
+		MonsterData best = defaultVariant(atLevel);
+		return best != null ? best.getVersion() : atLevel.get(0).getVersion();
 	}
 
 	private static boolean isStandard(MonsterData m)

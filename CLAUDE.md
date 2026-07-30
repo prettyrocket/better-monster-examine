@@ -92,6 +92,17 @@ scraping — cut over to Bucket in #26.)
    rather than a bare `#N`, and `defaultVariant` sets foreign rows aside so a bare name means the
    monster's **own article** (#60). Groups from a single page are untouched. `assignVersions` and
    `defaultVariant` are pure statics, unit-tested like `matchNames`.
+   Before labelling, **`relevantVariants`** reduces each name to the variants a player can act on:
+   the wiki carries a row per **sprite**, so ~25% of the bestiary differs in nothing rendered
+   (Guard 124→26, Crystal impling 17→1, Hill Giant 14→2). Those collapse by `MonsterData.statKey()`
+   and the survivor **absorbs the others' spawn ids**, so right-click still resolves by id (#62).
+   `(historical)` rows are dropped as removed content, but only when a live sibling remains — a name
+   that is entirely historical (Barbarian woman) would otherwise vanish from search (#63). Note
+   `Realm of Memories` is **live quest content** despite the name, and is kept.
+   `variantVersionForLevel` (the right-click fallback when a spawn id isn't in the dataset) ranks its
+   level matches through `defaultVariant` rather than taking the first: 240 name+level buckets hold
+   rows with genuinely different stats (Alchemical Hydra's four phases at 426), so first-match showed
+   whichever row Bucket ordered first.
 
 2. **`MonsterData`** — a flat Gson DTO mapped to the Bucket `infobox_monster` schema, capturing
    **all** fields (Lombok `@Getter`), including ones not yet rendered (slayer level/XP/category,
