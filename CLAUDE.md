@@ -85,6 +85,13 @@ scraping — cut over to Bucket in #26.)
    display `version` from its `version_anchor`, disambiguated with the combat level when blank or
    colliding, and `default_version` drives the default-variant pick. Accessors return empty until
    the async load lands. `matchNames` is a pure static helper kept unit-testable without the dataset.
+   A name group can also span **pages** — an infobox may set a name that isn't its page title, so a
+   boss article and its quest fight both emit rows named "Shellbane gryphon" with a blank anchor and
+   the same combat level, leaving nothing to tell them apart. So `page_name` is selected too: a
+   blank-anchor row from a foreign page is labelled from that page's qualifier ("Troubled Tortugans")
+   rather than a bare `#N`, and `defaultVariant` sets foreign rows aside so a bare name means the
+   monster's **own article** (#60). Groups from a single page are untouched. `assignVersions` and
+   `defaultVariant` are pure statics, unit-tested like `matchNames`.
 
 2. **`MonsterData`** — a flat Gson DTO mapped to the Bucket `infobox_monster` schema, capturing
    **all** fields (Lombok `@Getter`), including ones not yet rendered (slayer level/XP/category,
