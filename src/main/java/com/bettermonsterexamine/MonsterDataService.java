@@ -61,7 +61,7 @@ public class MonsterDataService
 
 	/** Bucket fields fetched for every monster — the rendered set plus extras captured for later use. */
 	private static final String[] FIELDS = {
-		"name", "id", "version_anchor", "default_version", "combat_level", "hitpoints", "size",
+		"name", "id", "page_name", "version_anchor", "default_version", "combat_level", "hitpoints", "size",
 		"attack_level", "strength_level", "defence_level", "magic_level", "ranged_level",
 		"attack_bonus", "strength_bonus", "magic_attack_bonus", "magic_damage_bonus",
 		"range_attack_bonus", "range_strength_bonus",
@@ -545,14 +545,26 @@ public class MonsterDataService
 	 * when it's present and unique, otherwise disambiguated with the combat level (or hitpoints when
 	 * the level is unknown) — e.g. {@code "Awake (lvl 758)"} or {@code "Level 100"}. A lone blank
 	 * anchor stays "" (the plain "Standard" form).
+	 *
+	 * <p>A name group can also span <b>pages</b>: an infobox may set a name that isn't its page
+	 * title, so a boss article and its quest fight both emit rows named "Shellbane gryphon". Those
+	 * rows share a blank anchor and often the same combat level, so the level alone can't separate
+	 * them — the row from the monster's own article keeps the plain form and the others are labelled
+	 * from their page ("Troubled Tortugans"), which is how the wiki itself tells them apart. Without
+	 * this they collided into "Level 235" / "Level 235 #2" — labels found nowhere on the wiki (#60).
 	 */
-	private static void assignVersions(List<MonsterData> group)
+	static void assignVersions(List<MonsterData> group)
 	{
 		Map<String, Integer> counts = new HashMap<>();
 		for (MonsterData m : group)
 		{
 			counts.merge(baseLabel(m), 1, Integer::sum);
 		}
+		// Only worth qualifying by page when the group actually spans pages *and* the monster's own
+		// article is among them; otherwise every row would gain a label with nothing to contrast against.
+		long ownPageRows = group.stream().filter(MonsterData::isOwnPage).count();
+		boolean spansPages = ownPageRows > 0
+			&& group.stream().anyMatch(m -> !m.pageQualifier().isEmpty());
 		Set<String> used = new HashSet<>();
 		for (MonsterData m : group)
 		{
@@ -560,7 +572,18 @@ public class MonsterDataService
 			String label;
 			if (base.isEmpty())
 			{
-				label = group.size() == 1 ? "" : tier(m);
+				if (spansPages)
+				{
+					// The own article keeps the plain form — but only while it's the lone row from
+					// that page, since "" bypasses the uniqueness guard below.
+					label = m.isOwnPage()
+						? (ownPageRows == 1 ? "" : tier(m))
+						: m.pageQualifier();
+				}
+				else
+				{
+					label = group.size() == 1 ? "" : tier(m);
+				}
 			}
 			else
 			{
@@ -657,9 +680,21 @@ public class MonsterDataService
 	 * Pick a sensible default from a name's variants: the Bucket-flagged default form with data;
 	 * else the plain (unlabelled) form with data; else the highest-level variant with data; failing
 	 * that, any standard form, else the first. Pure over its argument.
+	 *
+	 * <p>When the group spans pages, rows from pages that merely reuse the name (a quest fight) are
+	 * set aside first: a bare name means the monster's own article, and a foreign row could otherwise
+	 * win on combat level (#60). A group entirely from one page is unaffected.
 	 */
-	public MonsterData defaultVariant(List<MonsterData> variants)
+	static MonsterData defaultVariant(List<MonsterData> variants)
 	{
+		List<MonsterData> ownPage = variants.stream()
+			.filter(m -> m.isOwnPage() && hasData(m))
+			.collect(Collectors.toList());
+		if (!ownPage.isEmpty() && ownPage.size() < variants.size())
+		{
+			variants = ownPage;
+		}
+
 		for (MonsterData m : variants)
 		{
 			if (m.isDefaultVersion() && hasData(m))
