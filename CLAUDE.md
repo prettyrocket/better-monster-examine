@@ -271,7 +271,9 @@ deliver it. The only channel is the core **`PluginMessage`** event — namespace
 `Map<String, Object>` of **core types only** (no shared DTOs).
 
 - **`NotEnoughRunesLink`** — the outbound half: posts `notenoughrunes`/`displayItemById` with an
-  `Integer` `itemId`, which Not Enough Runes already subscribes to. Presence is decided by matching
+  `Integer` `itemId`, which Not Enough Runes already subscribes to, plus `openUses = true` to land on
+  its Uses tab (**agreed but not read on NER's side yet** — an unknown key is ignored, so it switches
+  on with her release rather than needing both plugins to ship together). Presence is decided by matching
   the plugin class **by name** (`com.notenoughrunes.NotEnoughRunesPlugin`) and then
   **`isPluginActive`** — *not* `isPluginEnabled`, which only reads the "start on boot" flag, whereas
   event-bus registration happens in `startPlugin`. Resolved per call, so installing or enabling NER

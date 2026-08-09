@@ -28,6 +28,13 @@ public class NotEnoughRunesLink
 	private static final String NAMESPACE = "notenoughrunes";
 	private static final String DISPLAY_ITEM_BY_ID = "displayItemById";
 	private static final String ITEM_ID = "itemId";
+	/**
+	 * Asks NER to land on its Uses tab: arriving from a drop, the question is almost always "what is
+	 * this for?". Agreed with NER's author but <strong>not read on her side yet</strong> — an unknown
+	 * key is ignored by her handler, so sending it now costs nothing and means the behaviour switches
+	 * on with her release instead of needing both plugins to ship together.
+	 */
+	private static final String OPEN_USES = "openUses";
 
 	private final EventBus eventBus;
 	private final PluginManager pluginManager;
@@ -65,6 +72,7 @@ public class NotEnoughRunesLink
 		log.debug("Handing item {} to Not Enough Runes", itemId);
 		Map<String, Object> data = new HashMap<>();
 		data.put(ITEM_ID, itemId);
+		data.put(OPEN_USES, true);
 		eventBus.post(new PluginMessage(NAMESPACE, DISPLAY_ITEM_BY_ID, data));
 	}
 
