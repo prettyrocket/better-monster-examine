@@ -704,10 +704,13 @@ public class DropsCard extends JPanel
 		return hint("Wiki");
 	}
 
-	/** The tooltip's closing line: where a click lands, dimmed so it reads under the name and prices. */
-	private static String hint(String label)
+	/**
+	 * The tooltip's closing line: where the primary click opens. Dimmed and italic so it reads as an
+	 * aside under the name and prices rather than as more item data.
+	 */
+	private static String hint(String target)
 	{
-		return "<br><span style='color:#9a9a9a'>" + label + "</span></html>";
+		return "<br><span style='color:#9a9a9a'><i>Opens in " + target + "</i></span></html>";
 	}
 
 	private static String esc(String s)
