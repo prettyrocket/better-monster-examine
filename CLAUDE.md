@@ -258,7 +258,30 @@ Item icon / GE price / High Alch come from the **RuneLite client by item id** (z
   renders per `statsRenderTarget`, **Drops** opens the side panel to its Drops tab. Each entry shows
   only when it can act — Stats needs the overlay target or (panel target + `enableSidePanel`); Drops
   needs `enableSidePanel`. A second Stats click on the same monster toggles the overlay off. The
-  overlay updates on the **client thread** (it draws there); the side panel on the EDT.
+  overlay updates on the **client thread** (it draws there); the side panel on the EDT. An
+  **Integrations** section holds the cross-plugin links — currently `notEnoughRunesLink` (see below).
+
+### Cross-plugin links (`NotEnoughRunesLink`, #69 · inbound #70)
+
+Plugin-hub plugins each load in their own `PluginHubClassLoader` **parented to the client loader**, so
+any two hub plugins are **siblings and cannot see each other's classes**. That rules out the obvious
+routes: `@PluginDependency` takes a `Class` literal, and a shared event type would be a different
+`Class` object on each side, so `EventBus.post` (which dispatches on exact class identity) would never
+deliver it. The only channel is the core **`PluginMessage`** event — namespace, name, and a
+`Map<String, Object>` of **core types only** (no shared DTOs).
+
+- **`NotEnoughRunesLink`** — the outbound half: posts `notenoughrunes`/`displayItemById` with an
+  `Integer` `itemId`, which Not Enough Runes already subscribes to. Presence is decided by matching
+  the plugin class **by name** (`com.notenoughrunes.NotEnoughRunesPlugin`) and then
+  **`isPluginActive`** — *not* `isPluginEnabled`, which only reads the "start on boot" flag, whereas
+  event-bus registration happens in `startPlugin`. Resolved per call, so installing or enabling NER
+  mid-session works without a restart. Posting when NER is absent is harmless (no subscribers), so the
+  check only gates what the UI *offers*.
+- **`DropsCard` click roles** — with the link on, primary click hands the item to NER and right-click
+  opens the wiki; with it off, NER not running, or the item id unresolved, the wiki stays on the
+  primary click. Decided **per click**, never baked in at render. The id is armed inside `fill()`,
+  where it is already resolved on the client thread, rather than in `makeClickable` — which is why
+  `PriceCell` carries a mutable `itemId` (EDT-only, so unsynchronised).
 
 ### Threading model (important)
 
