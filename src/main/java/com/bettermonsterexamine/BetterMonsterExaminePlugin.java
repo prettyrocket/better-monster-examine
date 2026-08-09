@@ -329,10 +329,19 @@ public class BetterMonsterExaminePlugin extends Plugin
 			log.debug("displayMonster for {} arrived before the dataset loaded", name);
 		}
 
-		log.debug("Opening {} (version {}, {}) for a plugin request", name, version, request.isDrops() ? "drops" : "stats");
+		// Logged from inside the hop, where the outcome is actually known: a name that resolves to
+		// nothing still opens the panel, and "opening X" for a monster we never found is the kind of
+		// line that sends you hunting for a bug on the wrong side of the plugin boundary.
 		SwingUtilities.invokeLater(() ->
 		{
-			panel.openMonsterRequested(name, version, request.isDrops());
+			if (panel.openMonsterRequested(name, version, request.isDrops()))
+			{
+				log.debug("Opened {} (version {}, {}) for a plugin request", name, version, request.isDrops() ? "drops" : "stats");
+			}
+			else
+			{
+				log.debug("No monster named {}; showing it as a search instead", name);
+			}
 			clientToolbar.openPanel(navButton);
 		});
 	}
