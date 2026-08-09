@@ -2,6 +2,7 @@ package com.bettermonsterexamine;
 
 import java.util.HashMap;
 import java.util.Map;
+import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.eventbus.EventBus;
 import net.runelite.client.events.PluginMessage;
 import net.runelite.client.plugins.Plugin;
@@ -19,6 +20,7 @@ import net.runelite.client.plugins.PluginManager;
  * <p>Posting when NER is absent is harmless (the event simply has no subscribers), so
  * {@link #isActive()} exists to decide what the UI should <em>offer</em>, not to make the post safe.
  */
+@Slf4j
 public class NotEnoughRunesLink
 {
 	/** Matched by name because the class itself can't be referenced across the classloader boundary. */
@@ -60,6 +62,7 @@ public class NotEnoughRunesLink
 		{
 			return;
 		}
+		log.debug("Handing item {} to Not Enough Runes", itemId);
 		Map<String, Object> data = new HashMap<>();
 		data.put(ITEM_ID, itemId);
 		eventBus.post(new PluginMessage(NAMESPACE, DISPLAY_ITEM_BY_ID, data));
