@@ -279,6 +279,19 @@ deliver it. The only channel is the core **`PluginMessage`** event — namespace
   event-bus registration happens in `startPlugin`. Resolved per call, so installing or enabling NER
   mid-session works without a restart. Posting when NER is absent is harmless (no subscribers), so the
   check only gates what the UI *offers*.
+- **`MonsterLookupMessage`** — the inbound half: parses a `bettermonsterexamine`/`displayMonster`
+  request (`name` + optional `level`, `npcId`, `tab`) into a value object, type-checking every read so a
+  malformed message from another plugin is ignored rather than thrown on the event bus. Numbers are read
+  as `Number`, unknown keys ignored, so the contract can grow without both sides shipping in step. Pure,
+  so it's unit-tested. The plugin's `onPluginMessage` resolves `npcId` → `name` + `level` → `name` and is
+  **ungated by config** — a switch we own but the sender can't read would leave a live, correct-looking
+  button in *their* UI that silently does nothing. Always renders to the **side panel**, ignoring
+  `statsRenderTarget` (the overlay is for in-game NPC context).
+- **`BetterMonsterExaminePanel.openMonsterRequested`** — stricter than `openMonster`, which auto-selects
+  the best fuzzy hit (`matchNames` floats an exact match to the top). That's right for a name read off
+  the game and wrong for one that crossed a plugin boundary, where a near-miss would silently show the
+  wrong monster. Only an exact name opens a card; anything else goes into the search field, whose
+  document listener shows live results without selecting.
 - **`DropsCard` click roles** — with the link on, primary click hands the item to NER and right-click
   opens the wiki; with it off, NER not running, or the item id unresolved, the wiki stays on the
   primary click. Decided **per click**, never baked in at render. The id is armed inside `fill()`,
@@ -305,4 +318,6 @@ The `loot/` layer adds `DropPageServiceTest` (the rendered-page HTML parse: rows
 `DropTableTest` (group → section grouping in wiki page order; like-named sections in different groups
 stay distinct), `ItemIdServiceTest` (the `item_id` name→id parse), `DropRowTest` (the `isAlways`
 helper) and `DropFormatTest` (the drops display shaping).
+`MonsterLookupMessageTest` covers the inbound cross-plugin contract — precedence, defaults, and above
+all that a wrongly-typed or empty payload is ignored rather than thrown.
 `BetterMonsterExaminePluginTest` and `OverlayPreview` are dev launchers, not assertions.

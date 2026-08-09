@@ -417,6 +417,27 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		}
 	}
 
+	/**
+	 * Open a monster asked for by another plugin. Deliberately stricter than {@link #openMonster}: that
+	 * one auto-selects the best fuzzy hit, which is right for a name read off the game but wrong for one
+	 * that crossed a plugin boundary, where a near-miss would silently show the wrong monster. Only an
+	 * exact name opens a card; anything else goes in the search box so the user picks from the results.
+	 *
+	 * @return true when the name resolved and a card is showing
+	 */
+	public boolean openMonsterRequested(String name, String version, boolean drops)
+	{
+		if (data.variantsForName(name).isEmpty())
+		{
+			// Setting the text fires the document listener, which shows live results without selecting
+			// anything — and leaves the name visible, so a miss reads as "no match" rather than a no-op.
+			searchField.setText(name);
+			return false;
+		}
+		openMonster(name, version, drops);
+		return currentSelection != null;
+	}
+
 	/** Render the Drops tab for the current selection — the wiki's sections, or a loading hint. */
 	private void renderDrops()
 	{

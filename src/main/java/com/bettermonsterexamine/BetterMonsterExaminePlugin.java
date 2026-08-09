@@ -35,6 +35,7 @@ import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.eventbus.EventBus;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
+import net.runelite.client.events.PluginMessage;
 import net.runelite.api.events.MenuEntryAdded;
 import net.runelite.client.util.ImageUtil;
 import net.runelite.client.util.LinkBrowser;
@@ -280,6 +281,60 @@ public class BetterMonsterExaminePlugin extends Plugin
 				SwingUtilities.invokeLater(panel::onHistoryConfigChanged);
 			}
 		}
+	}
+
+	/**
+	 * Another plugin asking us to open a monster — see {@link MonsterLookupMessage} for the contract.
+	 * Deliberately ungated by config: a switch we own but the sender can't read would leave a live,
+	 * correct-looking button in their UI that silently does nothing.
+	 */
+	@Subscribe
+	public void onPluginMessage(PluginMessage event)
+	{
+		if (!MonsterLookupMessage.NAMESPACE.equals(event.getNamespace())
+			|| !MonsterLookupMessage.DISPLAY_MONSTER.equals(event.getName()))
+		{
+			return;
+		}
+
+		MonsterLookupMessage request = MonsterLookupMessage.of(event.getData());
+		if (request == null)
+		{
+			log.debug("Ignoring displayMonster with neither a name nor an npcId");
+			return;
+		}
+
+		// An id resolves to one variant outright; a name has to be matched, and its level (when given)
+		// picks between the variants sharing it.
+		MonsterData byId = request.getNpcId() == null ? null : dataService.getById(request.getNpcId());
+		String name = byId != null ? byId.getName() : request.getName();
+		if (name == null)
+		{
+			log.debug("Ignoring displayMonster for unknown npc id {}", request.getNpcId());
+			return;
+		}
+		String version = byId != null ? byId.getVersion()
+			: (request.getLevel() == null ? null : dataService.variantVersionForLevel(name, request.getLevel()));
+
+		BetterMonsterExaminePanel panel = monsterStatsPanel;
+		if (panel == null || navButton == null)
+		{
+			// Renders to the side panel regardless of statsRenderTarget: the overlay is for in-game NPC
+			// context, and a request from another panel belongs in ours.
+			log.debug("Ignoring displayMonster for {}: the side panel is disabled", name);
+			return;
+		}
+		if (!dataService.isLoaded())
+		{
+			log.debug("displayMonster for {} arrived before the dataset loaded", name);
+		}
+
+		log.debug("Opening {} (version {}, {}) for a plugin request", name, version, request.isDrops() ? "drops" : "stats");
+		SwingUtilities.invokeLater(() ->
+		{
+			panel.openMonsterRequested(name, version, request.isDrops());
+			clientToolbar.openPanel(navButton);
+		});
 	}
 
 	@Subscribe
