@@ -2,6 +2,7 @@ package com.bettermonsterexamine.loot;
 
 import com.bettermonsterexamine.BetterMonsterExamineConfig;
 import com.bettermonsterexamine.HighlightMode;
+import com.bettermonsterexamine.NotEnoughRunesLink;
 import static com.bettermonsterexamine.PanelStyle.block;
 import static com.bettermonsterexamine.PanelStyle.capHeight;
 import static com.bettermonsterexamine.PanelStyle.headerLabel;
@@ -94,6 +95,7 @@ public class DropsCard extends JPanel
 	private final ClientThread clientThread;
 	private final ItemIdService itemIds;
 	private final BetterMonsterExamineConfig config;
+	private final NotEnoughRunesLink ner;
 
 	/**
 	 * The group bands and section blocks the user has collapsed, by {@link #keyOf} key. Held on the card
@@ -105,12 +107,13 @@ public class DropsCard extends JPanel
 	/** The table on screen, so a collapse-all can re-render through {@link #show} rather than by hand. */
 	private DropTable current;
 
-	public DropsCard(ItemManager itemManager, ClientThread clientThread, ItemIdService itemIds, BetterMonsterExamineConfig config)
+	public DropsCard(ItemManager itemManager, ClientThread clientThread, ItemIdService itemIds, BetterMonsterExamineConfig config, NotEnoughRunesLink ner)
 	{
 		this.itemManager = itemManager;
 		this.clientThread = clientThread;
 		this.itemIds = itemIds;
 		this.config = config;
+		this.ner = ner;
 		setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
 		setAlignmentX(LEFT_ALIGNMENT);
 	}
@@ -123,6 +126,12 @@ public class DropsCard extends JPanel
 		private final boolean noted;
 		private final JLabel icon;
 		private final JComponent row;
+		/**
+		 * The client item id, once {@link #fill} has resolved it — the handle the Not Enough Runes
+		 * hand-off needs. Null until then (and for good on an item the client can't place). Written
+		 * and read only on the EDT, so it needs no synchronisation.
+		 */
+		private Integer itemId;
 
 		private PriceCell(String itemName, int quantity, boolean noted, JLabel icon, JComponent row)
 		{
@@ -479,8 +488,9 @@ public class DropsCard extends JPanel
 
 		if (row.getItem() != null && !row.getItem().isEmpty())
 		{
-			cells.add(new PriceCell(row.getItem(), iconQuantity(qty), isNoted(qty), icon, r));
-			makeClickable(r, row.getItem());
+			PriceCell cell = new PriceCell(row.getItem(), iconQuantity(qty), isNoted(qty), icon, r);
+			cells.add(cell);
+			makeClickable(r, row.getItem(), cell);
 		}
 		return r;
 	}
@@ -531,8 +541,13 @@ public class DropsCard extends JPanel
 		}
 	}
 
-	/** Make the whole row open the item's OSRS Wiki page on click (hand cursor + hover tooltip). */
-	private static void makeClickable(JComponent row, String item)
+	/**
+	 * Make the whole row act on its item (hand cursor + hover tooltip). Normally left-click opens the
+	 * item's OSRS Wiki page. With the Not Enough Runes link on, the two swap: left-click hands the item
+	 * to that plugin and right-click opens the wiki. The swap is resolved per click, not baked in here,
+	 * so the wiki stays the fallback whenever NER isn't running or the item id never resolved.
+	 */
+	private void makeClickable(JComponent row, String item, PriceCell cell)
 	{
 		String url = "https://oldschool.runescape.wiki/w/" + item.replace(' ', '_');
 		MouseAdapter open = new MouseAdapter()
@@ -540,7 +555,19 @@ public class DropsCard extends JPanel
 			@Override
 			public void mouseClicked(MouseEvent e)
 			{
+				boolean toNer = ner.isActive() && cell.itemId != null;
 				if (e.getButton() == MouseEvent.BUTTON1)
+				{
+					if (toNer)
+					{
+						ner.displayItem(cell.itemId);
+					}
+					else
+					{
+						LinkBrowser.browse(url);
+					}
+				}
+				else if (e.getButton() == MouseEvent.BUTTON3 && toNer)
 				{
 					LinkBrowser.browse(url);
 				}
@@ -595,7 +622,25 @@ public class DropsCard extends JPanel
 		{
 			sb.append("<br>").append(line);
 		}
-		return sb.append(wikiHint()).toString();
+		return sb.append(clickHint()).toString();
+	}
+
+	/**
+	 * Where the row's primary click goes, for the tooltip's last line. Only priced rows get this — an
+	 * item the client couldn't place keeps the plain wiki hint, which is what its click still does.
+	 * "(no NER)" is the one that earns its keep: it separates a deliberate fallback from a dead click.
+	 */
+	private String clickHint()
+	{
+		if (ner.isActive())
+		{
+			return hint("NER");
+		}
+		if (ner.isUnavailable())
+		{
+			return hint("Wiki (no NER)");
+		}
+		return wikiHint();
 	}
 
 	/**
@@ -656,7 +701,16 @@ public class DropsCard extends JPanel
 
 	private static String wikiHint()
 	{
-		return "<br><span style='color:#9a9a9a'>Click to open on the OSRS Wiki</span></html>";
+		return hint("Wiki");
+	}
+
+	/**
+	 * The tooltip's closing line: where the primary click opens. Dimmed and italic so it reads as an
+	 * aside under the name and prices rather than as more item data.
+	 */
+	private static String hint(String target)
+	{
+		return "<br><span style='color:#9a9a9a'><i>Opens in " + target + "</i></span></html>";
 	}
 
 	private static String esc(String s)
@@ -707,6 +761,9 @@ public class DropsCard extends JPanel
 					{
 						img.addTo(c.icon);
 					}
+					// Arms the Not Enough Runes hand-off for this row; until now its click had no id
+					// to send and fell back to the wiki.
+					c.itemId = id;
 					setRowTooltip(c.row, tip);
 				});
 			}

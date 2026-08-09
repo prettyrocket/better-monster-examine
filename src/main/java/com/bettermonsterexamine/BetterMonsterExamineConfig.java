@@ -29,6 +29,13 @@ public interface BetterMonsterExamineConfig extends Config
 	)
 	String highlightSection = "highlightSection";
 
+	@ConfigSection(
+		name = "Integrations",
+		description = "Hand-offs to other plugins. Each needs that plugin installed and enabled to do anything.",
+		position = 3
+	)
+	String integrationSection = "integrationSection";
+
 	@ConfigItem(
 		keyName = "menuOptions",
 		name = "Right-click menu",
@@ -99,5 +106,17 @@ public interface BetterMonsterExamineConfig extends Config
 	default HighlightMode statHighlighting()
 	{
 		return HighlightMode.STANDARD;
+	}
+
+	@ConfigItem(
+		keyName = "notEnoughRunesLink",
+		name = "Not Enough Runes",
+		description = "Requires the Not Enough Runes plugin. Clicking a drop opens the item there instead of the wiki; right-click opens the wiki. Falls back to the wiki when it isn't running.",
+		section = integrationSection,
+		position = 0
+	)
+	default boolean notEnoughRunesLink()
+	{
+		return false;
 	}
 }
