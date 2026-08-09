@@ -28,9 +28,11 @@ import net.runelite.client.input.MouseAdapter;
 import net.runelite.client.input.MouseManager;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
+import net.runelite.client.plugins.PluginManager;
 import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.ui.overlay.OverlayManager;
+import net.runelite.client.eventbus.EventBus;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
 import net.runelite.api.events.MenuEntryAdded;
@@ -80,6 +82,12 @@ public class BetterMonsterExaminePlugin extends Plugin
 
 	@Inject
 	private MouseManager mouseManager;
+
+	@Inject
+	private EventBus eventBus;
+
+	@Inject
+	private PluginManager pluginManager;
 
 	@Inject
 	private Gson gson;
@@ -175,7 +183,7 @@ public class BetterMonsterExaminePlugin extends Plugin
 	{
 		log.debug("Adding side panel navigation button");
 		BufferedImage icon = titleIcon;
-		DropsCard dropsCard = new DropsCard(itemManager, clientThread, itemIdService, config);
+		DropsCard dropsCard = new DropsCard(itemManager, clientThread, itemIdService, config, new NotEnoughRunesLink(eventBus, pluginManager, config));
 		monsterStatsPanel = new BetterMonsterExaminePanel(monsterIcons, dataService, dropPageService, itemIdService, dropsCard, config, configManager, gson, () -> playerCombatLevel, () -> playerHpLevel, () -> playerSlayerLevel, icon);
 		// Mirror whatever the panel is showing into the overlay (when the overlay is a target).
 		monsterStatsPanel.setSelectionListener(this::showInOverlay);
@@ -251,6 +259,16 @@ public class BetterMonsterExaminePlugin extends Plugin
 			if (!config.statsRenderTarget().showsOverlay())
 			{
 				hideOverlay();
+			}
+		}
+		else if (event.getKey().equals("notEnoughRunesLink"))
+		{
+			// Clicks resolve the link live, but the rendered tooltips say which button does what —
+			// re-render so they don't advertise the old arrangement.
+			BetterMonsterExaminePanel panel = monsterStatsPanel;
+			if (panel != null)
+			{
+				SwingUtilities.invokeLater(panel::refresh);
 			}
 		}
 		else if (event.getKey().equals("enableHistory"))
