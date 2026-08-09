@@ -111,7 +111,7 @@ public interface BetterMonsterExamineConfig extends Config
 	@ConfigItem(
 		keyName = "notEnoughRunesLink",
 		name = "Not Enough Runes",
-		description = "Clicking a drop opens the item in Not Enough Runes instead of the wiki; right-click opens the wiki. Falls back to the wiki when that plugin isn't running.",
+		description = "Requires the Not Enough Runes plugin. Clicking a drop opens the item there instead of the wiki; right-click opens the wiki. Falls back to the wiki when it isn't running.",
 		section = integrationSection,
 		position = 0
 	)

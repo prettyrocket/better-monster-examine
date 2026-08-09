@@ -626,17 +626,21 @@ public class DropsCard extends JPanel
 	}
 
 	/**
-	 * What the row's buttons do, for the tooltip's last line. Only priced rows get this — an item the
-	 * client couldn't place keeps the plain wiki hint, which is what its click still does.
+	 * Where the row's primary click goes, for the tooltip's last line. Only priced rows get this — an
+	 * item the client couldn't place keeps the plain wiki hint, which is what its click still does.
+	 * "(no NER)" is the one that earns its keep: it separates a deliberate fallback from a dead click.
 	 */
 	private String clickHint()
 	{
-		if (!ner.isActive())
+		if (ner.isActive())
 		{
-			return wikiHint();
+			return hint("NER");
 		}
-		return "<br><span style='color:#9a9a9a'>Click to open in Not Enough Runes"
-			+ "<br>Right-click to open on the OSRS Wiki</span></html>";
+		if (ner.isUnavailable())
+		{
+			return hint("Wiki (no NER)");
+		}
+		return wikiHint();
 	}
 
 	/**
@@ -697,7 +701,13 @@ public class DropsCard extends JPanel
 
 	private static String wikiHint()
 	{
-		return "<br><span style='color:#9a9a9a'>Click to open on the OSRS Wiki</span></html>";
+		return hint("Wiki");
+	}
+
+	/** The tooltip's closing line: where a click lands, dimmed so it reads under the name and prices. */
+	private static String hint(String label)
+	{
+		return "<br><span style='color:#9a9a9a'>" + label + "</span></html>";
 	}
 
 	private static String esc(String s)

@@ -58,6 +58,16 @@ public class NotEnoughRunesLink
 	}
 
 	/**
+	 * True when the link is switched on but NER isn't there to receive it, so clicks quietly fall back
+	 * to the wiki. Worth saying out loud in the UI: covers not installed, disabled, and disabled
+	 * mid-session alike, all of which otherwise look like the link is simply broken.
+	 */
+	public boolean isUnavailable()
+	{
+		return config.notEnoughRunesLink() && !isRunning();
+	}
+
+	/**
 	 * Ask NER to show this item. No-op when the link is inactive.
 	 *
 	 * <p>Call from the EDT: {@link EventBus#post} runs subscribers inline on the calling thread, and
