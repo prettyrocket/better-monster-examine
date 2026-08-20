@@ -13,15 +13,21 @@ import com.bettermonsterexamine.loot.ItemIdService;
 import com.google.gson.Gson;
 import com.google.inject.Provides;
 import lombok.extern.slf4j.Slf4j;
+import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
 import net.runelite.api.KeyCode;
 import net.runelite.api.MenuAction;
 import net.runelite.api.NPC;
+import net.runelite.api.NPCComposition;
 import net.runelite.api.Player;
 import net.runelite.api.Skill;
+import net.runelite.api.events.ChatMessage;
+import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.client.callback.ClientThread;
+import net.runelite.client.chat.ChatMessageManager;
+import net.runelite.client.chat.QueuedMessage;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.input.MouseAdapter;
@@ -59,6 +65,9 @@ public class BetterMonsterExaminePlugin extends Plugin
 
 	@Inject
 	private ClientThread clientThread;
+
+	@Inject
+	private ChatMessageManager chatMessageManager;
 
 	@Inject
 	private ConfigManager configManager;
@@ -111,6 +120,7 @@ public class BetterMonsterExaminePlugin extends Plugin
 	private volatile int playerCombatLevel = -1;
 	private volatile int playerHpLevel = -1;
 	private volatile int playerSlayerLevel = -1;
+	private final ExamineSummaryQueue examineSummaryQueue = new ExamineSummaryQueue();
 	private static final String STATS_OPTION = "Stats";
 	private static final String DROPS_OPTION = "Drops";
 
@@ -124,6 +134,7 @@ public class BetterMonsterExaminePlugin extends Plugin
 	protected void startUp() throws Exception
 	{
 		log.info("Better Monster Examine started");
+		examineSummaryQueue.clear();
 		titleIcon = ImageUtil.loadImageResource(getClass(), "/icon.png");
 		cardOverlay = new MonsterCardOverlay(config, monsterIcons, () -> playerCombatLevel, () -> playerHpLevel, () -> playerSlayerLevel);
 		overlayManager.add(cardOverlay);
@@ -177,6 +188,7 @@ public class BetterMonsterExaminePlugin extends Plugin
 			cardOverlay = null;
 		}
 		overlayKey = null;
+		examineSummaryQueue.clear();
 		log.info("Better Monster Examine stopped");
 	}
 
@@ -281,6 +293,11 @@ public class BetterMonsterExaminePlugin extends Plugin
 				SwingUtilities.invokeLater(panel::onHistoryConfigChanged);
 			}
 		}
+		else if (event.getKey().equals("examineSummary"))
+		{
+			// A response still in flight should not use the mode that was active before this change.
+			examineSummaryQueue.clearPending();
+		}
 	}
 
 	/**
@@ -347,6 +364,14 @@ public class BetterMonsterExaminePlugin extends Plugin
 	}
 
 	@Subscribe
+	public void onGameStateChanged(GameStateChanged event)
+	{
+		// Do not pair an Examine response from before a hop/logout with a later click.
+		// Keep injected markers: RuneLite's global chat queue may still deliver one after this event.
+		examineSummaryQueue.clearPending();
+	}
+
+	@Subscribe
 	public void onGameTick(GameTick event)
 	{
 		// Keep the player's combat, hitpoints and Slayer levels current so the panel can colour the
@@ -386,10 +411,10 @@ public class BetterMonsterExaminePlugin extends Plugin
 
 		// Resolve the NPC from the world view by the entry's identifier rather than
 		// getMenuEntry().getNpc(), which isn't reliably populated for examine entries — the
-		// approach the Loot Lookup plugin uses. Match by id or name so the options cover
-		// variant ids the dataset lacks (e.g. Hellhounds in different dungeons).
+		// approach the Loot Lookup plugin uses. Resolve now so name fallback must match the live
+		// combat level; otherwise a cosmetic pet sharing a monster's name would gain these options.
 		NPC npc = client.getTopLevelWorldView().npcs().byIndex(event.getIdentifier());
-		if (npc == null || !dataService.isKnownMonster(npc.getId(), npc.getName()))
+		if (resolveMonster(npc) == null)
 		{
 			return;
 		}
@@ -419,9 +444,25 @@ public class BetterMonsterExaminePlugin extends Plugin
 				.setParam1(event.getActionParam1());
 	}
 
-	@Subscribe
+	@Subscribe(priority = -1)
 	public void onMenuOptionClicked(MenuOptionClicked event)
 	{
+		// Run after normal-priority subscribers so an Examine another plugin consumed is not tracked:
+		// consumed menu actions never produce the vanilla chat response this feature waits for.
+		if (event.isConsumed())
+		{
+			return;
+		}
+
+		// This path is independent of the plugin's extra Stats/Drops menu entries: the intended
+		// compact setup is menuOptions=None with the normal Examine left untouched.
+		if (event.getMenuAction() == MenuAction.EXAMINE_NPC
+			&& "Examine".equals(event.getMenuOption()))
+		{
+			trackNpcExamine(event);
+			return;
+		}
+
 		boolean stats = STATS_OPTION.equals(event.getMenuOption());
 		boolean drops = DROPS_OPTION.equals(event.getMenuOption());
 		if (!stats && !drops)
@@ -432,20 +473,17 @@ public class BetterMonsterExaminePlugin extends Plugin
 		clientThread.invoke(() ->
 		{
 			NPC clickedNPC = client.getTopLevelWorldView().npcs().byIndex(event.getId());
-			if (clickedNPC == null)
+			MonsterData entry = resolveMonster(clickedNPC);
+			if (entry == null)
 			{
+				if (clickedNPC != null)
+				{
+					log.debug("No dataset entry for clicked NPC {} (id {})", clickedNPC.getName(), clickedNPC.getId());
+				}
 				return;
 			}
-			// Resolve by id; if this spawn's id isn't in the dataset, fall back to the NPC's
-			// name and match its in-game combat level to the right variant.
-			MonsterData entry = dataService.getById(clickedNPC.getId());
-			String name = entry != null ? entry.getName() : clickedNPC.getName();
-			if (name == null || dataService.variantsForName(name).isEmpty())
-			{
-				log.debug("No dataset entry for clicked NPC {} (id {})", clickedNPC.getName(), clickedNPC.getId());
-				return;
-			}
-			String version = entry != null ? entry.getVersion() : dataService.variantVersionForLevel(name, clickedNPC.getCombatLevel());
+			String name = entry.getName();
+			String version = entry.getVersion();
 
 			if (drops)
 			{
@@ -458,6 +496,83 @@ public class BetterMonsterExaminePlugin extends Plugin
 				openStats(name, version);
 			}
 		});
+	}
+
+	/** Record a native Examine in history and, when enabled, await its vanilla chat response. */
+	private void trackNpcExamine(MenuOptionClicked event)
+	{
+		NPC npc = client.getTopLevelWorldView().npcs().byIndex(event.getId());
+		MonsterData monster = resolveMonster(npc);
+		if (monster != null)
+		{
+			BetterMonsterExaminePanel panel = monsterStatsPanel;
+			if (panel != null)
+			{
+				String name = monster.getName();
+				String version = monster.getVersion();
+				SwingUtilities.invokeLater(() -> panel.recordLookup(name, version));
+			}
+		}
+
+		ExamineSummaryMode mode = config.examineSummary();
+		if (mode == ExamineSummaryMode.OFF)
+		{
+			return;
+		}
+
+		// Unknown monsters deliberately add an empty slot so rapid Examine responses stay aligned.
+		examineSummaryQueue.add(ExamineSummary.format(monster, mode), client.getTickCount());
+	}
+
+	/**
+	 * Wait for the game's own Examine message, then queue one compact block behind it. A single
+	 * queued message with {@code <br>} keeps the multi-line summary together in the chat box.
+	 */
+	@Subscribe
+	public void onChatMessage(ChatMessage event)
+	{
+		if (event.getType() != ChatMessageType.NPC_EXAMINE)
+		{
+			return;
+		}
+
+		String message = examineSummaryQueue.onNpcExamine(event.getMessage(), client.getTickCount());
+		if (message == null)
+		{
+			return;
+		}
+
+		chatMessageManager.queue(QueuedMessage.builder()
+			.type(ChatMessageType.NPC_EXAMINE)
+			.runeLiteFormattedMessage(message)
+			.build());
+	}
+
+	/** Resolve an NPC by spawn id, falling back to name plus its in-game combat level. */
+	private MonsterData resolveMonster(NPC npc)
+	{
+		if (npc == null)
+		{
+			return null;
+		}
+		NPCComposition composition = npc.getTransformedComposition();
+		if (composition != null && composition.isFollower())
+		{
+			return null;
+		}
+
+		MonsterData entry = dataService.getById(npc.getId());
+		if (entry != null)
+		{
+			return entry;
+		}
+
+		String name = npc.getName();
+		if (name == null)
+		{
+			return null;
+		}
+		return dataService.variantForLevel(name, npc.getCombatLevel());
 	}
 
 	/** Handle a Stats click: render to the overlay and/or side panel per the render target. */

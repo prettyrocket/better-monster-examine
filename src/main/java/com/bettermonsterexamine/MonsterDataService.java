@@ -834,7 +834,24 @@ public class MonsterDataService
 	/** The version string of the variant whose combat level matches {@code combatLevel}, or null. */
 	public String variantVersionForLevel(String name, int combatLevel)
 	{
-		List<MonsterData> atLevel = variantsForName(name).stream()
+		MonsterData variant = variantForLevel(name, combatLevel);
+		return variant == null ? null : variant.getVersion();
+	}
+
+	/**
+	 * The best variant whose combat level exactly matches the live NPC, or null when none does.
+	 * Requiring an exact match is important for name fallback: a cosmetic pet can share a name with
+	 * a real monster while having a different NPC id and no combat level.
+	 */
+	public MonsterData variantForLevel(String name, int combatLevel)
+	{
+		return variantForLevel(variantsForName(name), combatLevel);
+	}
+
+	/** Pure list overload for exact-level selection and regression tests. */
+	static MonsterData variantForLevel(List<MonsterData> variants, int combatLevel)
+	{
+		List<MonsterData> atLevel = variants.stream()
 			.filter(v -> v.getLevel() == combatLevel)
 			.collect(Collectors.toList());
 		if (atLevel.isEmpty())
@@ -845,7 +862,7 @@ public class MonsterDataService
 		// phases at 426, Abyssal Sire, Araxxor — so returning the first match showed whichever row
 		// Bucket happened to order first. Reuse the default-variant ranking instead (#62).
 		MonsterData best = defaultVariant(atLevel);
-		return best != null ? best.getVersion() : atLevel.get(0).getVersion();
+		return best != null ? best : atLevel.get(0);
 	}
 
 	private static boolean isStandard(MonsterData m)

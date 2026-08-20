@@ -6,6 +6,7 @@ import java.util.Collections;
 import java.util.List;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import org.junit.Test;
@@ -20,6 +21,17 @@ public class MonsterDataServiceTest
 	private static MonsterData monster(String json)
 	{
 		return GSON.fromJson(json, MonsterData.class);
+	}
+
+	@Test
+	public void exactLevelFallbackDoesNotMapACombatlessPetToItsNamesakeMonster()
+	{
+		MonsterData level13 = monster("{\"name\":\"Rock Golem\",\"combat_level\":13}");
+		MonsterData level27 = monster("{\"name\":\"Rock Golem\",\"combat_level\":27}");
+		List<MonsterData> variants = Arrays.asList(level13, level27);
+
+		assertNull(MonsterDataService.variantForLevel(variants, -1));
+		assertSame(level27, MonsterDataService.variantForLevel(variants, 27));
 	}
 
 	@Test

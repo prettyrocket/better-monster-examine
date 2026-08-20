@@ -10,7 +10,7 @@ public interface BetterMonsterExamineConfig extends Config
 {
 	@ConfigSection(
 		name = "Right-click menu",
-		description = "The Stats/Drops entries added to a monster's right-click Examine, and where they render.",
+		description = "The Stats/Drops entries added to a monster's right-click Examine, where they render, and the optional Examine summary.",
 		position = 0
 	)
 	String menuSection = "menuSection";
@@ -73,6 +73,18 @@ public interface BetterMonsterExamineConfig extends Config
 	}
 
 	@ConfigItem(
+		keyName = "examineSummary",
+		name = "Examine combat summary",
+		description = "Append compact combat information after the monster's normal Examine text: its weakest styles or all melee and ranged defences.",
+		section = menuSection,
+		position = 3
+	)
+	default ExamineSummaryMode examineSummary()
+	{
+		return ExamineSummaryMode.OFF;
+	}
+
+	@ConfigItem(
 		keyName = "enableSidePanel",
 		name = "Enable side panel",
 		description = "Enables the searchable side panel to display more monster stats.",
@@ -87,7 +99,7 @@ public interface BetterMonsterExamineConfig extends Config
 	@ConfigItem(
 		keyName = "enableHistory",
 		name = "Recent & favorites",
-		description = "Show Recent and Favorites lists in the side panel, reached via the ↺ / ★ buttons in the search row. Needs the side panel enabled.",
+		description = "Show Recent and Favorites lists in the side panel, reached via the ↺ / ★ buttons in the search row. Normal monster Examines are added to Recent. Needs the side panel enabled.",
 		section = panelSection,
 		position = 1
 	)
