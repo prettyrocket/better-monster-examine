@@ -1,0 +1,3 @@
+# Default owner for everything in the repo.
+# Combined with the default branch's ruleset, this asks for a maintainer review on every PR.
+* @prettyrocket
