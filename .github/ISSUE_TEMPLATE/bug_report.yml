@@ -1,0 +1,70 @@
+name: Bug report
+description: Something in the plugin doesn't work, or shows the wrong data.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. If a monster's **stats or drops are wrong**, please include
+        the monster's name — most data bugs are specific to one page's wiki markup, and the
+        name is usually enough to reproduce it.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you see, and what did you expect instead?
+    validations:
+      required: true
+
+  - type: input
+    id: monster
+    attributes:
+      label: Monster / item involved
+      description: If the bug is about specific data, which monster (and variant, if it has one)?
+      placeholder: "e.g. Vorkath (Post-Quest), or Abyssal demon — Catacombs table"
+    validations:
+      required: false
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Search for '...'
+        2. Open the Drops tab
+        3. ...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Where does it happen?
+      multiple: true
+      options:
+        - Side panel — Stats tab
+        - Side panel — Drops tab
+        - In-game overlay
+        - Right-click menu entry
+        - Somewhere else / not sure
+    validations:
+      required: false
+
+  - type: input
+    id: versions
+    attributes:
+      label: RuneLite version
+      placeholder: "e.g. 1.11.4"
+    validations:
+      required: false
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Screenshots or client log
+      description: |
+        Screenshots help a lot for rendering bugs. For crashes, the client log is at
+        `%USERPROFILE%\.runelite\logs\client.log` (Windows) or `~/.runelite/logs/client.log`.
+    validations:
+      required: false

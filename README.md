@@ -49,6 +49,12 @@ GE price / High Alch on hover.*
 - **Accessible highlighting** — colour coding is configurable: the default red/green palette, 
   a **colour-blind-friendly** palette with redundant cues, or off entirely.
 
+## Contributing
+
+Bug reports, ideas and pull requests are welcome — see **[CONTRIBUTING.md](CONTRIBUTING.md)**
+for how to build the plugin, run the tests, and the style rules CI enforces (the short
+version: JDK 11, `./gradlew build`, and **indent with tabs**).
+
 ## Credits & licence
 
 This plugin began as a fork of [Koitere/monster-stats][orig]. 
