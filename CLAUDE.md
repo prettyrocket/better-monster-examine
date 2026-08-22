@@ -258,16 +258,24 @@ Item icon / GE price / High Alch come from the **RuneLite client by item id** (z
 - **`StatColors`** — the shared `HighlightMode` palette (danger / good / combat-level gradient)
   used by both the side panel and the overlay, so both honour the same colour-blind settings.
 - **`BetterMonsterExamineConfig`** — config group `bettermonsterexamine`: `enableSidePanel`,
-  `menuOptions`, `examineSummary`, `statHighlighting`, and `statsRenderTarget` (`RenderTarget`: panel /
-  overlay / both — where the right-click **"Stats"** action renders). **`menuOptions`** (`MenuOption`: Stats only /
-  Drops only / Both / None) picks which right-click entries appear on a monster's Examine: **Stats**
-  renders per `statsRenderTarget`, **Drops** opens the side panel to its Drops tab. Each entry shows
-  only when it can act — Stats needs the overlay target or (panel target + `enableSidePanel`); Drops
-  needs `enableSidePanel`. `examineSummary` (`ExamineSummaryMode`: Off / Weaknesses only / All
-  defences) independently appends a compact block after the normal Examine text. A second Stats
-  click on the same monster toggles the overlay off. The overlay updates on the **client thread**
-  (it draws there); the side panel on the EDT. An
-  **Integrations** section holds the cross-plugin links — currently `notEnoughRunesLink` (see below).
+  `enableSidePanel`, `statHighlighting`, and `statsRenderTarget` (`RenderTarget`: panel / overlay /
+  both — where the right-click **"Stats"** action renders). The three things the plugin can attach to
+  a monster's Examine are **three independent checkboxes**, not one enum: **`statsMenuEntry`** adds
+  the right-click **Stats** entry (rendering per `statsRenderTarget`), **`dropsMenuEntry`** adds
+  **Drops** (opening the side panel on its Drops tab), and **`examineSummaryEnabled`** appends a
+  compact combat block after the game's own Examine text — with `examineSummaryDetail`
+  (`ExamineSummaryMode`: Weaknesses only / All defences) controlling how much it shows. Each entry
+  appears only when it can act — Stats needs the overlay target or (panel target +
+  `enableSidePanel`); Drops needs `enableSidePanel` — while the summary is independent of all of it,
+  so every menu entry can be off and the summary still works (its whole point). A second Stats click
+  on the same monster toggles the overlay off. The overlay updates on the **client thread** (it draws
+  there); the side panel on the EDT. An **Integrations** section holds the cross-plugin links —
+  currently `notEnoughRunesLink` (see below).
+
+  The checkboxes replaced a `menuOptions` enum (`Stats only / Drops only / Both / None`) that had
+  already shipped, so `migrateMenuOptions` in `startUp` reads the retired key once, sets the two
+  booleans from it, and unsets it. Without that, everyone who had narrowed or disabled the entries
+  would silently get both back on update, since the new booleans would just fall to their defaults.
 
 ### Cross-plugin links (`NotEnoughRunesLink`, #69 · inbound #70)
 

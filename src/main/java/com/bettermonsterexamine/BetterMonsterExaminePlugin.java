@@ -123,6 +123,9 @@ public class BetterMonsterExaminePlugin extends Plugin
 	private final ExamineSummaryQueue examineSummaryQueue = new ExamineSummaryQueue();
 	private static final String STATS_OPTION = "Stats";
 	private static final String DROPS_OPTION = "Drops";
+	private static final String CONFIG_GROUP = "bettermonsterexamine";
+	/** Retired in favour of the statsMenuEntry/dropsMenuEntry checkboxes; read once to migrate. */
+	private static final String LEGACY_MENU_OPTIONS = "menuOptions";
 
 	@Provides
 	BetterMonsterExamineConfig provideConfig(ConfigManager configManager)
@@ -134,6 +137,7 @@ public class BetterMonsterExaminePlugin extends Plugin
 	protected void startUp() throws Exception
 	{
 		log.info("Better Monster Examine started");
+		migrateMenuOptions();
 		examineSummaryQueue.clear();
 		titleIcon = ImageUtil.loadImageResource(getClass(), "/icon.png");
 		cardOverlay = new MonsterCardOverlay(config, monsterIcons, () -> playerCombatLevel, () -> playerHpLevel, () -> playerSlayerLevel);
@@ -231,7 +235,7 @@ public class BetterMonsterExaminePlugin extends Plugin
 	@Subscribe
 	public void onConfigChanged(ConfigChanged event)
 	{
-		if (!event.getGroup().equals("bettermonsterexamine"))
+		if (!event.getGroup().equals(CONFIG_GROUP))
 		{
 			return;
 		}
@@ -252,7 +256,7 @@ public class BetterMonsterExaminePlugin extends Plugin
 			{
 				// The right-click Stats option is independently gated on enableSidePanel()
 				// in onMenuEntryAdded, so simply dropping the panel is enough — no need to
-				// touch showStatsMenuOption (doing so left it stuck off after a re-enable).
+				// touch statsMenuEntry (doing so left it stuck off after a re-enable).
 				removeNavBar();
 			}
 		}
@@ -293,7 +297,7 @@ public class BetterMonsterExaminePlugin extends Plugin
 				SwingUtilities.invokeLater(panel::onHistoryConfigChanged);
 			}
 		}
-		else if (event.getKey().equals("examineSummary"))
+		else if (event.getKey().equals("examineSummaryEnabled") || event.getKey().equals("examineSummaryDetail"))
 		{
 			// A response still in flight should not use the mode that was active before this change.
 			examineSummaryQueue.clearPending();
@@ -397,8 +401,9 @@ public class BetterMonsterExaminePlugin extends Plugin
 	{
 		// Anchor on the NPC's Examine entry — every NPC has exactly one, so the options appear once
 		// per monster regardless of its other entries (Attack, Talk-to, …).
-		MenuOption menu = config.menuOptions();
-		if (menu == MenuOption.NONE || event.getType() != MenuAction.EXAMINE_NPC.getId())
+		boolean wantStats = config.statsMenuEntry();
+		boolean wantDrops = config.dropsMenuEntry();
+		if ((!wantStats && !wantDrops) || event.getType() != MenuAction.EXAMINE_NPC.getId())
 		{
 			return;
 		}
@@ -422,11 +427,11 @@ public class BetterMonsterExaminePlugin extends Plugin
 		// Add each enabled option only when it can actually do something. Drops opens in the side
 		// panel; Stats can target the overlay or the panel (see statsActionAvailable). The entry
 		// created last sits on top, so add Drops first and Stats above it.
-		if (menu.showsDrops() && config.enableSidePanel())
+		if (wantDrops && config.enableSidePanel())
 		{
 			addMenuEntry(DROPS_OPTION, event);
 		}
-		if (menu.showsStats() && statsActionAvailable())
+		if (wantStats && statsActionAvailable())
 		{
 			addMenuEntry(STATS_OPTION, event);
 		}
@@ -498,6 +503,27 @@ public class BetterMonsterExaminePlugin extends Plugin
 		});
 	}
 
+	/**
+	 * Carry the retired {@code menuOptions} enum (Stats only / Drops only / Both / None) over to the
+	 * two checkboxes that replaced it. The plugin is on the hub, so without this everyone who had
+	 * narrowed or switched off the entries silently gets both back on update — the booleans would
+	 * simply fall to their defaults with nothing to read. Unsetting the old key makes it a one-off.
+	 */
+	private void migrateMenuOptions()
+	{
+		String legacy = configManager.getConfiguration(CONFIG_GROUP, LEGACY_MENU_OPTIONS);
+		if (legacy == null)
+		{
+			return;
+		}
+		configManager.setConfiguration(CONFIG_GROUP, "statsMenuEntry",
+			"STATS_ONLY".equals(legacy) || "BOTH".equals(legacy));
+		configManager.setConfiguration(CONFIG_GROUP, "dropsMenuEntry",
+			"DROPS_ONLY".equals(legacy) || "BOTH".equals(legacy));
+		configManager.unsetConfiguration(CONFIG_GROUP, LEGACY_MENU_OPTIONS);
+		log.debug("Migrated menuOptions={} to the Stats/Drops checkboxes", legacy);
+	}
+
 	/** Record a native Examine in history and, when enabled, await its vanilla chat response. */
 	private void trackNpcExamine(MenuOptionClicked event)
 	{
@@ -514,14 +540,13 @@ public class BetterMonsterExaminePlugin extends Plugin
 			}
 		}
 
-		ExamineSummaryMode mode = config.examineSummary();
-		if (mode == ExamineSummaryMode.OFF)
+		if (!config.examineSummaryEnabled())
 		{
 			return;
 		}
 
 		// Unknown monsters deliberately add an empty slot so rapid Examine responses stay aligned.
-		examineSummaryQueue.add(ExamineSummary.format(monster, mode), client.getTickCount());
+		examineSummaryQueue.add(ExamineSummary.format(monster, config.examineSummaryDetail()), client.getTickCount());
 	}
 
 	/**

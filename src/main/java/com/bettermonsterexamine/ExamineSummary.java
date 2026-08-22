@@ -25,7 +25,7 @@ final class ExamineSummary
 
 	static List<String> format(MonsterData monster, ExamineSummaryMode mode)
 	{
-		if (monster == null || mode == null || mode == ExamineSummaryMode.OFF)
+		if (monster == null || mode == null)
 		{
 			return Collections.emptyList();
 		}

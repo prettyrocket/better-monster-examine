@@ -10,7 +10,7 @@ public interface BetterMonsterExamineConfig extends Config
 {
 	@ConfigSection(
 		name = "Right-click menu",
-		description = "The Stats/Drops entries added to a monster's right-click Examine, where they render, and the optional Examine summary.",
+		description = "What the plugin adds when you examine a monster: the Stats/Drops right-click entries, where they render, and the optional combat summary in chat.",
 		position = 0
 	)
 	String menuSection = "menuSection";
@@ -37,15 +37,27 @@ public interface BetterMonsterExamineConfig extends Config
 	String integrationSection = "integrationSection";
 
 	@ConfigItem(
-		keyName = "menuOptions",
-		name = "Right-click menu",
-		description = "Which right-click options to add on a monster's Examine: Stats, Drops, both, or none. Drops needs the side panel enabled.",
+		keyName = "statsMenuEntry",
+		name = "Stats entry",
+		description = "Add a 'Stats' option to a monster's right-click Examine. Shows the monster per 'Show stats in' below.",
 		section = menuSection,
 		position = 0
 	)
-	default MenuOption menuOptions()
+	default boolean statsMenuEntry()
 	{
-		return MenuOption.BOTH;
+		return true;
+	}
+
+	@ConfigItem(
+		keyName = "dropsMenuEntry",
+		name = "Drops entry",
+		description = "Add a 'Drops' option to a monster's right-click Examine, opening the side panel on its Drops tab. Needs the side panel enabled.",
+		section = menuSection,
+		position = 1
+	)
+	default boolean dropsMenuEntry()
+	{
+		return true;
 	}
 
 	@ConfigItem(
@@ -53,7 +65,7 @@ public interface BetterMonsterExamineConfig extends Config
 		name = "Show stats in",
 		description = "Where the right-click 'Stats' action shows a monster: the side panel, an in-game overlay, or both. Only applies when the Stats entry is enabled above.",
 		section = menuSection,
-		position = 1
+		position = 2
 	)
 	default RenderTarget statsRenderTarget()
 	{
@@ -65,7 +77,7 @@ public interface BetterMonsterExamineConfig extends Config
 		name = "Only show when Shift held",
 		description = "Add the Stats/Drops right-click options only while Shift is held, to keep the normal menu uncluttered.",
 		section = menuSection,
-		position = 2
+		position = 3
 	)
 	default boolean requireShift()
 	{
@@ -73,15 +85,27 @@ public interface BetterMonsterExamineConfig extends Config
 	}
 
 	@ConfigItem(
-		keyName = "examineSummary",
-		name = "Examine combat summary",
-		description = "Append compact combat information after the monster's normal Examine text: its weakest styles or all melee and ranged defences.",
+		keyName = "examineSummaryEnabled",
+		name = "Combat summary on Examine",
+		description = "Append compact combat information after the game's own Examine text. Independent of the entries above, so they can all be off.",
 		section = menuSection,
-		position = 3
+		position = 4
 	)
-	default ExamineSummaryMode examineSummary()
+	default boolean examineSummaryEnabled()
 	{
-		return ExamineSummaryMode.OFF;
+		return false;
+	}
+
+	@ConfigItem(
+		keyName = "examineSummaryDetail",
+		name = "Summary detail",
+		description = "How much the Examine summary shows: just the weakest melee and ranged styles, or every melee and ranged defence. Only applies when the summary above is on.",
+		section = menuSection,
+		position = 5
+	)
+	default ExamineSummaryMode examineSummaryDetail()
+	{
+		return ExamineSummaryMode.WEAKNESSES;
 	}
 
 	@ConfigItem(
