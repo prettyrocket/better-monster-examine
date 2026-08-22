@@ -38,8 +38,12 @@ GE price / High Alch on hover.*
   rarity** — with **GE price & High Alch** on hover, and clicks through to the item's wiki page.
 - **In-game overlay** — show the stats as a compact, tabbed card in the viewport instead of
   (or alongside) the side panel.
+- **Examine combat summary** — optionally append either the weakest melee/ranged styles or all
+  melee and ranged defences after the game's normal monster Examine text, with a named heading and
+  colour-coded combat categories. This works independently of the added right-click entries, so
+  they can be set to **None** for an uncluttered menu.
 - **Recent & favorites** — the side panel's **↺** and **★** buttons hold your recently viewed
-  monsters and a pinned favorites list, so you can re-open one without re-typing.
+  or examined monsters and a pinned favorites list, so you can re-open one without re-typing.
 - **Quick links** — open the monster's **Wiki** page or the **DPS calculator**
   in one click.
 - **Accessible highlighting** — colour coding is configurable: the default red/green palette, 

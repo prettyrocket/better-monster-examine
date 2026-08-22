@@ -114,10 +114,12 @@ scraping — cut over to Bucket in #26.)
    `(historical)` rows are dropped as removed content, but only when a live sibling remains — a name
    that is entirely historical (Barbarian woman) would otherwise vanish from search (#63). Note
    `Realm of Memories` is **live quest content** despite the name, and is kept.
-   `variantVersionForLevel` (the right-click fallback when a spawn id isn't in the dataset) ranks its
-   level matches through `defaultVariant` rather than taking the first: 240 name+level buckets hold
-   rows with genuinely different stats (Alchemical Hydra's four phases at 426), so first-match showed
-   whichever row Bucket ordered first.
+   `variantForLevel` (the right-click fallback when a spawn id isn't in the dataset) requires an
+   exact live combat-level match and ranks matches through `defaultVariant` rather than taking the
+   first. The exact requirement prevents a cosmetic NPC sharing a monster's name (the Rock golem
+   pet versus Rock Golem) from silently selecting the monster's default form; 240 name+level buckets
+   still hold rows with genuinely different stats (Alchemical Hydra's four phases at 426), so the
+   ranking avoids whichever row Bucket happened to order first.
 
 2. **`MonsterData`** — a flat Gson DTO mapped to the Bucket `infobox_monster` schema, capturing
    **all** fields (Lombok `@Getter`), including ones not yet rendered (slayer level/XP/category,
@@ -219,8 +221,12 @@ Item icon / GE price / High Alch come from the **RuneLite client by item id** (z
   `enableSidePanel` is on; adds a right-click **"Stats"** menu entry anchored on each NPC's
   Examine entry (gated on both config flags). Resolves the clicked NPC **by id, falling back to
   name + matching in-game combat level to a variant** — so it covers variant spawn ids the
-  dataset doesn't carry (e.g. Hellhounds across dungeons). Caches the player's combat and HP
-  levels each `GameTick` so the panel can read them safely off-thread.
+  dataset doesn't carry (e.g. Hellhounds across dungeons). When the Examine summary is enabled,
+  snapshots its named, colour-labelled compact lines on the native click and waits for the matching
+  `NPC_EXAMINE` chat response before queueing them, so the vanilla text always appears first.
+  Followers are rejected before resolution, and examines record in the existing Recent history when
+  enabled. Caches the player's combat and HP levels each `GameTick` so the panel can read them safely
+  off-thread.
 - **`BetterMonsterExaminePanel`** (`PluginPanel`) — search field over a card area: a shared
   **`MonsterHeader`** (name, favourite star, combat level, examine, variant selector, Wiki/DPS
   links) sits above a `MaterialTabGroup` **`Stats | Drops`** tab strip, whose body swaps between the
@@ -252,13 +258,15 @@ Item icon / GE price / High Alch come from the **RuneLite client by item id** (z
 - **`StatColors`** — the shared `HighlightMode` palette (danger / good / combat-level gradient)
   used by both the side panel and the overlay, so both honour the same colour-blind settings.
 - **`BetterMonsterExamineConfig`** — config group `bettermonsterexamine`: `enableSidePanel`,
-  `menuOptions`, `statHighlighting`, and `statsRenderTarget` (`RenderTarget`: panel / overlay / both —
-  where the right-click **"Stats"** action renders). **`menuOptions`** (`MenuOption`: Stats only /
+  `menuOptions`, `examineSummary`, `statHighlighting`, and `statsRenderTarget` (`RenderTarget`: panel /
+  overlay / both — where the right-click **"Stats"** action renders). **`menuOptions`** (`MenuOption`: Stats only /
   Drops only / Both / None) picks which right-click entries appear on a monster's Examine: **Stats**
   renders per `statsRenderTarget`, **Drops** opens the side panel to its Drops tab. Each entry shows
   only when it can act — Stats needs the overlay target or (panel target + `enableSidePanel`); Drops
-  needs `enableSidePanel`. A second Stats click on the same monster toggles the overlay off. The
-  overlay updates on the **client thread** (it draws there); the side panel on the EDT. An
+  needs `enableSidePanel`. `examineSummary` (`ExamineSummaryMode`: Off / Weaknesses only / All
+  defences) independently appends a compact block after the normal Examine text. A second Stats
+  click on the same monster toggles the overlay off. The overlay updates on the **client thread**
+  (it draws there); the side panel on the EDT. An
   **Integrations** section holds the cross-plugin links — currently `notEnoughRunesLink` (see below).
 
 ### Cross-plugin links (`NotEnoughRunesLink`, #69 · inbound #70)
@@ -312,7 +320,9 @@ state reads on the client thread (`clientThread.invoke`), Swing updates on the E
 JUnit 4 under `src/test/java`. Pure-logic tests exercise the static helpers and the view-model:
 `MonsterDataServiceTest` (name matching), `WikiSanitizerTest` (the Bucket field-cleaning shapes),
 `InfoboxLevelsTest` (recovering a level Bucket dropped; blanks stay a dash),
-`MonsterStatsTest` (view-model semantics), `StatFormatTest`, `StatColorsTest`, `LookupHistoryTest`.
+`MonsterStatsTest` (view-model semantics), `ExamineSummaryTest` (compact combat strings),
+`ExamineSummaryQueueTest` (native/injected ordering), `StatFormatTest`, `StatColorsTest`,
+`LookupHistoryTest`.
 The `loot/` layer adds `DropPageServiceTest` (the rendered-page HTML parse: rows inherit their
 `<h3>/<h4>` section, the Drops region stops at the next `<h2>`, entity/footnote cleaning),
 `DropTableTest` (group → section grouping in wiki page order; like-named sections in different groups

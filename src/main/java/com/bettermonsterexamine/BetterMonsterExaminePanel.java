@@ -51,7 +51,7 @@ public class BetterMonsterExaminePanel extends PluginPanel
 	/** Config group the persisted Recent/Favorites JSON lives under (alongside the typed config). */
 	private static final String CONFIG_GROUP = "bettermonsterexamine";
 	private static final String HISTORY_KEY = "historyData";
-	private static final String HINT = "Search a monster, or right-click one in game → Stats.";
+	private static final String HINT = "Search a monster, right-click → Stats, or Examine one in game.";
 	/** Where the footer link and the nav button's right-click entry both send a reporter. */
 	static final String ISSUES_URL = "https://github.com/prettyrocket/better-monster-examine/issues";
 
@@ -704,7 +704,7 @@ public class BetterMonsterExaminePanel extends PluginPanel
 	{
 		String msg = fav
 			? "No favorites yet. Open a monster and tap ★ to pin it here."
-			: "Nothing here yet. Search a monster, or right-click one in game → Stats.";
+			: "Nothing here yet. Search a monster, right-click → Stats, or Examine one in game.";
 		JLabel l = new JLabel("<html><body style='width:180px'>" + msg + "</body></html>");
 		l.setFont(FontManager.getRunescapeSmallFont());
 		l.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
@@ -760,8 +760,9 @@ public class BetterMonsterExaminePanel extends PluginPanel
 	}
 
 	/**
-	 * Record an in-game "Stats" lookup that didn't open the panel (overlay-only target), so it
-	 * still lands in Recent. Resolves the variant the same way the overlay does. Called on the EDT.
+	 * Record an in-game lookup that didn't open the panel (an overlay-only Stats action or a normal
+	 * Examine), so it still lands in Recent. Resolves the variant the same way the overlay does.
+	 * Called on the EDT.
 	 */
 	public void recordLookup(String name, String version)
 	{
