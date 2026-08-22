@@ -275,6 +275,11 @@ Item icon / GE price / High Alch come from the **RuneLite client by item id** (z
   there); the side panel on the EDT. An **Integrations** section holds the cross-plugin links —
   currently `notEnoughRunesLink` (see below).
 
+  Sections split by **trigger**: **Right-click menu** owns the two entries and `requireShift`;
+  **Examine** owns the three settings that hang off the game's own Examine. `statsRenderTarget` is
+  deliberately **sectionless**, rendering above both — the Stats entry and `examineOpensStats` both
+  render through it, so filing it under either heading would misdescribe it.
+
   `openStats` takes a `toggleOverlayOff` flag rather than always toggling. A second **Stats click**
   on the same monster still closes the overlay, but a second **Examine** doesn't: Examine is a repeat
   action in a way a deliberate menu click isn't, and closing the card under the player mid-fight
