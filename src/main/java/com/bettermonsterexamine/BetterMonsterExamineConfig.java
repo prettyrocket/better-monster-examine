@@ -109,6 +109,18 @@ public interface BetterMonsterExamineConfig extends Config
 	}
 
 	@ConfigItem(
+		keyName = "examineOpensStats",
+		name = "Open stats on Examine",
+		description = "Examining a monster also shows it per 'Show stats in' above, so the Stats entry isn't needed. Unlike that entry, re-examining the same monster won't close the overlay.",
+		section = menuSection,
+		position = 6
+	)
+	default boolean examineOpensStats()
+	{
+		return false;
+	}
+
+	@ConfigItem(
 		keyName = "enableSidePanel",
 		name = "Enable side panel",
 		description = "Enables the searchable side panel to display more monster stats.",

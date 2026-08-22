@@ -498,7 +498,7 @@ public class BetterMonsterExaminePlugin extends Plugin
 			else
 			{
 				log.debug("Opening stats for {} (npc id {})", name, clickedNPC.getId());
-				openStats(name, version);
+				openStats(name, version, true);
 			}
 		});
 	}
@@ -531,12 +531,20 @@ public class BetterMonsterExaminePlugin extends Plugin
 		MonsterData monster = resolveMonster(npc);
 		if (monster != null)
 		{
-			BetterMonsterExaminePanel panel = monsterStatsPanel;
-			if (panel != null)
+			String name = monster.getName();
+			String version = monster.getVersion();
+			if (config.examineOpensStats() && statsActionAvailable())
 			{
-				String name = monster.getName();
-				String version = monster.getVersion();
-				SwingUtilities.invokeLater(() -> panel.recordLookup(name, version));
+				// Renders per statsRenderTarget and records the lookup on its own path.
+				openStats(name, version, false);
+			}
+			else
+			{
+				BetterMonsterExaminePanel panel = monsterStatsPanel;
+				if (panel != null)
+				{
+					SwingUtilities.invokeLater(() -> panel.recordLookup(name, version));
+				}
 			}
 		}
 
@@ -600,14 +608,26 @@ public class BetterMonsterExaminePlugin extends Plugin
 		return dataService.variantForLevel(name, npc.getCombatLevel());
 	}
 
-	/** Handle a Stats click: render to the overlay and/or side panel per the render target. */
-	private void openStats(String name, String version)
+	/**
+	 * Show a monster per the render target, on the overlay and/or the side panel. A Stats click
+	 * passes {@code toggleOverlayOff} so repeating it closes the overlay; Examine doesn't, since
+	 * it's a repeat action and closing the card under the player mid-fight isn't what they asked
+	 * for. Records the lookup itself either way, so callers must not record it again.
+	 */
+	private void openStats(String name, String version, boolean toggleOverlayOff)
 	{
 		RenderTarget target = config.statsRenderTarget();
 		// The overlay draws on the client thread, so update it here; the panel is Swing (EDT).
 		if (target.showsOverlay())
 		{
-			toggleOverlay(name, version);
+			if (toggleOverlayOff)
+			{
+				toggleOverlay(name, version);
+			}
+			else
+			{
+				showOverlay(name, version);
+			}
 		}
 		// Feeding the panel records the lookup via its own select() choke point.
 		if (target.showsPanel() && openInPanel(name, version, false))
@@ -654,16 +674,25 @@ public class BetterMonsterExaminePlugin extends Plugin
 	 */
 	private void toggleOverlay(String name, String version)
 	{
-		MonsterCardOverlay overlay = cardOverlay;
-		if (overlay == null)
+		if (cardOverlay == null)
 		{
 			return;
 		}
-		String key = name + ' ' + version;
-		if (key.equals(overlayKey))
+		if ((name + ' ' + version).equals(overlayKey))
 		{
 			// Already showing this monster — a second Stats click closes it (and keeps it closed).
 			dismissOverlay();
+			return;
+		}
+		showOverlay(name, version);
+	}
+
+	/** Show the overlay for a monster, leaving it up if it's already the one showing. Client thread. */
+	private void showOverlay(String name, String version)
+	{
+		MonsterCardOverlay overlay = cardOverlay;
+		if (overlay == null)
+		{
 			return;
 		}
 		MonsterData selection = dataService.variant(name, version);
@@ -672,7 +701,7 @@ public class BetterMonsterExaminePlugin extends Plugin
 			return;
 		}
 		overlay.setMonster(selection);
-		overlayKey = key;
+		overlayKey = name + ' ' + version;
 		dismissedKey = null;
 	}
 

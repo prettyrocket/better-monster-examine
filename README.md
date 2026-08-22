@@ -41,7 +41,9 @@ GE price / High Alch on hover.*
 - **Examine combat summary** — optionally append either the weakest melee/ranged styles or all
   melee and ranged defences after the game's normal monster Examine text, with a named heading and
   colour-coded combat categories. This works independently of the added right-click entries, so
-  both can be switched off for an uncluttered menu.
+  both can be switched off for an uncluttered menu. Examine can also **open the full stats** in
+  whichever place you've set **Show stats in** — panel, overlay, or both — replacing the Stats
+  entry entirely if you'd rather keep the right-click menu clean.
 - **Recent & favorites** — the side panel's **↺** and **★** buttons hold your recently viewed
   or examined monsters and a pinned favorites list, so you can re-open one without re-typing.
 - **Quick links** — open the monster's **Wiki** page or the **DPS calculator**
