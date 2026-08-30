@@ -538,7 +538,7 @@ public class BetterMonsterExaminePlugin extends Plugin
 				// Renders per statsRenderTarget and records the lookup on its own path.
 				openStats(name, version, false);
 			}
-			else
+			else if (config.examineSummaryEnabled())
 			{
 				BetterMonsterExaminePanel panel = monsterStatsPanel;
 				if (panel != null)

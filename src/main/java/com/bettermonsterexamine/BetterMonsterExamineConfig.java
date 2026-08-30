@@ -143,7 +143,7 @@ public interface BetterMonsterExamineConfig extends Config
 	@ConfigItem(
 		keyName = "enableHistory",
 		name = "Recent & favorites",
-		description = "Show Recent and Favorites lists in the side panel, reached via the ↺ / ★ buttons in the search row. Normal monster Examines are added to Recent. Needs the side panel enabled.",
+		description = "Show Recent and Favorites lists in the side panel, reached via the ↺ / ★ buttons in the search row. Monster Examines are added to Recent when an Examine option above is on. Needs the side panel enabled.",
 		section = panelSection,
 		position = 1
 	)

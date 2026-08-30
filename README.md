@@ -45,7 +45,8 @@ GE price / High Alch on hover.*
   whichever place you've set **Show stats in** — panel, overlay, or both — replacing the Stats
   entry entirely if you'd rather keep the right-click menu clean.
 - **Recent & favorites** — the side panel's **↺** and **★** buttons hold your recently viewed
-  or examined monsters and a pinned favorites list, so you can re-open one without re-typing.
+  monsters and a pinned favorites list, so you can re-open one without re-typing. Examines join
+  the list when one of the Examine options above is on.
 - **Quick links** — open the monster's **Wiki** page or the **DPS calculator**
   in one click.
 - **Accessible highlighting** — colour coding is configurable: the default red/green palette, 
