@@ -23,48 +23,77 @@ final class ExamineSummary
 	{
 	}
 
-	static List<String> format(MonsterData monster, ExamineSummaryMode mode)
+	static List<String> format(MonsterData monster, ExamineSummaryMode mode, ExamineIconSet icons)
 	{
 		if (monster == null || mode == null)
 		{
 			return Collections.emptyList();
 		}
 
-		List<String> lines = new ArrayList<>(4);
-		lines.add(header(monster));
+		String[] meleeLabels = icons == null ? MELEE_NAMES : icons.melee();
+		String[] rangedLabels = icons == null ? RANGED_NAMES : icons.ranged();
 
+		List<String> lines = new ArrayList<>(3);
 		if (mode == ExamineSummaryMode.WEAKNESSES)
 		{
-			lines.add(weaknesses(monster));
+			lines.add(weaknesses(monster, meleeLabels, rangedLabels, icons));
 			return lines;
 		}
 
-		lines.add(colored("Melee:", MELEE_COLOR) + " Stab " + StatFormat.bonus(monster.getStabDefenceBonus())
-			+ " | Slash " + StatFormat.bonus(monster.getSlashDefenceBonus())
-			+ " | Crush " + StatFormat.bonus(monster.getCrushDefenceBonus()));
-		lines.add(colored("Ranged:", RANGED_COLOR) + " Standard " + StatFormat.bonus(monster.getStandardRangeDefenceBonus())
-			+ " | Heavy " + StatFormat.bonus(monster.getHeavyRangeDefenceBonus())
-			+ " | Light " + StatFormat.bonus(monster.getLightRangeDefenceBonus()));
+		lines.add(colored("Melee:", MELEE_COLOR) + ' ' + row(meleeLabels, new int[]{
+			monster.getStabDefenceBonus(),
+			monster.getSlashDefenceBonus(),
+			monster.getCrushDefenceBonus()
+		}));
+		lines.add(colored("Ranged:", RANGED_COLOR) + ' ' + row(rangedLabels, new int[]{
+			monster.getStandardRangeDefenceBonus(),
+			monster.getHeavyRangeDefenceBonus(),
+			monster.getLightRangeDefenceBonus()
+		}));
 
 		String element = weaknessElement(monster);
 		if (element != null)
 		{
-			lines.add(colored("Elemental weakness:", ELEMENT_COLOR) + ' ' + element + ' '
+			lines.add(colored("Element:", ELEMENT_COLOR) + ' ' + element(element, icons) + ' '
 				+ monster.getWeaknessPercent() + '%');
 		}
 		return lines;
 	}
 
-	private static String weaknesses(MonsterData monster)
+	/** One "label value" pair per style, in the order the bonuses were passed. */
+	private static String row(String[] labels, int[] bonuses)
 	{
-		StringBuilder line = new StringBuilder(colored("Weakest melee:", MELEE_COLOR)).append(' ')
-			.append(weakest(MELEE_NAMES, new int[]{
+		StringJoiner joined = new StringJoiner(" | ");
+		for (int i = 0; i < labels.length; i++)
+		{
+			joined.add(labels[i] + ' ' + StatFormat.bonus(bonuses[i]));
+		}
+		return joined.toString();
+	}
+
+	/** An icon replaces the element's name outright; an element we bundle no rune for keeps it. */
+	private static String element(String element, ExamineIconSet icons)
+	{
+		String icon = icons == null ? null : icons.element(element);
+		return icon == null ? element : icon;
+	}
+
+	private static String weaknesses(MonsterData monster, String[] meleeLabels, String[] rangedLabels,
+		ExamineIconSet icons)
+	{
+		StringBuilder line = new StringBuilder(new ChatMessageBuilder()
+			.append(ChatColorType.HIGHLIGHT)
+			.append("Weakest:")
+			.append(ChatColorType.NORMAL)
+			.build())
+			.append(' ')
+			.append(weakest(meleeLabels, new int[]{
 				monster.getStabDefenceBonus(),
 				monster.getSlashDefenceBonus(),
 				monster.getCrushDefenceBonus()
 			}))
-			.append(" | ").append(colored("Ranged:", RANGED_COLOR)).append(' ')
-			.append(weakest(RANGED_NAMES, new int[]{
+			.append(" | ")
+			.append(weakest(rangedLabels, new int[]{
 				monster.getStandardRangeDefenceBonus(),
 				monster.getHeavyRangeDefenceBonus(),
 				monster.getLightRangeDefenceBonus()
@@ -73,22 +102,25 @@ final class ExamineSummary
 		String element = weaknessElement(monster);
 		if (element != null)
 		{
-			line.append(" | ").append(colored("Elemental weakness:", ELEMENT_COLOR)).append(' ')
-				.append(element).append(' ').append(monster.getWeaknessPercent()).append('%');
+			line.append(" | ").append(element(element, icons)).append(' ')
+				.append(monster.getWeaknessPercent()).append('%');
 		}
 		return line.toString();
 	}
 
-	private static String header(MonsterData monster)
+	/**
+	 * The monster's name as it can safely go on a chat line: Jagex formatting escaped so a name
+	 * containing tags can't recolour the row, and line breaks flattened so it stays one line.
+	 * Null when there's nothing usable left, which tells the caller to leave the line alone.
+	 */
+	static String chatName(String name)
 	{
-		String name = monster.getName();
-		name = name == null || name.trim().isEmpty() ? "monster" : name.trim();
-		name = name.replace('\r', ' ').replace('\n', ' ');
-		return new ChatMessageBuilder()
-			.append(ChatColorType.HIGHLIGHT)
-			.append("Examined " + name + " stats:")
-			.append(ChatColorType.NORMAL)
-			.build();
+		if (name == null)
+		{
+			return null;
+		}
+		String cleaned = name.replace('\r', ' ').replace('\n', ' ').trim();
+		return cleaned.isEmpty() ? null : Text.escapeJagex(cleaned);
 	}
 
 	private static String colored(String text, Color color)
