@@ -287,6 +287,16 @@ Item icon / GE price / High Alch come from the **RuneLite client by item id** (z
   `openStats` records the lookup through its own path, so the Examine handler records only when it
   *doesn't* run — otherwise a single Examine would land in Recent twice.
 
+  The summary no longer opens with a header of its own. The monster's **name is written onto the
+  game's own Examine line**, underlined — RuneLite hands the live `MessageNode` to the
+  `ChatMessage` subscriber, so the row is rewritten in place (`setRuneLiteFormatMessage` +
+  `refreshChat()`). That drops a row rather than adding one, since the old `Examined X stats:`
+  line only restated a name the player had just clicked. `ExamineSummary.chatName` does the
+  escaping the header used to: a name carrying Jagex tags can't recolour the row, newlines are
+  flattened, and null means leave the game's line alone. `ExamineSummaryQueue` carries the name
+  beside the block, because the click is where the monster is known and the chat response is
+  where it's needed. Underline rather than colour — the row already carries the game's own.
+
   The checkboxes replaced a `menuOptions` enum (`Stats only / Drops only / Both / None`) that had
   already shipped, so `migrateMenuOptions` in `startUp` reads the retired key once, sets the two
   booleans from it, and unsets it. Without that, everyone who had narrowed or disabled the entries
