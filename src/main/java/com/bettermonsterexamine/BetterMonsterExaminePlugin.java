@@ -3,7 +3,6 @@ package com.bettermonsterexamine;
 import javax.inject.Inject;
 import javax.swing.SwingUtilities;
 
-import java.awt.Color;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 import java.util.Collections;
@@ -47,7 +46,6 @@ import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.events.PluginMessage;
 import net.runelite.client.events.ProfileChanged;
 import net.runelite.api.events.MenuEntryAdded;
-import net.runelite.client.util.ColorUtil;
 import net.runelite.client.util.ImageUtil;
 import net.runelite.client.util.LinkBrowser;
 
@@ -137,9 +135,6 @@ public class BetterMonsterExaminePlugin extends Plugin
 	private static final String CONFIG_GROUP = "bettermonsterexamine";
 	/** Retired in favour of the statsMenuEntry/dropsMenuEntry checkboxes; read once to migrate. */
 	private static final String LEGACY_MENU_OPTIONS = "menuOptions";
-
-	/** The monster's name on the game's own Examine line; the summary's old header colour. */
-	private static final Color NAME_COLOR = new Color(0xFF981F);
 
 	@Provides
 	BetterMonsterExamineConfig provideConfig(ConfigManager configManager)
@@ -610,8 +605,10 @@ public class BetterMonsterExaminePlugin extends Plugin
 	}
 
 	/**
-	 * Name the monster on the game's own Examine line. Rewriting the node rather than adding a line
-	 * keeps the block one row shorter, and the name is what the old summary header carried.
+	 * Name the monster on the game's own Examine line, underlined. Rewriting the node rather than
+	 * adding a line keeps the block one row shorter, and the name is what the old header carried.
+	 * Underline rather than colour: the row already carries the game's own colour, and a second one
+	 * competing with it read as muddy against the chat background.
 	 */
 	private void prependName(MessageNode node, String name)
 	{
@@ -620,8 +617,7 @@ public class BetterMonsterExaminePlugin extends Plugin
 		{
 			return;
 		}
-		String label = ColorUtil.wrapWithColorTag(cleaned + ':', NAME_COLOR);
-		node.setRuneLiteFormatMessage(label + ' ' + node.getValue());
+		node.setRuneLiteFormatMessage("<u>" + cleaned + "</u>: " + node.getValue());
 		client.refreshChat();
 	}
 
