@@ -136,6 +136,9 @@ public class BetterMonsterExaminePlugin extends Plugin
 	/** Retired in favour of the statsMenuEntry/dropsMenuEntry checkboxes; read once to migrate. */
 	private static final String LEGACY_MENU_OPTIONS = "menuOptions";
 
+	/** Chat icon height, matching the 11px RuneLite uses for its own; registerChatIcon won't scale. */
+	private static final int CHAT_ICON_HEIGHT = 11;
+
 	@Provides
 	BetterMonsterExamineConfig provideConfig(ConfigManager configManager)
 	{
@@ -622,6 +625,23 @@ public class BetterMonsterExaminePlugin extends Plugin
 	}
 
 	/**
+	 * Shrink a panel icon to chat size. The bundled art is 30px tall for the side panel, and
+	 * {@code registerChatIcon} uses whatever it is handed, so unscaled icons tower over the line.
+	 * Height drives the scale and the width follows, since the set is a mix of tall (dagger) and
+	 * wide (bolts) shapes that a square would squash.
+	 */
+	private static BufferedImage chatSized(BufferedImage image)
+	{
+		int height = image.getHeight();
+		if (height <= CHAT_ICON_HEIGHT)
+		{
+			return image;
+		}
+		int width = Math.max(1, Math.round(image.getWidth() * (float) CHAT_ICON_HEIGHT / height));
+		return ImageUtil.resizeImage(image, width, CHAT_ICON_HEIGHT, true);
+	}
+
+	/**
 	 * Hand the bundled style icons to RuneLite, keeping the ids it returns. Null if any icon is
 	 * missing, so the summary spells the styles out rather than rendering a broken tag.
 	 */
@@ -640,7 +660,7 @@ public class BetterMonsterExaminePlugin extends Plugin
 				log.debug("Examine summary icons unavailable; falling back to style names");
 				return null;
 			}
-			ids[i] = chatIconManager.registerChatIcon(images[i]);
+			ids[i] = chatIconManager.registerChatIcon(chatSized(images[i]));
 		}
 		return ids;
 	}
