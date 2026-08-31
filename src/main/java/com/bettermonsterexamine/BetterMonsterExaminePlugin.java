@@ -3,6 +3,7 @@ package com.bettermonsterexamine;
 import javax.inject.Inject;
 import javax.swing.SwingUtilities;
 
+import java.awt.Color;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 import java.util.Collections;
@@ -17,6 +18,7 @@ import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
 import net.runelite.api.KeyCode;
 import net.runelite.api.MenuAction;
+import net.runelite.api.MessageNode;
 import net.runelite.api.NPC;
 import net.runelite.api.NPCComposition;
 import net.runelite.api.Player;
@@ -29,6 +31,7 @@ import net.runelite.client.callback.ClientThread;
 import net.runelite.client.chat.ChatMessageManager;
 import net.runelite.client.chat.QueuedMessage;
 import net.runelite.client.config.ConfigManager;
+import net.runelite.client.game.ChatIconManager;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.input.MouseAdapter;
 import net.runelite.client.input.MouseManager;
@@ -44,6 +47,7 @@ import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.events.PluginMessage;
 import net.runelite.client.events.ProfileChanged;
 import net.runelite.api.events.MenuEntryAdded;
+import net.runelite.client.util.ColorUtil;
 import net.runelite.client.util.ImageUtil;
 import net.runelite.client.util.LinkBrowser;
 
@@ -69,6 +73,9 @@ public class BetterMonsterExaminePlugin extends Plugin
 
 	@Inject
 	private ChatMessageManager chatMessageManager;
+
+	@Inject
+	private ChatIconManager chatIconManager;
 
 	@Inject
 	private ConfigManager configManager;
@@ -122,11 +129,17 @@ public class BetterMonsterExaminePlugin extends Plugin
 	private volatile int playerHpLevel = -1;
 	private volatile int playerSlayerLevel = -1;
 	private final ExamineSummaryQueue examineSummaryQueue = new ExamineSummaryQueue();
+
+	/** Chat icon indices for the summary's attack styles; null when registration failed. */
+	private volatile ExamineIconSet examineIcons;
 	private static final String STATS_OPTION = "Stats";
 	private static final String DROPS_OPTION = "Drops";
 	private static final String CONFIG_GROUP = "bettermonsterexamine";
 	/** Retired in favour of the statsMenuEntry/dropsMenuEntry checkboxes; read once to migrate. */
 	private static final String LEGACY_MENU_OPTIONS = "menuOptions";
+
+	/** The monster's name on the game's own Examine line; the summary's old header colour. */
+	private static final Color NAME_COLOR = new Color(0xFF981F);
 
 	@Provides
 	BetterMonsterExamineConfig provideConfig(ConfigManager configManager)
@@ -139,6 +152,7 @@ public class BetterMonsterExaminePlugin extends Plugin
 	{
 		log.info("Better Monster Examine started");
 		migrateMenuOptions();
+		examineIcons = registerExamineIcons();
 		examineSummaryQueue.clear();
 		titleIcon = ImageUtil.loadImageResource(getClass(), "/icon.png");
 		cardOverlay = new MonsterCardOverlay(config, monsterIcons, () -> playerCombatLevel, () -> playerHpLevel, () -> playerSlayerLevel);
@@ -565,7 +579,8 @@ public class BetterMonsterExaminePlugin extends Plugin
 		}
 
 		// Unknown monsters deliberately add an empty slot so rapid Examine responses stay aligned.
-		examineSummaryQueue.add(ExamineSummary.format(monster, config.examineSummaryDetail()), client.getTickCount());
+		examineSummaryQueue.add(monster == null ? null : monster.getName(),
+			ExamineSummary.format(monster, config.examineSummaryDetail(), examineIcons), client.getTickCount());
 	}
 
 	/**
@@ -580,16 +595,60 @@ public class BetterMonsterExaminePlugin extends Plugin
 			return;
 		}
 
-		String message = examineSummaryQueue.onNpcExamine(event.getMessage(), client.getTickCount());
-		if (message == null)
+		ExamineSummaryQueue.Examined examined = examineSummaryQueue.onNpcExamine(event.getMessage(), client.getTickCount());
+		if (examined == null)
 		{
 			return;
 		}
 
+		prependName(event.getMessageNode(), examined.getMonsterName());
+
 		chatMessageManager.queue(QueuedMessage.builder()
 			.type(ChatMessageType.NPC_EXAMINE)
-			.runeLiteFormattedMessage(message)
+			.runeLiteFormattedMessage(examined.getBlock())
 			.build());
+	}
+
+	/**
+	 * Name the monster on the game's own Examine line. Rewriting the node rather than adding a line
+	 * keeps the block one row shorter, and the name is what the old summary header carried.
+	 */
+	private void prependName(MessageNode node, String name)
+	{
+		String cleaned = ExamineSummary.chatName(name);
+		if (node == null || cleaned == null)
+		{
+			return;
+		}
+		String label = ColorUtil.wrapWithColorTag(cleaned + ':', NAME_COLOR);
+		node.setRuneLiteFormatMessage(label + ' ' + node.getValue());
+		client.refreshChat();
+	}
+
+	/**
+	 * Hand the bundled style icons to RuneLite so the summary can name a style with {@code <img=N>}.
+	 * Returns null if any icon is missing, so the summary spells the styles out instead of
+	 * rendering a broken tag.
+	 */
+	private ExamineIconSet registerExamineIcons()
+	{
+		BufferedImage[] images = {
+			monsterIcons.stabIcon, monsterIcons.slashIcon, monsterIcons.crushIcon,
+			monsterIcons.standardIcon, monsterIcons.heavyIcon, monsterIcons.lightIcon,
+			monsterIcons.airIcon, monsterIcons.waterIcon, monsterIcons.earthIcon, monsterIcons.fireIcon
+		};
+		int[] indices = new int[images.length];
+		for (int i = 0; i < images.length; i++)
+		{
+			if (images[i] == null)
+			{
+				log.debug("Examine summary icons unavailable; falling back to style names");
+				return null;
+			}
+			indices[i] = chatIconManager.chatIconIndex(chatIconManager.registerChatIcon(images[i]));
+		}
+		return new ExamineIconSet(indices[0], indices[1], indices[2], indices[3], indices[4],
+			indices[5], indices[6], indices[7], indices[8], indices[9]);
 	}
 
 	/** Resolve an NPC by spawn id, falling back to name plus its in-game combat level. */
