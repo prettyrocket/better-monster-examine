@@ -16,10 +16,10 @@ public class ExamineSummaryTest
 	}
 
 	@Test
-	public void offProducesNoSummary()
+	public void noMonsterOrNoModeProducesNoSummary()
 	{
-		assertTrue(ExamineSummary.format(monster("{}"), ExamineSummaryMode.OFF).isEmpty());
 		assertTrue(ExamineSummary.format(null, ExamineSummaryMode.ALL_DEFENCES).isEmpty());
+		assertTrue(ExamineSummary.format(monster("{}"), null).isEmpty());
 	}
 
 	@Test
@@ -90,7 +90,6 @@ public class ExamineSummaryTest
 	@Test
 	public void modeLabelsAreUserFacing()
 	{
-		assertEquals("Off", ExamineSummaryMode.OFF.toString());
 		assertEquals("Weaknesses only", ExamineSummaryMode.WEAKNESSES.toString());
 		assertEquals("All defences", ExamineSummaryMode.ALL_DEFENCES.toString());
 	}

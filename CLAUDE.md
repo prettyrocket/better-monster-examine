@@ -258,16 +258,43 @@ Item icon / GE price / High Alch come from the **RuneLite client by item id** (z
 - **`StatColors`** — the shared `HighlightMode` palette (danger / good / combat-level gradient)
   used by both the side panel and the overlay, so both honour the same colour-blind settings.
 - **`BetterMonsterExamineConfig`** — config group `bettermonsterexamine`: `enableSidePanel`,
-  `menuOptions`, `examineSummary`, `statHighlighting`, and `statsRenderTarget` (`RenderTarget`: panel /
-  overlay / both — where the right-click **"Stats"** action renders). **`menuOptions`** (`MenuOption`: Stats only /
-  Drops only / Both / None) picks which right-click entries appear on a monster's Examine: **Stats**
-  renders per `statsRenderTarget`, **Drops** opens the side panel to its Drops tab. Each entry shows
-  only when it can act — Stats needs the overlay target or (panel target + `enableSidePanel`); Drops
-  needs `enableSidePanel`. `examineSummary` (`ExamineSummaryMode`: Off / Weaknesses only / All
-  defences) independently appends a compact block after the normal Examine text. A second Stats
-  click on the same monster toggles the overlay off. The overlay updates on the **client thread**
-  (it draws there); the side panel on the EDT. An
-  **Integrations** section holds the cross-plugin links — currently `notEnoughRunesLink` (see below).
+  `enableHistory`, `statHighlighting`, and `statsRenderTarget` (`RenderTarget`: panel / overlay /
+  both — where the right-click **"Stats"** action renders). The three things the plugin can attach to
+  a monster's Examine are **three independent checkboxes**, not one enum: **`statsMenuEntry`** adds
+  the right-click **Stats** entry (rendering per `statsRenderTarget`), **`dropsMenuEntry`** adds
+  **Drops** (opening the side panel on its Drops tab), and **`examineSummaryEnabled`** appends a
+  compact combat block after the game's own Examine text — with `examineSummaryDetail`
+  (`ExamineSummaryMode`: Weaknesses only / All defences) controlling how much it shows. Each entry
+  appears only when it can act — Stats needs the overlay target or (panel target +
+  `enableSidePanel`); Drops needs `enableSidePanel` — while the summary is independent of all of it,
+  so every menu entry can be off and the summary still works (its whole point).
+  **`examineOpensStats`** is the fourth: a native Examine also renders the monster per
+  `statsRenderTarget`, making the Stats entry redundant for players who'd rather not carry it. It's
+  separate from the summary checkbox because a chat line and a panel opening are different enough
+  that wanting one shouldn't force the other. The overlay updates on the **client thread** (it draws
+  there); the side panel on the EDT. An **Integrations** section holds the cross-plugin links —
+  currently `notEnoughRunesLink` (see below).
+
+  Sections split by **trigger**: **Right-click menu** owns the two entries and `requireShift`;
+  **Examine** owns the three settings that hang off the game's own Examine. `statsRenderTarget` is
+  deliberately **sectionless**, rendering above both — the Stats entry and `examineOpensStats` both
+  render through it, so filing it under either heading would misdescribe it.
+
+  `openStats` takes a `toggleOverlayOff` flag rather than always toggling. A second **Stats click**
+  on the same monster still closes the overlay, but a second **Examine** doesn't: Examine is a repeat
+  action in a way a deliberate menu click isn't, and closing the card under the player mid-fight
+  reads as a bug. `toggleOverlay` now defers to a plain `showOverlay` for the non-toggling half.
+  `openStats` records the lookup through its own path, so the Examine handler records only when it
+  *doesn't* run — otherwise a single Examine would land in Recent twice.
+
+  The checkboxes replaced a `menuOptions` enum (`Stats only / Drops only / Both / None`) that had
+  already shipped, so `migrateMenuOptions` in `startUp` reads the retired key once, sets the two
+  booleans from it, and unsets it. Without that, everyone who had narrowed or disabled the entries
+  would silently get both back on update, since the new booleans would just fall to their defaults.
+  It also runs on **`ProfileChanged`**: profiles carry their own config, so switching to one that
+  still holds the retired key would otherwise leave it unmigrated until the next restart. The two
+  new keys are constants on the config interface, shared with its `@ConfigItem` annotations, so a
+  rename can't leave the migration writing a key nothing reads.
 
 ### Cross-plugin links (`NotEnoughRunesLink`, #69 · inbound #70)
 

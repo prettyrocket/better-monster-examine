@@ -1,11 +1,11 @@
 package com.bettermonsterexamine;
 
 /**
- * The compact combat information appended to a monster's Examine response.
+ * How much detail the compact block appended to a monster's Examine response carries. Whether it
+ * appears at all is the separate {@code examineSummaryEnabled} checkbox.
  */
 public enum ExamineSummaryMode
 {
-	OFF("Off"),
 	WEAKNESSES("Weaknesses only"),
 	ALL_DEFENCES("All defences");
 
