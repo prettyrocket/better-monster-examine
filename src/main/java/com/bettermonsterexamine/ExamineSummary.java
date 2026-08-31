@@ -5,8 +5,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.StringJoiner;
-import net.runelite.client.chat.ChatColorType;
-import net.runelite.client.chat.ChatMessageBuilder;
 import net.runelite.client.util.ColorUtil;
 import net.runelite.client.util.Text;
 
@@ -23,77 +21,46 @@ final class ExamineSummary
 	{
 	}
 
-	static List<String> format(MonsterData monster, ExamineSummaryMode mode, ExamineIconSet icons)
+	static List<String> format(MonsterData monster, ExamineSummaryMode mode)
 	{
 		if (monster == null || mode == null)
 		{
 			return Collections.emptyList();
 		}
 
-		String[] meleeLabels = icons == null ? MELEE_NAMES : icons.melee();
-		String[] rangedLabels = icons == null ? RANGED_NAMES : icons.ranged();
-
 		List<String> lines = new ArrayList<>(3);
 		if (mode == ExamineSummaryMode.WEAKNESSES)
 		{
-			lines.add(weaknesses(monster, meleeLabels, rangedLabels, icons));
+			lines.add(weaknesses(monster));
 			return lines;
 		}
 
-		lines.add(colored("Melee:", MELEE_COLOR) + ' ' + row(meleeLabels, new int[]{
-			monster.getStabDefenceBonus(),
-			monster.getSlashDefenceBonus(),
-			monster.getCrushDefenceBonus()
-		}));
-		lines.add(colored("Ranged:", RANGED_COLOR) + ' ' + row(rangedLabels, new int[]{
-			monster.getStandardRangeDefenceBonus(),
-			monster.getHeavyRangeDefenceBonus(),
-			monster.getLightRangeDefenceBonus()
-		}));
+		lines.add(colored("Melee:", MELEE_COLOR) + " Stab " + StatFormat.bonus(monster.getStabDefenceBonus())
+			+ " | Slash " + StatFormat.bonus(monster.getSlashDefenceBonus())
+			+ " | Crush " + StatFormat.bonus(monster.getCrushDefenceBonus()));
+		lines.add(colored("Ranged:", RANGED_COLOR) + " Standard " + StatFormat.bonus(monster.getStandardRangeDefenceBonus())
+			+ " | Heavy " + StatFormat.bonus(monster.getHeavyRangeDefenceBonus())
+			+ " | Light " + StatFormat.bonus(monster.getLightRangeDefenceBonus()));
 
 		String element = weaknessElement(monster);
 		if (element != null)
 		{
-			lines.add(colored("Element:", ELEMENT_COLOR) + ' ' + element(element, icons) + ' '
+			lines.add(colored("Elemental weakness:", ELEMENT_COLOR) + ' ' + element + ' '
 				+ monster.getWeaknessPercent() + '%');
 		}
 		return lines;
 	}
 
-	/** One "label value" pair per style, in the order the bonuses were passed. */
-	private static String row(String[] labels, int[] bonuses)
+	private static String weaknesses(MonsterData monster)
 	{
-		StringJoiner joined = new StringJoiner(" | ");
-		for (int i = 0; i < labels.length; i++)
-		{
-			joined.add(labels[i] + ' ' + StatFormat.bonus(bonuses[i]));
-		}
-		return joined.toString();
-	}
-
-	/** An icon replaces the element's name outright; an element we bundle no rune for keeps it. */
-	private static String element(String element, ExamineIconSet icons)
-	{
-		String icon = icons == null ? null : icons.element(element);
-		return icon == null ? element : icon;
-	}
-
-	private static String weaknesses(MonsterData monster, String[] meleeLabels, String[] rangedLabels,
-		ExamineIconSet icons)
-	{
-		StringBuilder line = new StringBuilder(new ChatMessageBuilder()
-			.append(ChatColorType.HIGHLIGHT)
-			.append("Weakest:")
-			.append(ChatColorType.NORMAL)
-			.build())
-			.append(' ')
-			.append(weakest(meleeLabels, new int[]{
+		StringBuilder line = new StringBuilder(colored("Weakest melee:", MELEE_COLOR)).append(' ')
+			.append(weakest(MELEE_NAMES, new int[]{
 				monster.getStabDefenceBonus(),
 				monster.getSlashDefenceBonus(),
 				monster.getCrushDefenceBonus()
 			}))
-			.append(" | ")
-			.append(weakest(rangedLabels, new int[]{
+			.append(" | ").append(colored("Ranged:", RANGED_COLOR)).append(' ')
+			.append(weakest(RANGED_NAMES, new int[]{
 				monster.getStandardRangeDefenceBonus(),
 				monster.getHeavyRangeDefenceBonus(),
 				monster.getLightRangeDefenceBonus()
@@ -102,8 +69,8 @@ final class ExamineSummary
 		String element = weaknessElement(monster);
 		if (element != null)
 		{
-			line.append(" | ").append(element(element, icons)).append(' ')
-				.append(monster.getWeaknessPercent()).append('%');
+			line.append(" | ").append(colored("Elemental weakness:", ELEMENT_COLOR)).append(' ')
+				.append(element).append(' ').append(monster.getWeaknessPercent()).append('%');
 		}
 		return line.toString();
 	}

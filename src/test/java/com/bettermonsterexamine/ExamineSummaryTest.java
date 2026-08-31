@@ -16,9 +16,6 @@ public class ExamineSummaryTest
 		return GSON.fromJson(json, MonsterData.class);
 	}
 
-	/** Fixed indices so an expected string can spell the tag out. */
-	private static final ExamineIconSet ICONS = new ExamineIconSet(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
-
 	private static final String ICE_GIANT = "{\"name\":\"Ice giant\",\"stab_defence_bonus\":20,"
 		+ "\"slash_defence_bonus\":20,\"crush_defence_bonus\":0,\"standard_range_defence_bonus\":40,"
 		+ "\"heavy_range_defence_bonus\":20,\"light_range_defence_bonus\":60,"
@@ -27,55 +24,46 @@ public class ExamineSummaryTest
 	@Test
 	public void noMonsterOrNoModeProducesNoSummary()
 	{
-		assertTrue(ExamineSummary.format(null, ExamineSummaryMode.ALL_DEFENCES, ICONS).isEmpty());
-		assertTrue(ExamineSummary.format(monster("{}"), null, ICONS).isEmpty());
+		assertTrue(ExamineSummary.format(null, ExamineSummaryMode.ALL_DEFENCES).isEmpty());
+		assertTrue(ExamineSummary.format(monster("{}"), null).isEmpty());
 	}
 
 	@Test
-	public void allDefencesUsesIconsSignedBonusesAndRequestedOrder()
-	{
-		assertEquals(List.of(
-			"<col=ff4040>Melee:</col> <img=1> +20 | <img=2> +20 | <img=3> +0",
-			"<col=5fc96b>Ranged:</col> <img=4> +40 | <img=5> +20 | <img=6> +60",
-			"<col=56b4e9>Element:</col> <img=10> 50%"),
-			ExamineSummary.format(monster(ICE_GIANT), ExamineSummaryMode.ALL_DEFENCES, ICONS));
-	}
-
-	@Test
-	public void noIconSetSpellsTheStylesOut()
+	public void allDefencesUsesSignedBonusesAndRequestedOrder()
 	{
 		assertEquals(List.of(
 			"<col=ff4040>Melee:</col> Stab +20 | Slash +20 | Crush +0",
 			"<col=5fc96b>Ranged:</col> Standard +40 | Heavy +20 | Light +60",
-			"<col=56b4e9>Element:</col> Fire 50%"),
-			ExamineSummary.format(monster(ICE_GIANT), ExamineSummaryMode.ALL_DEFENCES, null));
+			"<col=56b4e9>Elemental weakness:</col> Fire 50%"),
+			ExamineSummary.format(monster(ICE_GIANT), ExamineSummaryMode.ALL_DEFENCES));
 	}
 
 	@Test
 	public void summaryNoLongerCarriesItsOwnNameHeader()
 	{
 		// The name moved onto the game's own Examine line, so the block starts with the stats.
-		List<String> lines = ExamineSummary.format(monster(ICE_GIANT), ExamineSummaryMode.WEAKNESSES, ICONS);
+		List<String> lines = ExamineSummary.format(monster(ICE_GIANT), ExamineSummaryMode.WEAKNESSES);
 
 		assertEquals(1, lines.size());
-		assertTrue(lines.get(0).startsWith("<colHIGHLIGHT>Weakest:<colNORMAL>"));
+		assertTrue(lines.get(0).startsWith("<col=ff4040>Weakest melee:</col>"));
 	}
 
 	@Test
 	public void allDefencesOmitsMissingElement()
 	{
-		List<String> lines = ExamineSummary.format(monster("{}"), ExamineSummaryMode.ALL_DEFENCES, ICONS);
+		List<String> lines = ExamineSummary.format(monster("{}"), ExamineSummaryMode.ALL_DEFENCES);
 
 		assertEquals(2, lines.size());
-		assertEquals("<col=ff4040>Melee:</col> <img=1> +0 | <img=2> +0 | <img=3> +0", lines.get(0));
+		assertEquals("<col=ff4040>Melee:</col> Stab +0 | Slash +0 | Crush +0", lines.get(0));
 	}
 
 	@Test
 	public void weaknessesOnlySelectsLowestBonusesAndElement()
 	{
 		assertEquals(List.of(
-			"<colHIGHLIGHT>Weakest:<colNORMAL> <img=3> (+0) | <img=5> (+20) | <img=10> 50%"),
-			ExamineSummary.format(monster(ICE_GIANT), ExamineSummaryMode.WEAKNESSES, ICONS));
+			"<col=ff4040>Weakest melee:</col> Crush (+0) | <col=5fc96b>Ranged:</col> Heavy (+20)"
+				+ " | <col=56b4e9>Elemental weakness:</col> Fire 50%"),
+			ExamineSummary.format(monster(ICE_GIANT), ExamineSummaryMode.WEAKNESSES));
 	}
 
 	@Test
@@ -86,17 +74,9 @@ public class ExamineSummaryTest
 			+ "\"heavy_range_defence_bonus\":-5,\"light_range_defence_bonus\":-5}");
 
 		assertEquals(List.of(
-			"<colHIGHLIGHT>Weakest:<colNORMAL> <img=1>/<img=2>/<img=3> (-15) | <img=5>/<img=6> (-5)"),
-			ExamineSummary.format(m, ExamineSummaryMode.WEAKNESSES, ICONS));
-	}
-
-	@Test
-	public void anElementWeBundleNoRuneForKeepsItsName()
-	{
-		MonsterData m = monster("{\"elemental_weakness\":\"smoke\",\"elemental_weakness_percent\":30}");
-
-		assertTrue(ExamineSummary.format(m, ExamineSummaryMode.WEAKNESSES, ICONS).get(0)
-			.endsWith("| Smoke 30%"));
+			"<col=ff4040>Weakest melee:</col> Stab/Slash/Crush (-15)"
+				+ " | <col=5fc96b>Ranged:</col> Heavy/Light (-5)"),
+			ExamineSummary.format(m, ExamineSummaryMode.WEAKNESSES));
 	}
 
 	@Test
