@@ -8,6 +8,10 @@ import net.runelite.client.config.ConfigSection;
 @ConfigGroup("bettermonsterexamine")
 public interface BetterMonsterExamineConfig extends Config
 {
+	/** Shared with the plugin's one-off migration off the retired menuOptions enum. */
+	String STATS_MENU_ENTRY = "statsMenuEntry";
+	String DROPS_MENU_ENTRY = "dropsMenuEntry";
+
 	@ConfigSection(
 		name = "Right-click menu",
 		description = "The Stats/Drops entries added to a monster's right-click Examine.",
@@ -57,7 +61,7 @@ public interface BetterMonsterExamineConfig extends Config
 	}
 
 	@ConfigItem(
-		keyName = "statsMenuEntry",
+		keyName = STATS_MENU_ENTRY,
 		name = "Stats entry",
 		description = "Add a 'Stats' option to a monster's right-click Examine, showing it per 'Show stats in'.",
 		section = menuSection,
@@ -69,7 +73,7 @@ public interface BetterMonsterExamineConfig extends Config
 	}
 
 	@ConfigItem(
-		keyName = "dropsMenuEntry",
+		keyName = DROPS_MENU_ENTRY,
 		name = "Drops entry",
 		description = "Add a 'Drops' option to a monster's right-click Examine, opening the side panel on its Drops tab. Needs the side panel enabled.",
 		section = menuSection,

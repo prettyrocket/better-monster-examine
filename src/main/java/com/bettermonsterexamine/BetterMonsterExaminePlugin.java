@@ -42,6 +42,7 @@ import net.runelite.client.eventbus.EventBus;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.events.PluginMessage;
+import net.runelite.client.events.ProfileChanged;
 import net.runelite.api.events.MenuEntryAdded;
 import net.runelite.client.util.ImageUtil;
 import net.runelite.client.util.LinkBrowser;
@@ -504,6 +505,16 @@ public class BetterMonsterExaminePlugin extends Plugin
 	}
 
 	/**
+	 * Profiles carry their own config, so a switch can bring a profile that still holds the
+	 * retired key — start-up alone would leave it unmigrated until the next restart.
+	 */
+	@Subscribe
+	public void onProfileChanged(ProfileChanged event)
+	{
+		migrateMenuOptions();
+	}
+
+	/**
 	 * Carry the retired {@code menuOptions} enum (Stats only / Drops only / Both / None) over to the
 	 * two checkboxes that replaced it. The plugin is on the hub, so without this everyone who had
 	 * narrowed or switched off the entries silently gets both back on update — the booleans would
@@ -516,9 +527,9 @@ public class BetterMonsterExaminePlugin extends Plugin
 		{
 			return;
 		}
-		configManager.setConfiguration(CONFIG_GROUP, "statsMenuEntry",
+		configManager.setConfiguration(CONFIG_GROUP, BetterMonsterExamineConfig.STATS_MENU_ENTRY,
 			"STATS_ONLY".equals(legacy) || "BOTH".equals(legacy));
-		configManager.setConfiguration(CONFIG_GROUP, "dropsMenuEntry",
+		configManager.setConfiguration(CONFIG_GROUP, BetterMonsterExamineConfig.DROPS_MENU_ENTRY,
 			"DROPS_ONLY".equals(legacy) || "BOTH".equals(legacy));
 		configManager.unsetConfiguration(CONFIG_GROUP, LEGACY_MENU_OPTIONS);
 		log.debug("Migrated menuOptions={} to the Stats/Drops checkboxes", legacy);

@@ -291,6 +291,10 @@ Item icon / GE price / High Alch come from the **RuneLite client by item id** (z
   already shipped, so `migrateMenuOptions` in `startUp` reads the retired key once, sets the two
   booleans from it, and unsets it. Without that, everyone who had narrowed or disabled the entries
   would silently get both back on update, since the new booleans would just fall to their defaults.
+  It also runs on **`ProfileChanged`**: profiles carry their own config, so switching to one that
+  still holds the retired key would otherwise leave it unmigrated until the next restart. The two
+  new keys are constants on the config interface, shared with its `@ConfigItem` annotations, so a
+  rename can't leave the migration writing a key nothing reads.
 
 ### Cross-plugin links (`NotEnoughRunesLink`, #69 · inbound #70)
 
