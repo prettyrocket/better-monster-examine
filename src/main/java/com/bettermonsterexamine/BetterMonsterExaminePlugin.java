@@ -130,8 +130,8 @@ public class BetterMonsterExaminePlugin extends Plugin
 	private volatile int playerSlayerLevel = -1;
 	private final ExamineSummaryQueue examineSummaryQueue = new ExamineSummaryQueue();
 
-	/** Chat icon indices for the summary's attack styles; null when registration failed. */
-	private volatile ExamineIconSet examineIcons;
+	/** Chat icon ids for the summary's attack styles; null when registration failed. */
+	private volatile int[] examineIconIds;
 	private static final String STATS_OPTION = "Stats";
 	private static final String DROPS_OPTION = "Drops";
 	private static final String CONFIG_GROUP = "bettermonsterexamine";
@@ -152,7 +152,7 @@ public class BetterMonsterExaminePlugin extends Plugin
 	{
 		log.info("Better Monster Examine started");
 		migrateMenuOptions();
-		examineIcons = registerExamineIcons();
+		examineIconIds = registerExamineIcons();
 		examineSummaryQueue.clear();
 		titleIcon = ImageUtil.loadImageResource(getClass(), "/icon.png");
 		cardOverlay = new MonsterCardOverlay(config, monsterIcons, () -> playerCombatLevel, () -> playerHpLevel, () -> playerSlayerLevel);
@@ -580,7 +580,7 @@ public class BetterMonsterExaminePlugin extends Plugin
 
 		// Unknown monsters deliberately add an empty slot so rapid Examine responses stay aligned.
 		examineSummaryQueue.add(monster == null ? null : monster.getName(),
-			ExamineSummary.format(monster, config.examineSummaryDetail(), examineIcons), client.getTickCount());
+			ExamineSummary.format(monster, config.examineSummaryDetail(), currentExamineIcons()), client.getTickCount());
 	}
 
 	/**
@@ -626,18 +626,17 @@ public class BetterMonsterExaminePlugin extends Plugin
 	}
 
 	/**
-	 * Hand the bundled style icons to RuneLite so the summary can name a style with {@code <img=N>}.
-	 * Returns null if any icon is missing, so the summary spells the styles out instead of
-	 * rendering a broken tag.
+	 * Hand the bundled style icons to RuneLite, keeping the ids it returns. Null if any icon is
+	 * missing, so the summary spells the styles out rather than rendering a broken tag.
 	 */
-	private ExamineIconSet registerExamineIcons()
+	private int[] registerExamineIcons()
 	{
 		BufferedImage[] images = {
 			monsterIcons.stabIcon, monsterIcons.slashIcon, monsterIcons.crushIcon,
 			monsterIcons.standardIcon, monsterIcons.heavyIcon, monsterIcons.lightIcon,
 			monsterIcons.airIcon, monsterIcons.waterIcon, monsterIcons.earthIcon, monsterIcons.fireIcon
 		};
-		int[] indices = new int[images.length];
+		int[] ids = new int[images.length];
 		for (int i = 0; i < images.length; i++)
 		{
 			if (images[i] == null)
@@ -645,10 +644,38 @@ public class BetterMonsterExaminePlugin extends Plugin
 				log.debug("Examine summary icons unavailable; falling back to style names");
 				return null;
 			}
-			indices[i] = chatIconManager.chatIconIndex(chatIconManager.registerChatIcon(images[i]));
+			ids[i] = chatIconManager.registerChatIcon(images[i]);
 		}
-		return new ExamineIconSet(indices[0], indices[1], indices[2], indices[3], indices[4],
-			indices[5], indices[6], indices[7], indices[8], indices[9]);
+		return ids;
+	}
+
+	/**
+	 * Resolve the registered ids to the {@code <img=N>} indices the chat renderer wants.
+	 *
+	 * <p>Deliberately not done at registration: {@code registerChatIcon} files the icon with an
+	 * index of -1 and fills the real one in on a later client-thread pass, so an index read there is
+	 * always -1 — which renders as nothing and leaves the separators bare. Resolving per summary
+	 * also survives the reshuffle when another plugin registers an icon of its own.
+	 */
+	private ExamineIconSet currentExamineIcons()
+	{
+		int[] ids = examineIconIds;
+		if (ids == null)
+		{
+			return null;
+		}
+		int[] idx = new int[ids.length];
+		for (int i = 0; i < ids.length; i++)
+		{
+			idx[i] = chatIconManager.chatIconIndex(ids[i]);
+			if (idx[i] < 0)
+			{
+				// Not uploaded to the client yet; spell the styles out rather than draw nothing.
+				return null;
+			}
+		}
+		return new ExamineIconSet(idx[0], idx[1], idx[2], idx[3], idx[4], idx[5], idx[6], idx[7],
+			idx[8], idx[9]);
 	}
 
 	/** Resolve an NPC by spawn id, falling back to name plus its in-game combat level. */
