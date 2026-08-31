@@ -17,6 +17,7 @@ import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
 import net.runelite.api.KeyCode;
 import net.runelite.api.MenuAction;
+import net.runelite.api.MessageNode;
 import net.runelite.api.NPC;
 import net.runelite.api.NPCComposition;
 import net.runelite.api.Player;
@@ -565,7 +566,8 @@ public class BetterMonsterExaminePlugin extends Plugin
 		}
 
 		// Unknown monsters deliberately add an empty slot so rapid Examine responses stay aligned.
-		examineSummaryQueue.add(ExamineSummary.format(monster, config.examineSummaryDetail()), client.getTickCount());
+		examineSummaryQueue.add(monster == null ? null : monster.getName(),
+			ExamineSummary.format(monster, config.examineSummaryDetail()), client.getTickCount());
 	}
 
 	/**
@@ -580,16 +582,35 @@ public class BetterMonsterExaminePlugin extends Plugin
 			return;
 		}
 
-		String message = examineSummaryQueue.onNpcExamine(event.getMessage(), client.getTickCount());
-		if (message == null)
+		ExamineSummaryQueue.Examined examined = examineSummaryQueue.onNpcExamine(event.getMessage(), client.getTickCount());
+		if (examined == null)
 		{
 			return;
 		}
 
+		prependName(event.getMessageNode(), examined.getMonsterName());
+
 		chatMessageManager.queue(QueuedMessage.builder()
 			.type(ChatMessageType.NPC_EXAMINE)
-			.runeLiteFormattedMessage(message)
+			.runeLiteFormattedMessage(examined.getBlock())
 			.build());
+	}
+
+	/**
+	 * Name the monster on the game's own Examine line, underlined. Rewriting the node rather than
+	 * adding a line keeps the block one row shorter, and the name is what the old header carried.
+	 * Underline rather than colour: the row already carries the game's own colour, and a second one
+	 * competing with it read as muddy against the chat background.
+	 */
+	private void prependName(MessageNode node, String name)
+	{
+		String cleaned = ExamineSummary.chatName(name);
+		if (node == null || cleaned == null)
+		{
+			return;
+		}
+		node.setRuneLiteFormatMessage("<u>" + cleaned + "</u>: " + node.getValue());
+		client.refreshChat();
 	}
 
 	/** Resolve an NPC by spawn id, falling back to name plus its in-game combat level. */

@@ -5,8 +5,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.StringJoiner;
-import net.runelite.client.chat.ChatColorType;
-import net.runelite.client.chat.ChatMessageBuilder;
 import net.runelite.client.util.ColorUtil;
 import net.runelite.client.util.Text;
 
@@ -30,9 +28,7 @@ final class ExamineSummary
 			return Collections.emptyList();
 		}
 
-		List<String> lines = new ArrayList<>(4);
-		lines.add(header(monster));
-
+		List<String> lines = new ArrayList<>(3);
 		if (mode == ExamineSummaryMode.WEAKNESSES)
 		{
 			lines.add(weaknesses(monster));
@@ -79,16 +75,19 @@ final class ExamineSummary
 		return line.toString();
 	}
 
-	private static String header(MonsterData monster)
+	/**
+	 * The monster's name as it can safely go on a chat line: Jagex formatting escaped so a name
+	 * containing tags can't recolour the row, and line breaks flattened so it stays one line.
+	 * Null when there's nothing usable left, which tells the caller to leave the line alone.
+	 */
+	static String chatName(String name)
 	{
-		String name = monster.getName();
-		name = name == null || name.trim().isEmpty() ? "monster" : name.trim();
-		name = name.replace('\r', ' ').replace('\n', ' ');
-		return new ChatMessageBuilder()
-			.append(ChatColorType.HIGHLIGHT)
-			.append("Examined " + name + " stats:")
-			.append(ChatColorType.NORMAL)
-			.build();
+		if (name == null)
+		{
+			return null;
+		}
+		String cleaned = name.replace('\r', ' ').replace('\n', ' ').trim();
+		return cleaned.isEmpty() ? null : Text.escapeJagex(cleaned);
 	}
 
 	private static String colored(String text, Color color)
