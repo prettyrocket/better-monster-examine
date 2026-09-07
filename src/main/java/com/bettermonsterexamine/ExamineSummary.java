@@ -4,7 +4,6 @@ import java.awt.Color;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.StringJoiner;
 import net.runelite.client.util.ColorUtil;
 import net.runelite.client.util.Text;
 
@@ -14,8 +13,6 @@ final class ExamineSummary
 	private static final Color MELEE_COLOR = new Color(0xFF4040);
 	private static final Color RANGED_COLOR = new Color(0x5FC96B);
 	private static final Color ELEMENT_COLOR = new Color(0x56B4E9);
-	private static final String[] MELEE_NAMES = {"Stab", "Slash", "Crush"};
-	private static final String[] RANGED_NAMES = {"Standard", "Heavy", "Light"};
 
 	private ExamineSummary()
 	{
@@ -28,10 +25,14 @@ final class ExamineSummary
 			return Collections.emptyList();
 		}
 
-		List<String> lines = new ArrayList<>(3);
+		List<String> lines = new ArrayList<>(4);
+		String weakness = weakness(monster);
+		if (weakness != null)
+		{
+			lines.add(weakness);
+		}
 		if (mode == ExamineSummaryMode.WEAKNESSES)
 		{
-			lines.add(weaknesses(monster));
 			return lines;
 		}
 
@@ -42,7 +43,7 @@ final class ExamineSummary
 			+ " | Heavy " + StatFormat.bonus(monster.getHeavyRangeDefenceBonus())
 			+ " | Light " + StatFormat.bonus(monster.getLightRangeDefenceBonus()));
 
-		String element = weaknessElement(monster);
+		String element = element(monster);
 		if (element != null)
 		{
 			lines.add(colored("Elemental weakness:", ELEMENT_COLOR) + ' ' + element + ' '
@@ -51,28 +52,82 @@ final class ExamineSummary
 		return lines;
 	}
 
-	private static String weaknesses(MonsterData monster)
+	/**
+	 * The one line that answers "what do I hit this with", ranked by defence roll rather than by
+	 * raw bonus — see {@link DefenceRolls}. Null when the wiki carries no defensive numbers, which
+	 * drops the line rather than printing a seven-way tie of zeroes.
+	 *
+	 * <p>The elemental weakness rides in the magic label ("Magic (Fire)") and nowhere else: it is a
+	 * damage multiplier, not accuracy, so naming it beside a melee or ranged answer would read as
+	 * an endorsement of casting on a monster that resists it.
+	 */
+	private static String weakness(MonsterData monster)
 	{
-		StringBuilder line = new StringBuilder(colored("Weakest melee:", MELEE_COLOR)).append(' ')
-			.append(weakest(MELEE_NAMES, new int[]{
-				monster.getStabDefenceBonus(),
-				monster.getSlashDefenceBonus(),
-				monster.getCrushDefenceBonus()
-			}))
-			.append(" | ").append(colored("Ranged:", RANGED_COLOR)).append(' ')
-			.append(weakest(RANGED_NAMES, new int[]{
-				monster.getStandardRangeDefenceBonus(),
-				monster.getHeavyRangeDefenceBonus(),
-				monster.getLightRangeDefenceBonus()
-			}));
-
-		String element = weaknessElement(monster);
-		if (element != null)
+		DefenceRolls.Result rolls = DefenceRolls.of(monster);
+		switch (rolls.getBand())
 		{
-			line.append(" | ").append(colored("Elemental weakness:", ELEMENT_COLOR)).append(' ')
-				.append(element).append(' ').append(monster.getWeaknessPercent()).append('%');
+			case NO_DATA:
+				return null;
+			case ALWAYS_HITS:
+				return label(rolls) + (rolls.getWeakest().size() == DefenceRolls.allStyles().size()
+					? "anything (cannot miss)"
+					: DefenceRolls.describe(rolls.getWeakest()) + " (cannot miss)");
+			case FLAT:
+			case MARGINAL:
+				return label(rolls) + "nothing in particular";
+			default:
+				break;
 		}
-		return line.toString();
+
+		String weakest = DefenceRolls.describe(rolls.getWeakest());
+		if (rolls.isMagicOnly())
+		{
+			String element = rolls.getElement();
+			if (element != null)
+			{
+				weakest += " (" + Text.escapeJagex(element) + ')';
+			}
+			return label(rolls) + weakest + ", or " + DefenceRolls.describe(rolls.getBestNonMagic());
+		}
+		return label(rolls) + weakest + " ("
+			+ String.format("%.1f", rolls.getMargin()) + "x over "
+			+ DefenceRolls.describe(rolls.getRunnerUp()) + ')';
+	}
+
+	/**
+	 * The label carries the colour, so the winning family reads at a glance without colouring the
+	 * values themselves. A tie spanning families gets no colour rather than an arbitrary one.
+	 */
+	private static String label(DefenceRolls.Result rolls)
+	{
+		Color color = familyColor(rolls.getWeakest());
+		String text = "Weakest to:";
+		return (color == null ? text : colored(text, color)) + ' ';
+	}
+
+	private static Color familyColor(List<DefenceRolls.Style> styles)
+	{
+		if (styles.isEmpty())
+		{
+			return null;
+		}
+		DefenceRolls.Family family = styles.get(0).getFamily();
+		for (DefenceRolls.Style style : styles)
+		{
+			if (style.getFamily() != family)
+			{
+				return null;
+			}
+		}
+		switch (family)
+		{
+			case MELEE:
+				return MELEE_COLOR;
+			case RANGED:
+				return RANGED_COLOR;
+			default:
+				return ELEMENT_COLOR;
+		}
 	}
 
 	/**
@@ -95,27 +150,7 @@ final class ExamineSummary
 		return ColorUtil.wrapWithColorTag(text, color);
 	}
 
-	/** Lowest defence bonus wins, and ties are retained instead of choosing one arbitrarily. */
-	private static String weakest(String[] names, int[] bonuses)
-	{
-		int minimum = bonuses[0];
-		for (int bonus : bonuses)
-		{
-			minimum = Math.min(minimum, bonus);
-		}
-
-		StringJoiner styles = new StringJoiner("/");
-		for (int i = 0; i < bonuses.length; i++)
-		{
-			if (bonuses[i] == minimum)
-			{
-				styles.add(names[i]);
-			}
-		}
-		return styles + " (" + StatFormat.bonus(minimum) + ')';
-	}
-
-	private static String weaknessElement(MonsterData monster)
+	private static String element(MonsterData monster)
 	{
 		String element = monster.getWeaknessElement();
 		return element == null || element.trim().isEmpty()
