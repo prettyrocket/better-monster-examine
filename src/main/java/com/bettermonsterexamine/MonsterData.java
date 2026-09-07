@@ -97,22 +97,36 @@ public class MonsterData
 	@SerializedName("crush_attack_bonus")
 	private int crushAttackBonus;
 
+	/**
+	 * The seven defence bonuses are <b>boxed</b> for the same reason the levels are: null means
+	 * "Bucket carries no value", which is distinct from a real {@code 0}. ~160 rows bestiary-wide
+	 * are blank, and reading them as zero produces a confident seven-way tie built from nothing.
+	 * The getters still collapse null to 0 so callers that only render a number are unaffected;
+	 * {@link #hasDefenceRollInputs()} is how you ask whether there is anything to rank.
+	 */
+	@Getter(AccessLevel.NONE)
 	@SerializedName("stab_defence_bonus")
-	private int stabDefenceBonus;
+	private Integer stabDefenceBonus;
+	@Getter(AccessLevel.NONE)
 	@SerializedName("slash_defence_bonus")
-	private int slashDefenceBonus;
+	private Integer slashDefenceBonus;
+	@Getter(AccessLevel.NONE)
 	@SerializedName("crush_defence_bonus")
-	private int crushDefenceBonus;
+	private Integer crushDefenceBonus;
+	@Getter(AccessLevel.NONE)
 	@SerializedName("magic_defence_bonus")
-	private int magicDefenceBonus;
+	private Integer magicDefenceBonus;
 	@SerializedName("range_defence_bonus")
 	private int rangeDefenceBonus;
+	@Getter(AccessLevel.NONE)
 	@SerializedName("light_range_defence_bonus")
-	private int lightRangeDefenceBonus;
+	private Integer lightRangeDefenceBonus;
+	@Getter(AccessLevel.NONE)
 	@SerializedName("standard_range_defence_bonus")
-	private int standardRangeDefenceBonus;
+	private Integer standardRangeDefenceBonus;
+	@Getter(AccessLevel.NONE)
 	@SerializedName("heavy_range_defence_bonus")
-	private int heavyRangeDefenceBonus;
+	private Integer heavyRangeDefenceBonus;
 	@SerializedName("flat_armour")
 	private int flatArmour;
 
@@ -192,6 +206,54 @@ public class MonsterData
 	public int getRangedLevel()
 	{
 		return rangedLevel == null ? 0 : rangedLevel;
+	}
+
+	public int getStabDefenceBonus()
+	{
+		return stabDefenceBonus == null ? 0 : stabDefenceBonus;
+	}
+
+	public int getSlashDefenceBonus()
+	{
+		return slashDefenceBonus == null ? 0 : slashDefenceBonus;
+	}
+
+	public int getCrushDefenceBonus()
+	{
+		return crushDefenceBonus == null ? 0 : crushDefenceBonus;
+	}
+
+	public int getMagicDefenceBonus()
+	{
+		return magicDefenceBonus == null ? 0 : magicDefenceBonus;
+	}
+
+	public int getStandardRangeDefenceBonus()
+	{
+		return standardRangeDefenceBonus == null ? 0 : standardRangeDefenceBonus;
+	}
+
+	public int getHeavyRangeDefenceBonus()
+	{
+		return heavyRangeDefenceBonus == null ? 0 : heavyRangeDefenceBonus;
+	}
+
+	public int getLightRangeDefenceBonus()
+	{
+		return lightRangeDefenceBonus == null ? 0 : lightRangeDefenceBonus;
+	}
+
+	/**
+	 * True when the wiki carries everything {@link DefenceRolls} needs. The Defence and Magic
+	 * levels are checked as boxed values on purpose — a Defence level of 0 is real (a Tombs of
+	 * Amascut Egg has one) and must not read as missing.
+	 */
+	boolean hasDefenceRollInputs()
+	{
+		return defenceLevel != null && magicLevel != null
+			&& stabDefenceBonus != null && slashDefenceBonus != null && crushDefenceBonus != null
+			&& magicDefenceBonus != null && standardRangeDefenceBonus != null
+			&& heavyRangeDefenceBonus != null && lightRangeDefenceBonus != null;
 	}
 
 	/**
