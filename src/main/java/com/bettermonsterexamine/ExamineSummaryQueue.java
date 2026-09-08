@@ -16,17 +16,17 @@ final class ExamineSummaryQueue
 	private final Deque<PendingSummary> pending = new ArrayDeque<>();
 	private final Deque<String> injected = new ArrayDeque<>();
 
-	void add(List<String> summary, int tick)
+	void add(String monsterName, List<String> summary, int tick)
 	{
 		discardExpired(tick);
-		pending.addLast(new PendingSummary(summary, tick));
+		pending.addLast(new PendingSummary(monsterName, summary, tick));
 	}
 
 	/**
-	 * Consume one NPC_EXAMINE message. Returns the block to inject after a native response, or null
+	 * Consume one NPC_EXAMINE message. Returns what to render against a native response, or null
 	 * when this is one of our own messages, nothing is pending, or the clicked NPC was unknown.
 	 */
-	String onNpcExamine(String message, int tick)
+	Examined onNpcExamine(String message, int tick)
 	{
 		if (injected.removeFirstOccurrence(message))
 		{
@@ -48,7 +48,7 @@ final class ExamineSummaryQueue
 			injected.removeFirst();
 		}
 		injected.addLast(block);
-		return block;
+		return new Examined(next.monsterName, block);
 	}
 
 	/** A consumed/dropped click must not shift every later Examine response indefinitely. */
@@ -71,13 +71,38 @@ final class ExamineSummaryQueue
 		injected.clear();
 	}
 
+	/** A matched Examine: the name to prepend to the game's own line, and the block to inject. */
+	static final class Examined
+	{
+		private final String monsterName;
+		private final String block;
+
+		private Examined(String monsterName, String block)
+		{
+			this.monsterName = monsterName;
+			this.block = block;
+		}
+
+		String getMonsterName()
+		{
+			return monsterName;
+		}
+
+		String getBlock()
+		{
+			return block;
+		}
+	}
+
 	private static final class PendingSummary
 	{
+		private final String monsterName;
 		private final List<String> lines;
 		private final int tick;
 
-		private PendingSummary(List<String> lines, int tick)
+		private PendingSummary(String monsterName, List<String> lines, int tick)
 		{
+			this.monsterName = monsterName;
 			this.lines = lines;
 			this.tick = tick;
 		}

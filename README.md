@@ -39,8 +39,8 @@ GE price / High Alch on hover.*
 - **In-game overlay** — show the stats as a compact, tabbed card in the viewport instead of
   (or alongside) the side panel.
 - **Examine combat summary** — optionally append either the weakest melee/ranged styles or all
-  melee and ranged defences after the game's normal monster Examine text, with a named heading and
-  colour-coded combat categories. This works independently of the added right-click entries, so
+  melee and ranged defences after the game's normal monster Examine text, with colour-coded
+  combat categories. The monster's name is added to the game's own Examine line, underlined. This works independently of the added right-click entries, so
   both can be switched off for an uncluttered menu. Examine can also **open the full stats** in
   whichever place you've set **Show stats in** — panel, overlay, or both — replacing the Stats
   entry entirely if you'd rather keep the right-click menu clean.
