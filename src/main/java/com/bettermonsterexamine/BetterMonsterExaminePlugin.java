@@ -26,6 +26,7 @@ import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.MenuOptionClicked;
+import net.runelite.api.gameval.VarbitID;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.chat.ChatMessageManager;
 import net.runelite.client.chat.QueuedMessage;
@@ -567,7 +568,13 @@ public class BetterMonsterExaminePlugin extends Plugin
 
 		// Unknown monsters deliberately add an empty slot so rapid Examine responses stay aligned.
 		examineSummaryQueue.add(monster == null ? null : monster.getName(),
-			ExamineSummary.format(monster, config.examineSummaryDetail()), client.getTickCount());
+			ExamineSummary.format(monster, config.examineSummaryDetail(), isChatTransparent()), client.getTickCount());
+	}
+
+	/** The same test RuneLite's own chat colours use to pick their transparent-chatbox variant. */
+	private boolean isChatTransparent()
+	{
+		return client.isResized() && client.getVarbitValue(VarbitID.CHATBOX_TRANSPARENCY) != 0;
 	}
 
 	/**

@@ -45,26 +45,26 @@ public class ExamineSummaryTest
 	@Test
 	public void noMonsterOrNoModeProducesNoSummary()
 	{
-		assertTrue(ExamineSummary.format(null, ExamineSummaryMode.ALL_DEFENCES).isEmpty());
-		assertTrue(ExamineSummary.format(monster("{}"), null).isEmpty());
+		assertTrue(ExamineSummary.format(null, ExamineSummaryMode.ALL_DEFENCES, false).isEmpty());
+		assertTrue(ExamineSummary.format(monster("{}"), null, false).isEmpty());
 	}
 
 	@Test
 	public void allDefencesLeadsWithTheWeaknessThenTheNumbers()
 	{
 		assertEquals(List.of(
-			"Weakness: Magic (<col=56b4e9>Fire</col>), Crush",
+			"Weakness: Magic (<col=b22800>Fire</col>), Crush",
 			"Melee: Stab +20 | Slash +20 | Crush +0",
 			"Ranged: Standard +40 | Heavy +20 | Light +60",
-			"Elemental weakness: <col=56b4e9>Fire 50%</col>"),
-			ExamineSummary.format(monster(ICE_GIANT), ExamineSummaryMode.ALL_DEFENCES));
+			"Elemental weakness: <col=b22800>Fire 50%</col>"),
+			ExamineSummary.format(monster(ICE_GIANT), ExamineSummaryMode.ALL_DEFENCES, false));
 	}
 
 	@Test
 	public void summaryNoLongerCarriesItsOwnNameHeader()
 	{
 		// The name moved onto the game's own Examine line, so the block starts with the stats.
-		List<String> lines = ExamineSummary.format(monster(ICE_GIANT), ExamineSummaryMode.WEAKNESSES);
+		List<String> lines = ExamineSummary.format(monster(ICE_GIANT), ExamineSummaryMode.WEAKNESSES, false);
 
 		assertEquals(1, lines.size());
 		assertTrue(lines.get(0).startsWith("Weakness:"));
@@ -74,8 +74,29 @@ public class ExamineSummaryTest
 	@Test
 	public void magicIsFollowedByTheBestFreeStyle()
 	{
-		assertEquals(List.of("Weakness: Magic (<col=56b4e9>Fire</col>), Crush"),
-			ExamineSummary.format(monster(ICE_GIANT), ExamineSummaryMode.WEAKNESSES));
+		assertEquals(List.of("Weakness: Magic (<col=b22800>Fire</col>), Crush"),
+			ExamineSummary.format(monster(ICE_GIANT), ExamineSummaryMode.WEAKNESSES, false));
+	}
+
+	/** The transparent chatbox is dark, so the element takes its lighter shade there. */
+	@Test
+	public void theElementShadeFollowsTheChatbox()
+	{
+		assertEquals(List.of("Weakness: Magic (<col=ff7a3d>Fire</col>), Crush"),
+			ExamineSummary.format(monster(ICE_GIANT), ExamineSummaryMode.WEAKNESSES, true));
+	}
+
+	/** Each element has its own colour, rather than one colour standing in for all four. */
+	@Test
+	public void elementsAreColouredApart()
+	{
+		String water = defences(120, 1, 20, 10, 10, -10, -10, -10, 50, "water");
+		String earth = defences(120, 1, 20, 10, 10, -10, -10, -10, 50, "earth");
+
+		assertEquals(List.of("Weakness: Magic (<col=0038b8>Water</col>), Ranged"),
+			ExamineSummary.format(monster(water), ExamineSummaryMode.WEAKNESSES, false));
+		assertEquals(List.of("Weakness: Magic (<col=6e3b0e>Earth</col>), Ranged"),
+			ExamineSummary.format(monster(earth), ExamineSummaryMode.WEAKNESSES, false));
 	}
 
 	/** When every free style is even there is no second answer to give. */
@@ -84,7 +105,7 @@ public class ExamineSummaryTest
 	{
 		MonsterData m = monster(defences(80, 1, 0, 0, 0, 0, 0, 0, 0));
 
-		assertEquals(List.of("Weakness: Magic"), ExamineSummary.format(m, ExamineSummaryMode.WEAKNESSES));
+		assertEquals(List.of("Weakness: Magic"), ExamineSummary.format(m, ExamineSummaryMode.WEAKNESSES, false));
 	}
 
 	/**
@@ -96,7 +117,7 @@ public class ExamineSummaryTest
 	{
 		MonsterData m = monster(defences(100, 100, -15, -15, -15, 60, 60, 60, 100, "air"));
 
-		List<String> lines = ExamineSummary.format(m, ExamineSummaryMode.WEAKNESSES);
+		List<String> lines = ExamineSummary.format(m, ExamineSummaryMode.WEAKNESSES, false);
 
 		assertEquals(List.of("Weakness: Melee"), lines);
 		assertFalse(lines.get(0).contains("Air"));
@@ -108,7 +129,7 @@ public class ExamineSummaryTest
 	{
 		MonsterData m = monster(defences(120, 100, 10, 20, 40, 60, 60, 60, 100, "air"));
 
-		assertEquals(List.of("Weakness: Stab/Slash"), ExamineSummary.format(m, ExamineSummaryMode.WEAKNESSES));
+		assertEquals(List.of("Weakness: Stab/Slash"), ExamineSummary.format(m, ExamineSummaryMode.WEAKNESSES, false));
 	}
 
 	@Test
@@ -116,7 +137,7 @@ public class ExamineSummaryTest
 	{
 		MonsterData m = monster(defences(50, 50, 0, 0, 0, 0, 0, 0, 0));
 
-		assertEquals(List.of("Weakness: none"), ExamineSummary.format(m, ExamineSummaryMode.WEAKNESSES));
+		assertEquals(List.of("Weakness: none"), ExamineSummary.format(m, ExamineSummaryMode.WEAKNESSES, false));
 	}
 
 	/** Every roll at zero means nothing can miss, the opposite of "none". */
@@ -125,18 +146,18 @@ public class ExamineSummaryTest
 	{
 		MonsterData m = monster(defences(0, 1, -100, -100, -100, -100, -100, -100, -100));
 
-		assertEquals(List.of("Weakness: anything"), ExamineSummary.format(m, ExamineSummaryMode.WEAKNESSES));
+		assertEquals(List.of("Weakness: anything"), ExamineSummary.format(m, ExamineSummaryMode.WEAKNESSES, false));
 	}
 
 	/** No defensive data drops the line rather than printing a seven-way tie of zeroes. */
 	@Test
 	public void aBlankRowGetsNoWeaknessLine()
 	{
-		List<String> lines = ExamineSummary.format(monster("{}"), ExamineSummaryMode.ALL_DEFENCES);
+		List<String> lines = ExamineSummary.format(monster("{}"), ExamineSummaryMode.ALL_DEFENCES, false);
 
 		assertEquals(2, lines.size());
 		assertEquals("Melee: Stab +0 | Slash +0 | Crush +0", lines.get(0));
-		assertTrue(ExamineSummary.format(monster("{}"), ExamineSummaryMode.WEAKNESSES).isEmpty());
+		assertTrue(ExamineSummary.format(monster("{}"), ExamineSummaryMode.WEAKNESSES, false).isEmpty());
 	}
 
 	@Test
