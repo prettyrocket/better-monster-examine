@@ -3,6 +3,8 @@ package com.bettermonsterexamine;
 import com.google.gson.Gson;
 import java.util.List;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import org.junit.Test;
 
@@ -15,76 +17,161 @@ public class ExamineSummaryTest
 		return GSON.fromJson(json, MonsterData.class);
 	}
 
+	private static String defences(int defence, int magic, int stab, int slash, int crush,
+		int standard, int heavy, int light, int magicBonus)
+	{
+		return defences(defence, magic, stab, slash, crush, standard, heavy, light, magicBonus, null);
+	}
+
+	private static String defences(int defence, int magic, int stab, int slash, int crush,
+		int standard, int heavy, int light, int magicBonus, String element)
+	{
+		return "{\"defence_level\":" + defence + ",\"magic_level\":" + magic
+			+ ",\"stab_defence_bonus\":" + stab + ",\"slash_defence_bonus\":" + slash
+			+ ",\"crush_defence_bonus\":" + crush + ",\"standard_range_defence_bonus\":" + standard
+			+ ",\"heavy_range_defence_bonus\":" + heavy + ",\"light_range_defence_bonus\":" + light
+			+ ",\"magic_defence_bonus\":" + magicBonus
+			+ (element == null ? "" : ",\"elemental_weakness\":\"" + element + "\",\"elemental_weakness_percent\":50")
+			+ "}";
+	}
+
+	private static final String ICE_GIANT = "{\"name\":\"Ice giant\",\"defence_level\":40,"
+		+ "\"magic_level\":1,\"stab_defence_bonus\":20,"
+		+ "\"slash_defence_bonus\":20,\"crush_defence_bonus\":0,\"standard_range_defence_bonus\":40,"
+		+ "\"heavy_range_defence_bonus\":20,\"light_range_defence_bonus\":60,"
+		+ "\"magic_defence_bonus\":0,"
+		+ "\"elemental_weakness\":\"fire\",\"elemental_weakness_percent\":50}";
+
 	@Test
 	public void noMonsterOrNoModeProducesNoSummary()
 	{
-		assertTrue(ExamineSummary.format(null, ExamineSummaryMode.ALL_DEFENCES).isEmpty());
-		assertTrue(ExamineSummary.format(monster("{}"), null).isEmpty());
+		assertTrue(ExamineSummary.format(null, ExamineSummaryMode.ALL_DEFENCES, false).isEmpty());
+		assertTrue(ExamineSummary.format(monster("{}"), null, false).isEmpty());
 	}
 
 	@Test
-	public void allDefencesUsesSignedBonusesAndRequestedOrder()
+	public void allDefencesLeadsWithTheWeaknessThenTheNumbers()
 	{
-		MonsterData m = monster("{\"name\":\"Ice giant\",\"stab_defence_bonus\":20,\"slash_defence_bonus\":20,"
-			+ "\"crush_defence_bonus\":0,\"standard_range_defence_bonus\":40,"
-			+ "\"heavy_range_defence_bonus\":20,\"light_range_defence_bonus\":60,"
-			+ "\"elemental_weakness\":\"fire\",\"elemental_weakness_percent\":50}");
-
 		assertEquals(List.of(
-			"<colHIGHLIGHT>Examined Ice giant stats:<colNORMAL>",
-			"<col=ff4040>Melee:</col> Stab +20 | Slash +20 | Crush +0",
-			"<col=5fc96b>Ranged:</col> Standard +40 | Heavy +20 | Light +60",
-			"<col=56b4e9>Elemental weakness:</col> Fire 50%"),
-			ExamineSummary.format(m, ExamineSummaryMode.ALL_DEFENCES));
+			"Weakness: Magic (<col=b22800>Fire</col>), Crush",
+			"Melee: Stab +20 | Slash +20 | Crush +0",
+			"Ranged: Standard +40 | Heavy +20 | Light +60",
+			"Elemental weakness: <col=b22800>Fire 50%</col>"),
+			ExamineSummary.format(monster(ICE_GIANT), ExamineSummaryMode.ALL_DEFENCES, false));
 	}
 
 	@Test
-	public void allDefencesOmitsMissingElement()
+	public void summaryNoLongerCarriesItsOwnNameHeader()
 	{
-		List<String> lines = ExamineSummary.format(monster("{}"), ExamineSummaryMode.ALL_DEFENCES);
+		// The name moved onto the game's own Examine line, so the block starts with the stats.
+		List<String> lines = ExamineSummary.format(monster(ICE_GIANT), ExamineSummaryMode.WEAKNESSES, false);
 
-		assertEquals(3, lines.size());
-		assertEquals("<colHIGHLIGHT>Examined monster stats:<colNORMAL>", lines.get(0));
-		assertEquals("<col=ff4040>Melee:</col> Stab +0 | Slash +0 | Crush +0", lines.get(1));
+		assertEquals(1, lines.size());
+		assertTrue(lines.get(0).startsWith("Weakness:"));
+	}
+
+	/** Magic wins, then the comma names the best style that costs no runes. */
+	@Test
+	public void magicIsFollowedByTheBestFreeStyle()
+	{
+		assertEquals(List.of("Weakness: Magic (<col=b22800>Fire</col>), Crush"),
+			ExamineSummary.format(monster(ICE_GIANT), ExamineSummaryMode.WEAKNESSES, false));
+	}
+
+	/** The transparent chatbox is dark, so the element takes its lighter shade there. */
+	@Test
+	public void theElementShadeFollowsTheChatbox()
+	{
+		assertEquals(List.of("Weakness: Magic (<col=ff7a3d>Fire</col>), Crush"),
+			ExamineSummary.format(monster(ICE_GIANT), ExamineSummaryMode.WEAKNESSES, true));
+	}
+
+	/** Each element has its own colour, rather than one colour standing in for all four. */
+	@Test
+	public void elementsAreColouredApart()
+	{
+		String water = defences(120, 1, 20, 10, 10, -10, -10, -10, 50, "water");
+		String earth = defences(120, 1, 20, 10, 10, -10, -10, -10, 50, "earth");
+
+		assertEquals(List.of("Weakness: Magic (<col=0038b8>Water</col>), Ranged"),
+			ExamineSummary.format(monster(water), ExamineSummaryMode.WEAKNESSES, false));
+		assertEquals(List.of("Weakness: Magic (<col=6e3b0e>Earth</col>), Ranged"),
+			ExamineSummary.format(monster(earth), ExamineSummaryMode.WEAKNESSES, false));
+	}
+
+	/** When every free style is even there is no second answer to give. */
+	@Test
+	public void magicStandsAloneWhenFreeStylesAreEven()
+	{
+		MonsterData m = monster(defences(80, 1, 0, 0, 0, 0, 0, 0, 0));
+
+		assertEquals(List.of("Weakness: Magic"), ExamineSummary.format(m, ExamineSummaryMode.WEAKNESSES, false));
+	}
+
+	/**
+	 * A melee answer carries no elemental weakness: the element is a damage multiplier, and
+	 * printing it beside a melee recommendation reads as an endorsement of casting.
+	 */
+	@Test
+	public void aNonMagicWinnerDropsTheElement()
+	{
+		MonsterData m = monster(defences(100, 100, -15, -15, -15, 60, 60, 60, 100, "air"));
+
+		List<String> lines = ExamineSummary.format(m, ExamineSummaryMode.WEAKNESSES, false);
+
+		assertEquals(List.of("Weakness: Melee"), lines);
+		assertFalse(lines.get(0).contains("Air"));
+	}
+
+	/** Styles within the tie factor are joined with a slash, and the element still stays off. */
+	@Test
+	public void aNarrowLeadIsATie()
+	{
+		MonsterData m = monster(defences(120, 100, 10, 20, 40, 60, 60, 60, 100, "air"));
+
+		assertEquals(List.of("Weakness: Stab/Slash"), ExamineSummary.format(m, ExamineSummaryMode.WEAKNESSES, false));
 	}
 
 	@Test
-	public void weaknessesOnlySelectsLowestBonusesAndElement()
+	public void evenStylesSayNone()
 	{
-		MonsterData m = monster("{\"name\":\"Ice giant\",\"stab_defence_bonus\":20,\"slash_defence_bonus\":20,"
-			+ "\"crush_defence_bonus\":0,\"standard_range_defence_bonus\":40,"
-			+ "\"heavy_range_defence_bonus\":20,\"light_range_defence_bonus\":60,"
-			+ "\"elemental_weakness\":\"fire\",\"elemental_weakness_percent\":50}");
+		MonsterData m = monster(defences(50, 50, 0, 0, 0, 0, 0, 0, 0));
 
-		assertEquals(List.of(
-			"<colHIGHLIGHT>Examined Ice giant stats:<colNORMAL>",
-			"<col=ff4040>Weakest melee:</col> Crush (+0) | <col=5fc96b>Ranged:</col> Heavy (+20)"
-				+ " | <col=56b4e9>Elemental weakness:</col> Fire 50%"),
-			ExamineSummary.format(m, ExamineSummaryMode.WEAKNESSES));
+		assertEquals(List.of("Weakness: none"), ExamineSummary.format(m, ExamineSummaryMode.WEAKNESSES, false));
+	}
+
+	/** Every roll at zero means nothing can miss, the opposite of "none". */
+	@Test
+	public void unmissableSaysAnything()
+	{
+		MonsterData m = monster(defences(0, 1, -100, -100, -100, -100, -100, -100, -100));
+
+		assertEquals(List.of("Weakness: anything"), ExamineSummary.format(m, ExamineSummaryMode.WEAKNESSES, false));
+	}
+
+	/** No defensive data drops the line rather than printing a seven-way tie of zeroes. */
+	@Test
+	public void aBlankRowGetsNoWeaknessLine()
+	{
+		List<String> lines = ExamineSummary.format(monster("{}"), ExamineSummaryMode.ALL_DEFENCES, false);
+
+		assertEquals(2, lines.size());
+		assertEquals("Melee: Stab +0 | Slash +0 | Crush +0", lines.get(0));
+		assertTrue(ExamineSummary.format(monster("{}"), ExamineSummaryMode.WEAKNESSES, false).isEmpty());
 	}
 
 	@Test
-	public void weaknessesOnlyRetainsTiesAndNegativeSigns()
+	public void chatNameEscapesFormattingAndFlattensNewlines()
 	{
-		MonsterData m = monster("{\"stab_defence_bonus\":-15,\"slash_defence_bonus\":-15,"
-			+ "\"crush_defence_bonus\":-15,\"standard_range_defence_bonus\":10,"
-			+ "\"heavy_range_defence_bonus\":-5,\"light_range_defence_bonus\":-5}");
-
-		assertEquals(List.of(
-			"<colHIGHLIGHT>Examined monster stats:<colNORMAL>",
-			"<col=ff4040>Weakest melee:</col> Stab/Slash/Crush (-15)"
-				+ " | <col=5fc96b>Ranged:</col> Heavy/Light (-5)"),
-			ExamineSummary.format(m, ExamineSummaryMode.WEAKNESSES));
+		assertEquals("Boss <lt>col=ff0000<gt><at>red<lt>/col<gt> form",
+			ExamineSummary.chatName("Boss <col=ff0000>@red</col>\nform"));
 	}
 
 	@Test
-	public void headerEscapesFormattingAndFlattensNewlinesInMonsterName()
+	public void chatNameRejectsWhatCannotBeShown()
 	{
-		MonsterData m = monster("{\"name\":\"Boss <col=ff0000>@red</col>\\nform\"}");
-
-		assertEquals("<colHIGHLIGHT>Examined Boss <lt>col=ff0000<gt><at>red"
-			+ "<lt>/col<gt> form stats:<colNORMAL>",
-			ExamineSummary.format(m, ExamineSummaryMode.WEAKNESSES).get(0));
+		assertNull(ExamineSummary.chatName(null));
+		assertNull(ExamineSummary.chatName("   "));
 	}
 
 	@Test

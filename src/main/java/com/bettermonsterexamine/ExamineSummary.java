@@ -4,26 +4,30 @@ import java.awt.Color;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.StringJoiner;
-import net.runelite.client.chat.ChatColorType;
-import net.runelite.client.chat.ChatMessageBuilder;
+import java.util.Locale;
 import net.runelite.client.util.ColorUtil;
 import net.runelite.client.util.Text;
 
 /** Formatter for the compact combat block appended to a normal NPC Examine response. */
 final class ExamineSummary
 {
-	private static final Color MELEE_COLOR = new Color(0xFF4040);
-	private static final Color RANGED_COLOR = new Color(0x5FC96B);
-	private static final Color ELEMENT_COLOR = new Color(0x56B4E9);
-	private static final String[] MELEE_NAMES = {"Stab", "Slash", "Crush"};
-	private static final String[] RANGED_NAMES = {"Standard", "Heavy", "Light"};
+	// Each element in its rune's colour, twice over: the opaque chatbox is light parchment and the
+	// transparent one is dark, and no single shade reads on both.
+	private static final Color FIRE_OPAQUE = new Color(0xB22800);
+	private static final Color FIRE_TRANSPARENT = new Color(0xFF7A3D);
+	private static final Color WATER_OPAQUE = new Color(0x0038B8);
+	private static final Color WATER_TRANSPARENT = new Color(0x5CA8FF);
+	private static final Color EARTH_OPAQUE = new Color(0x6E3B0E);
+	private static final Color EARTH_TRANSPARENT = new Color(0xD09A5E);
+	private static final Color AIR_OPAQUE = new Color(0x4F5B66);
+	private static final Color AIR_TRANSPARENT = new Color(0xB9E6F2);
 
 	private ExamineSummary()
 	{
 	}
 
-	static List<String> format(MonsterData monster, ExamineSummaryMode mode)
+	/** @param transparentChat whether the chatbox is transparent, which picks the element's shade */
+	static List<String> format(MonsterData monster, ExamineSummaryMode mode, boolean transparentChat)
 	{
 		if (monster == null || mode == null)
 		{
@@ -31,92 +35,116 @@ final class ExamineSummary
 		}
 
 		List<String> lines = new ArrayList<>(4);
-		lines.add(header(monster));
-
+		String weakness = weakness(monster, transparentChat);
+		if (weakness != null)
+		{
+			lines.add(weakness);
+		}
 		if (mode == ExamineSummaryMode.WEAKNESSES)
 		{
-			lines.add(weaknesses(monster));
 			return lines;
 		}
 
-		lines.add(colored("Melee:", MELEE_COLOR) + " Stab " + StatFormat.bonus(monster.getStabDefenceBonus())
+		lines.add("Melee: Stab " + StatFormat.bonus(monster.getStabDefenceBonus())
 			+ " | Slash " + StatFormat.bonus(monster.getSlashDefenceBonus())
 			+ " | Crush " + StatFormat.bonus(monster.getCrushDefenceBonus()));
-		lines.add(colored("Ranged:", RANGED_COLOR) + " Standard " + StatFormat.bonus(monster.getStandardRangeDefenceBonus())
+		lines.add("Ranged: Standard " + StatFormat.bonus(monster.getStandardRangeDefenceBonus())
 			+ " | Heavy " + StatFormat.bonus(monster.getHeavyRangeDefenceBonus())
 			+ " | Light " + StatFormat.bonus(monster.getLightRangeDefenceBonus()));
 
-		String element = weaknessElement(monster);
+		String element = element(monster);
 		if (element != null)
 		{
-			lines.add(colored("Elemental weakness:", ELEMENT_COLOR) + ' ' + element + ' '
-				+ monster.getWeaknessPercent() + '%');
+			lines.add("Elemental weakness: "
+				+ colored(element + ' ' + monster.getWeaknessPercent() + '%', element, transparentChat));
 		}
 		return lines;
 	}
 
-	private static String weaknesses(MonsterData monster)
+	/**
+	 * The one line that answers "what do I hit this with", ranked by defence roll rather than by
+	 * raw bonus — see {@link DefenceRolls}. A comma means "then" and a slash means "tied":
+	 * {@code Magic (Water), Ranged} is magic first and ranged as the best style that costs no
+	 * runes. Null when the wiki carries no defensive numbers, which drops the line rather than
+	 * printing a seven-way tie of zeroes.
+	 *
+	 * <p>The elemental weakness rides in the magic label and nowhere else: it is a damage
+	 * multiplier, not accuracy, so naming it beside a melee or ranged answer would read as an
+	 * endorsement of casting on a monster that resists it. It is the only thing coloured.
+	 */
+	private static String weakness(MonsterData monster, boolean transparentChat)
 	{
-		StringBuilder line = new StringBuilder(colored("Weakest melee:", MELEE_COLOR)).append(' ')
-			.append(weakest(MELEE_NAMES, new int[]{
-				monster.getStabDefenceBonus(),
-				monster.getSlashDefenceBonus(),
-				monster.getCrushDefenceBonus()
-			}))
-			.append(" | ").append(colored("Ranged:", RANGED_COLOR)).append(' ')
-			.append(weakest(RANGED_NAMES, new int[]{
-				monster.getStandardRangeDefenceBonus(),
-				monster.getHeavyRangeDefenceBonus(),
-				monster.getLightRangeDefenceBonus()
-			}));
-
-		String element = weaknessElement(monster);
-		if (element != null)
+		DefenceRolls.Result rolls = DefenceRolls.of(monster);
+		switch (rolls.getBand())
 		{
-			line.append(" | ").append(colored("Elemental weakness:", ELEMENT_COLOR)).append(' ')
-				.append(element).append(' ').append(monster.getWeaknessPercent()).append('%');
-		}
-		return line.toString();
-	}
-
-	private static String header(MonsterData monster)
-	{
-		String name = monster.getName();
-		name = name == null || name.trim().isEmpty() ? "monster" : name.trim();
-		name = name.replace('\r', ' ').replace('\n', ' ');
-		return new ChatMessageBuilder()
-			.append(ChatColorType.HIGHLIGHT)
-			.append("Examined " + name + " stats:")
-			.append(ChatColorType.NORMAL)
-			.build();
-	}
-
-	private static String colored(String text, Color color)
-	{
-		return ColorUtil.wrapWithColorTag(text, color);
-	}
-
-	/** Lowest defence bonus wins, and ties are retained instead of choosing one arbitrarily. */
-	private static String weakest(String[] names, int[] bonuses)
-	{
-		int minimum = bonuses[0];
-		for (int bonus : bonuses)
-		{
-			minimum = Math.min(minimum, bonus);
+			case NO_DATA:
+				return null;
+			case CANNOT_MISS:
+				return "Weakness: anything";
+			case EVEN:
+				return "Weakness: none";
+			default:
+				break;
 		}
 
-		StringJoiner styles = new StringJoiner("/");
-		for (int i = 0; i < bonuses.length; i++)
+		String line = "Weakness: " + styles(rolls.getWeakest(), rolls.getElement(), transparentChat);
+		if (!rolls.getFreeWeakest().isEmpty())
 		{
-			if (bonuses[i] == minimum)
-			{
-				styles.add(names[i]);
-			}
+			line += ", " + DefenceRolls.describe(rolls.getFreeWeakest());
 		}
-		return styles + " (" + StatFormat.bonus(minimum) + ')';
+		return line;
 	}
 
-	private static String weaknessElement(MonsterData monster)
+	private static String styles(List<DefenceRolls.Style> styles, String element, boolean transparentChat)
+	{
+		String described = DefenceRolls.describe(styles);
+		if (element == null || !styles.contains(DefenceRolls.Style.MAGIC))
+		{
+			return described;
+		}
+		return described.replace("Magic", "Magic (" + colored(Text.escapeJagex(element), element, transparentChat) + ')');
+	}
+
+	/**
+	 * The monster's name as it can safely go on a chat line: Jagex formatting escaped so a name
+	 * containing tags can't recolour the row, and line breaks flattened so it stays one line.
+	 * Null when there's nothing usable left, which tells the caller to leave the line alone.
+	 */
+	static String chatName(String name)
+	{
+		if (name == null)
+		{
+			return null;
+		}
+		String cleaned = name.replace('\r', ' ').replace('\n', ' ').trim();
+		return cleaned.isEmpty() ? null : Text.escapeJagex(cleaned);
+	}
+
+	/** {@code text} in {@code element}'s colour, or left plain for an element with none. */
+	private static String colored(String text, String element, boolean transparentChat)
+	{
+		Color color = elementColor(element, transparentChat);
+		return color == null ? text : ColorUtil.wrapWithColorTag(text, color);
+	}
+
+	private static Color elementColor(String element, boolean transparentChat)
+	{
+		switch (element.toLowerCase(Locale.ROOT))
+		{
+			case "fire":
+				return transparentChat ? FIRE_TRANSPARENT : FIRE_OPAQUE;
+			case "water":
+				return transparentChat ? WATER_TRANSPARENT : WATER_OPAQUE;
+			case "earth":
+				return transparentChat ? EARTH_TRANSPARENT : EARTH_OPAQUE;
+			case "air":
+				return transparentChat ? AIR_TRANSPARENT : AIR_OPAQUE;
+			default:
+				return null;
+		}
+	}
+
+	private static String element(MonsterData monster)
 	{
 		String element = monster.getWeaknessElement();
 		return element == null || element.trim().isEmpty()
