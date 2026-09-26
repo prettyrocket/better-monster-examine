@@ -124,8 +124,8 @@ final class MonsterStats
 	}
 
 	/**
-	 * The Slayer assignment categories, de-junked (Bucket carries a few {@code "No"}/{@code "None"}
-	 * placeholders) and deduplicated in order. Empty when none. E.g. {@code ["Blue dragons","Bosses"]}.
+	 * The Slayer assignment categories, de-junked (Bucket carries a few {@code "No"} placeholders;
+	 * {@code "None"} is already dropped at parse) and deduplicated in order. Empty when none. E.g. {@code ["Blue dragons","Bosses"]}.
 	 */
 	List<String> slayerCategories()
 	{
@@ -137,7 +137,7 @@ final class MonsterStats
 		List<String> out = new ArrayList<>();
 		for (String cat : c)
 		{
-			if (!cat.equalsIgnoreCase("no") && !cat.equalsIgnoreCase("none") && !out.contains(cat))
+			if (!cat.equalsIgnoreCase("no") && !out.contains(cat))
 			{
 				out.add(cat);
 			}
@@ -176,7 +176,7 @@ final class MonsterStats
 			return null;
 		}
 		String key = raw.trim().toLowerCase(Locale.ROOT);
-		if (key.isEmpty() || key.equals("no") || key.equals("none"))
+		if (key.isEmpty() || key.equals("no"))
 		{
 			return null;
 		}

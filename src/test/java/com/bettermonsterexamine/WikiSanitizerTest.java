@@ -184,4 +184,35 @@ public class WikiSanitizerTest
 		assertTrue(m.isDefaultVersion());
 		assertFalse(m.isMembersOnly());
 	}
+
+	@Test
+	public void placeholdersParseAsAbsent()
+	{
+		// Kraken's weakness, an impling's style / max hit / poisonous: the wiki's "no value".
+		MonsterData m = WikiSanitizer.bucketGson(new Gson()).fromJson("{\"elemental_weakness\":\"None\","
+			+ "\"attack_style\":[\"None\"],\"max_hit\":[\"N/A\"],\"poisonous\":\"n/a\","
+			+ "\"slayer_category\":[\"None\",\"Bosses\"]}", MonsterData.class);
+
+		assertNull(m.getWeaknessElement());
+		assertNull(m.getPoisonous());
+		assertEquals(Collections.emptyList(), m.getAttackStyles());
+		assertEquals(Collections.emptyList(), m.getMaxHitLines());
+		assertEquals(Collections.singletonList("Bosses"), m.getSlayerCategory());
+	}
+
+	@Test
+	public void noIsARealAnswerNotAPlaceholder()
+	{
+		MonsterData m = WikiSanitizer.bucketGson(new Gson()).fromJson("{\"poisonous\":\"No\"}", MonsterData.class);
+
+		assertEquals("No", m.getPoisonous());
+	}
+
+	@Test
+	public void enDashNormalisedForTheRuneScapeFont()
+	{
+		// Fever spider: the fonts carry no en dash glyph, but do carry the multiplication sign.
+		assertEquals("1-12 (without Slayer gloves)", WikiSanitizer.text("1–12 (without Slayer gloves)"));
+		assertEquals("12×2 (Ranged)", WikiSanitizer.text("12×2 (Ranged)"));
+	}
 }

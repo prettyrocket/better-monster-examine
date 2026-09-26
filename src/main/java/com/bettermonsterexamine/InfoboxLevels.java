@@ -200,12 +200,11 @@ final class InfoboxLevels
 		return plain(raw).replaceAll("\\s+", " ").trim().toLowerCase(Locale.ROOT);
 	}
 
-	/** Shared text cleanup: drop {@code <br>}s and wiki markup, and normalise en/em dashes. */
+	/** Shared text cleanup: drop {@code <br>}s and wiki markup (which covers en dashes), and em dashes. */
 	private static String plain(String raw)
 	{
 		String out = BR.matcher(raw).replaceAll("");
-		out = WikiSanitizer.text(out);
-		return out.replace('–', '-').replace('—', '-');
+		return WikiSanitizer.text(out).replace('—', '-');
 	}
 
 	/**
