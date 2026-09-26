@@ -19,6 +19,9 @@ final class StatColors
 	static final Color CB_DANGER = new Color(0xE69F00);
 	static final Color CB_GOOD = new Color(0x56B4E9);
 
+	/** Okabe-Ito yellow, distinct from both palettes' good/danger, so it serves both. */
+	static final Color NEXT_YELLOW = new Color(0xF0E442);
+
 	private StatColors()
 	{
 	}
@@ -32,6 +35,8 @@ final class StatColors
 				return danger(mode);
 			case GOOD:
 				return good(mode);
+			case NEXT:
+				return mode == HighlightMode.OFF ? Color.WHITE : NEXT_YELLOW;
 			default:
 				return Color.WHITE;
 		}
