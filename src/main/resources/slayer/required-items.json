@@ -1,0 +1,21 @@
+[
+	{"use": "Finishing blow", "items": ["Rock hammer", "Rock thrownhammer", "Granite hammer"], "monsters": ["Gargoyle", "Dusk"]},
+	{"use": "Protection", "items": ["Nose peg", "Slayer helmet"], "monsters": ["Aberrant spectre", "Abhorrent spectre", "Deviant spectre", "Repugnant spectre"]},
+	{"use": "Protection", "items": ["Earmuffs", "Slayer helmet"], "monsters": ["Banshee", "Twisted Banshee"]},
+	{"use": "Protection", "items": ["Facemask", "Slayer helmet"], "monsters": ["Dust devil", "Choke devil", "Smoke devil"]},
+	{"use": "Protection", "items": ["Mirror shield", "V's shield"], "monsters": ["Basilisk", "Monstrous basilisk", "Basilisk Knight", "Basilisk Youngling", "Cockatrice", "Cockathrice"]},
+	{"use": "Protection", "items": ["Witchwood icon", "Slayer helmet"], "monsters": ["Cave horror"]},
+	{"use": "Finishing blow", "items": ["Bag of salt"], "monsters": ["Rockslug"]},
+	{"use": "Finishing blow", "items": ["Ice cooler"], "monsters": ["Desert Lizard", "Small Lizard", "Lizard"]},
+	{"use": "Finishing blow", "items": ["Fungicide spray"], "monsters": ["Zygomite", "Ancient Zygomite"]},
+	{"use": "Protection", "items": ["Spiny helmet", "Slayer helmet"], "monsters": ["Wall beast"]},
+	{"use": "Protection", "items": ["Reinforced goggles"], "monsters": ["Sourhog"]},
+	{"use": "Protection", "items": ["Slayer gloves"], "monsters": ["Fever spider"]},
+	{"use": "Lure", "items": ["Slayer bell"], "monsters": ["Molanisk"]},
+	{"use": "Lure", "items": ["Fishing explosive"], "monsters": ["Mogre"]},
+	{"use": "Protection", "items": ["Insulated boots"], "monsters": ["Killerwatt"]},
+	{"use": "Required to kill", "items": ["Leaf-bladed battleaxe", "Leaf-bladed sword", "Leaf-bladed spear", "Broad arrows", "Broad bolts", "Slayer's staff"], "monsters": ["Turoth", "Kurask"]},
+	{"use": "Required to kill", "items": ["Crystal chime"], "monsters": ["Warped Terrorbird", "Warped Tortoise"]},
+	{"use": "Protection", "items": ["Boots of stone", "Boots of brimstone", "Granite boots"], "note": "In the Karuulm Slayer Dungeon", "monsters": ["Drake", "Wyrm", "Hydra", "Alchemical Hydra", "Sulphur Lizard"]},
+	{"use": "Protection", "items": ["Tortugan shield"], "monsters": ["Shellbane gryphon"]}
+]
