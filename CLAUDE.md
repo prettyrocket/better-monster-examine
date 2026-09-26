@@ -123,8 +123,8 @@ scraping — cut over to Bucket in #26.)
 
 2. **`MonsterData`** — a flat Gson DTO mapped to the Bucket `infobox_monster` schema, capturing
    **all** fields (Lombok `@Getter`), including ones not yet rendered (slayer level/XP/category,
-   members, freeze resistance, image — tracked in #31). TEXT and `max_hit` values keep their raw
-   Bucket form and are cleaned on access via **`WikiSanitizer`**.
+   members, freeze resistance, image — tracked in #31). Every string arrives already clean — the
+   Bucket parse runs through **`WikiSanitizer`** — so its getters return fields as stored.
 
 3. **`WikiSanitizer`** (static, unit-tested) — turns the markup Bucket leaves in its strings into
    plain text, **once, at parse time**: `MonsterDataService` parses rows with
