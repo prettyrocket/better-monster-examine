@@ -1,61 +1,64 @@
 package com.bettermonsterexamine;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonDeserializer;
+import com.google.gson.JsonElement;
+import com.google.gson.reflect.TypeToken;
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Cleans the few non-uniform shapes the OSRS Wiki Bucket API leaves in TEXT fields, so the rest
- * of the data layer sees plain strings. Bucket regularises the old wikitext-template garbage
- * (issue #24) into a few forms: MediaWiki strip-markers (bounded by the U+007F control char),
- * {@code <div class="plainlist">} bullet wrappers, {@code <br>} line breaks, and
- * {@code [[wikilinks]]}. Pure and static, so it stays trivially unit-testable without the network.
+ * Turns the markup the OSRS Wiki Bucket API leaves in its strings into plain text, so the rest of
+ * the data layer never sees any. Bucket stores a field <i>after</i> its templates expand, so any
+ * template an editor drops into an infobox arrives as rendered HTML — {@code {{sic}}} as a
+ * {@code <sup>} note, a thin space as {@code &thinsp;}, a footnote as a MediaWiki strip-marker.
+ * Rather than chase each template, the rules below are generic: every tag goes, entities decode,
+ * and line breaks survive as {@code \n}, since a field can list several values (#24).
  *
- * <p>Bucket stores a field <i>after</i> its templates expand, so any template an editor drops into
- * an infobox arrives as rendered HTML — {@code {{sic}}} as a {@code <sup>} note, a thin space as
- * {@code &thinsp;}. Rather than chase each template, every tag is stripped and entities decoded;
- * {@code <br>} becomes a real line break, since a field such as examine can list several.
+ * <p>{@link #bucketGson} applies this to every string of every Bucket row as it is parsed, so
+ * nothing downstream has to remember to.
  */
 final class WikiSanitizer
 {
-	/** The U+007F control char that delimits a MediaWiki strip-marker on both ends. */
 	private static final String DEL = String.valueOf((char) 0x7f);
-	/** MediaWiki strip-marker (e.g. a {@code <ref>} footnote), e.g. {@code UNIQ--ref-…-QINU}. */
-	private static final Pattern STRIP_MARKER = Pattern.compile(DEL + "[^" + DEL + "]*" + DEL);
-	/** {@code [[Magic]]} -> Magic, {@code [[a|b]]} -> b. */
-	private static final Pattern LINK = Pattern.compile("\\[\\[(?:[^\\]|]*\\|)?([^\\]]*)\\]\\]");
-	private static final Pattern BR = Pattern.compile("(?i)<br\\s*/?>");
-	private static final Pattern DIV = Pattern.compile("(?i)</?div[^>]*>");
-	/**
-	 * Editorial notes the wiki keeps out of print, e.g. {@code {{sic}}}'s "[sic]". Dropped whole, not
-	 * just untagged: "Zombies[sic] Champion" is still not the monster's name.
-	 */
-	private static final Pattern NOPRINT = Pattern.compile(
-		"(?is)<sup[^>]*class=\"[^\"]*\\bnoprint\\b[^\"]*\"[^>]*>.*?</sup>");
-	private static final Pattern TAG = Pattern.compile("</?[a-zA-Z][^>]*>");
+	/** Applied in order: each regex to its replacement. */
+	private static final Map<Pattern, String> RULES = new LinkedHashMap<>();
 	private static final Pattern ENTITY = Pattern.compile("&(#[0-9]+|#[xX][0-9a-fA-F]+|[a-zA-Z]+);");
-	/** Unrendered wikitext bold/italic, e.g. {@code '''In the Chambers of Xeric:'''}. */
-	private static final Pattern QUOTES = Pattern.compile("'{2,}");
 	private static final Pattern SPACES = Pattern.compile("[ \\t]+");
 	private static final Map<String, String> NAMED = new HashMap<>();
+	private static final Type STRING_LIST = new TypeToken<List<String>>()
+	{
+	}.getType();
 
 	static
 	{
+		// MediaWiki strip-marker (a <ref> footnote), bounded by U+007F on both ends.
+		rule(DEL + "[^" + DEL + "]*" + DEL, "");
+		// Editorial notes kept out of print, e.g. {{sic}}'s "[sic]". Dropped whole, not just
+		// untagged: "Zombies[sic] Champion" is still not the monster's name.
+		rule("(?is)<sup[^>]*\\bnoprint\\b.*?</sup>", "");
+		// [[Magic]] -> Magic, [[a|b]] -> b; then any unbalanced brackets.
+		rule("\\[\\[(?:[^\\]|]*\\|)?([^\\]]*)\\]\\]", "$1");
+		rule("\\[\\[|\\]\\]", "");
+		// <br> and a plainlist's <div> wrapper separate values.
+		rule("(?i)<br\\s*/?>|</?div[^>]*>", "\n");
+		rule("</?[a-zA-Z][^>]*>", "");
+		// Unrendered wikitext bold/italic ('''In the Chambers of Xeric:''') and list bullets.
+		rule("'{2,}|(?m)^[ \\t]*\\*+", "");
+
 		NAMED.put("amp", "&");
 		NAMED.put("lt", "<");
 		NAMED.put("gt", ">");
 		NAMED.put("quot", "\"");
-		NAMED.put("apos", "'");
 		NAMED.put("nbsp", " ");
 		NAMED.put("thinsp", " ");
-		NAMED.put("ensp", " ");
-		NAMED.put("emsp", " ");
-		NAMED.put("ndash", "-");
-		NAMED.put("mdash", "-");
-		// A list marker before each of several examines; they're split onto lines instead.
+		// A list marker before each of several examines; the line breaks already separate them.
 		NAMED.put("bull", "");
 	}
 
@@ -63,24 +66,53 @@ final class WikiSanitizer
 	{
 	}
 
+	private static void rule(String regex, String replacement)
+	{
+		RULES.put(Pattern.compile(regex), replacement);
+	}
+
 	/**
-	 * Clean a single TEXT value: drop strip-markers and editorial notes, unwrap wikilinks, turn
-	 * {@code <br>} into {@code \n}, strip remaining tags and wikitext quotes, decode entities, and
-	 * tidy each line's whitespace (dropping blank lines).
+	 * A copy of {@code base} that cleans every string as a Bucket row is parsed: a scalar through
+	 * {@link #text}, a list through {@link #lines} (so one element packing several values splits).
 	 */
+	static Gson bucketGson(Gson base)
+	{
+		return base.newBuilder()
+			.registerTypeAdapter(String.class, (JsonDeserializer<String>) (json, t, c) -> text(json.getAsString()))
+			.registerTypeAdapter(STRING_LIST, (JsonDeserializer<List<String>>) (json, t, c) ->
+			{
+				List<String> raw = new ArrayList<>();
+				for (JsonElement e : json.isJsonArray() ? json.getAsJsonArray() : singleton(json))
+				{
+					if (!e.isJsonNull())
+					{
+						raw.add(e.getAsString());
+					}
+				}
+				return lines(raw);
+			})
+			.create();
+	}
+
+	private static List<JsonElement> singleton(JsonElement e)
+	{
+		List<JsonElement> l = new ArrayList<>();
+		l.add(e);
+		return l;
+	}
+
+	/** Clean one value to plain text; several values stay on separate lines, blank lines dropped. */
 	static String text(String s)
 	{
 		if (s == null)
 		{
 			return null;
 		}
-		String out = STRIP_MARKER.matcher(s).replaceAll("");
-		out = NOPRINT.matcher(out).replaceAll("");
-		out = LINK.matcher(out).replaceAll("$1");
-		out = out.replace("[[", "").replace("]]", "");
-		out = BR.matcher(out).replaceAll("\n");
-		out = TAG.matcher(out).replaceAll("");
-		out = QUOTES.matcher(out).replaceAll("");
+		String out = s;
+		for (Map.Entry<Pattern, String> r : RULES.entrySet())
+		{
+			out = r.getKey().matcher(out).replaceAll(r.getValue());
+		}
 		// Decoded after the tag pass, so an escaped "&lt;" survives as text rather than read as a tag.
 		out = decodeEntities(out);
 
@@ -90,87 +122,55 @@ final class WikiSanitizer
 			String l = SPACES.matcher(line).replaceAll(" ").trim();
 			if (!l.isEmpty())
 			{
-				if (sb.length() > 0)
-				{
-					sb.append('\n');
-				}
-				sb.append(l);
+				sb.append(sb.length() > 0 ? "\n" : "").append(l);
 			}
 		}
 		return sb.toString();
 	}
 
-	/** Decode numeric and common named HTML entities; an unknown name is left as written. */
-	private static String decodeEntities(String s)
-	{
-		if (s.indexOf('&') < 0)
-		{
-			return s;
-		}
-		Matcher m = ENTITY.matcher(s);
-		StringBuffer sb = new StringBuffer();
-		while (m.find())
-		{
-			String e = m.group(1);
-			String rep;
-			if (e.charAt(0) == '#')
-			{
-				boolean hex = e.length() > 1 && (e.charAt(1) == 'x' || e.charAt(1) == 'X');
-				try
-				{
-					int cp = Integer.parseInt(e.substring(hex ? 2 : 1), hex ? 16 : 10);
-					rep = cp == 0xa0 || cp == 0x2009 ? " " : new String(Character.toChars(cp));
-				}
-				catch (IllegalArgumentException ex)
-				{
-					rep = m.group();
-				}
-			}
-			else
-			{
-				rep = NAMED.getOrDefault(e, m.group());
-			}
-			m.appendReplacement(sb, Matcher.quoteReplacement(rep));
-		}
-		m.appendTail(sb);
-		return sb.toString();
-	}
-
-	/**
-	 * Expand a Bucket list field into clean per-value lines: unwrap plainlist {@code <div>} +
-	 * {@code *} bullet wrappers, split on {@code <br>}, clean each via {@link #text}, and discard
-	 * empties. For {@code max_hit} each line is one value, e.g. {@code "45 (special)"}; an attack
-	 * style element can likewise pack two ({@code "Ranged <br/> Typeless"}).
-	 */
+	/** Clean a list, one value per line: {@code max_hit}'s plainlist, Vespula's two-style element. */
 	static List<String> lines(List<String> raw)
 	{
 		List<String> out = new ArrayList<>();
-		if (raw == null)
-		{
-			return out;
-		}
 		for (String element : raw)
 		{
-			if (element == null)
+			String clean = text(element);
+			if (clean != null && !clean.isEmpty())
 			{
-				continue;
-			}
-			String expanded = DIV.matcher(element).replaceAll("\n");
-			expanded = BR.matcher(expanded).replaceAll("\n");
-			for (String part : expanded.split("\n"))
-			{
-				String line = part.trim();
-				if (line.startsWith("*"))
-				{
-					line = line.substring(1).trim();
-				}
-				line = text(line);
-				if (!line.isEmpty())
+				for (String line : clean.split("\n"))
 				{
 					out.add(line);
 				}
 			}
 		}
 		return out;
+	}
+
+	/** Decode numeric and common named HTML entities; anything else is left as written. */
+	private static String decodeEntities(String s)
+	{
+		Matcher m = ENTITY.matcher(s);
+		StringBuffer sb = new StringBuffer();
+		while (m.find())
+		{
+			String e = m.group(1);
+			String rep = NAMED.getOrDefault(e, m.group());
+			if (e.charAt(0) == '#')
+			{
+				boolean hex = e.length() > 1 && (e.charAt(1) == 'x' || e.charAt(1) == 'X');
+				try
+				{
+					int cp = Integer.parseInt(e.substring(hex ? 2 : 1), hex ? 16 : 10);
+					rep = Character.isSpaceChar(cp) ? " " : new String(Character.toChars(cp));
+				}
+				catch (IllegalArgumentException ex)
+				{
+					// Out of range: leave it as written.
+				}
+			}
+			m.appendReplacement(sb, Matcher.quoteReplacement(rep));
+		}
+		m.appendTail(sb);
+		return sb.toString();
 	}
 }

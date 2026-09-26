@@ -126,16 +126,17 @@ scraping — cut over to Bucket in #26.)
    members, freeze resistance, image — tracked in #31). TEXT and `max_hit` values keep their raw
    Bucket form and are cleaned on access via **`WikiSanitizer`**.
 
-3. **`WikiSanitizer`** (static, unit-tested) — cleans the few non-uniform shapes Bucket leaves in
-   TEXT/`max_hit` fields: MediaWiki strip-markers, `<div class="plainlist">` + `*` bullet wrappers,
-   `<br>` line breaks, and `[[wikilinks]]`. This is what makes the old `{{template}}` max-hit
-   garbage render correctly (#24). Bucket stores fields **after templates expand**, so any template
-   an editor puts in an infobox arrives as HTML (`{{sic}}` → a `<sup class="noprint">` note, a thin
-   space → `&thinsp;`); rather than chase each one, `text` strips every tag, drops `noprint` notes
-   whole, decodes entities, and turns `<br>` into a line break (examine can list several). The
-   **name** is cleaned too, once, before indexing (`MonsterData.cleanName`) — otherwise
-   "Zombies Champion" never matches search or the in-game name. `lines` is the list form, used by
-   max hit and attack style.
+3. **`WikiSanitizer`** (static, unit-tested) — turns the markup Bucket leaves in its strings into
+   plain text, **once, at parse time**: `MonsterDataService` parses rows with
+   `WikiSanitizer.bucketGson(gson)`, which registers deserializers for `String` and `List<String>`,
+   so every field of every row arrives clean and nothing downstream calls the sanitizer. Bucket
+   stores fields **after templates expand**, so any template in an infobox arrives as rendered HTML
+   (`{{sic}}` → a `<sup class="noprint">` note, a footnote → a strip-marker, a thin space →
+   `&thinsp;`). Rather than chase each template, `text` applies generic rules: drop strip-markers
+   and `noprint` notes whole, unwrap `[[wikilinks]]`, `<br>`/`<div>` → line break, strip every other
+   tag and wikitext `'''`/`*`, decode entities. A list element that packs several values (max hit's
+   plainlist, Vespula's `Ranged <br/> Typeless`) splits into one entry each. Only the Bucket parse
+   uses it — the shared `gson` is left alone, since the wikitext `InfoboxLevels` reads must stay raw.
 
 4. **`InfoboxLevels`** (static, unit-tested) — recovers the levels Bucket **structurally cannot
    carry**. The wiki's `Module:Infobox Monster` writes each level with `tonumber()`, so a level that

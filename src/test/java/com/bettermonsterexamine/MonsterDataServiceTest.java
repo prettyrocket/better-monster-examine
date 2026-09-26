@@ -16,7 +16,7 @@ public class MonsterDataServiceTest
 	private static final List<String> NAMES = Arrays.asList(
 		"Goblin", "Cave goblin", "Goblin Champion", "Hobgoblin", "Cow");
 
-	private static final Gson GSON = new Gson();
+	private static final Gson GSON = WikiSanitizer.bucketGson(new Gson());
 
 	private static MonsterData monster(String json)
 	{

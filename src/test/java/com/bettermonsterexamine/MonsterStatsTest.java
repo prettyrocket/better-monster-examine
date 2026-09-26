@@ -16,7 +16,7 @@ import org.junit.Test;
  */
 public class MonsterStatsTest
 {
-	private static final Gson GSON = new Gson();
+	private static final Gson GSON = WikiSanitizer.bucketGson(new Gson());
 
 	private static MonsterData monster(String json)
 	{

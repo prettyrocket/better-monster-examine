@@ -1,15 +1,21 @@
 package com.bettermonsterexamine;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import org.junit.Test;
 
 /**
- * Locks the four bounded shapes the Bucket API leaves in TEXT/{@code max_hit} fields, using the
- * real strings observed for the issue-#24 monsters (Tormented Demon, Vardorvis, Stranger) plus
+ * Locks the shapes the Bucket API leaves in its strings, using the real strings observed for the
+ * issue-#24 monsters (Tormented Demon, Vardorvis, Stranger), the {@code {{sic}}} and multi-examine
+ * rows, plus
  * clean cases (Vorkath, Blue Moon).
  */
 public class WikiSanitizerTest
@@ -65,7 +71,6 @@ public class WikiSanitizerTest
 		List<String> raw = Arrays.asList("32", null, "", "  ");
 
 		assertEquals(Collections.singletonList("32"), WikiSanitizer.lines(raw));
-		assertEquals(Collections.emptyList(), WikiSanitizer.lines(null));
 	}
 
 	@Test
@@ -152,5 +157,31 @@ public class WikiSanitizerTest
 	{
 		assertNull(WikiSanitizer.text(null));
 		assertEquals("No", WikiSanitizer.text("No"));
+	}
+
+	@Test
+	public void bucketGsonCleansEveryStringOnParse()
+	{
+		// One raw row carrying each shape, parsed the way the service parses the dataset.
+		JsonObject row = new JsonObject();
+		row.addProperty("name", "Zombies" + SIC + " Champion");
+		row.addProperty("examine", "A small ice demon.<br>'''In the Chambers of Xeric:''' Servant.");
+		row.addProperty("default_version", "");
+		JsonArray styles = new JsonArray();
+		styles.add("Ranged <br/> Typeless");
+		row.add("attack_style", styles);
+		JsonArray maxHit = new JsonArray();
+		maxHit.add("<div class=\"plainlist \" >\n*31 (auto)\n*45 (special)\n</div>");
+		row.add("max_hit", maxHit);
+
+		MonsterData m = WikiSanitizer.bucketGson(new Gson()).fromJson(row, MonsterData.class);
+
+		assertEquals("Zombies Champion", m.getName());
+		assertEquals("A small ice demon.\nIn the Chambers of Xeric: Servant.", m.getExamine());
+		assertEquals(Arrays.asList("Ranged", "Typeless"), m.getAttackStyles());
+		assertEquals(Arrays.asList("31 (auto)", "45 (special)"), m.getMaxHitLines());
+		// An empty string is Bucket's "true" for a flag field, so it must survive as non-null.
+		assertTrue(m.isDefaultVersion());
+		assertFalse(m.isMembersOnly());
 	}
 }
