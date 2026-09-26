@@ -1,6 +1,9 @@
 package com.bettermonsterexamine;
 
 import com.google.gson.Gson;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -39,43 +42,70 @@ public class DefenceRollsTest
 
 		DefenceRolls.Result r = DefenceRolls.of(m);
 
-		assertEquals(DefenceRolls.Band.DECISIVE, r.getBand());
-		assertTrue(r.isMagicOnly());
-		assertEquals("Ranged", DefenceRolls.describe(r.getBestNonMagic()));
-		assertEquals(6.11d, r.getNonMagicCost(), 0.01d);
+		assertEquals(DefenceRolls.Band.RANKED, r.getBand());
+		assertEquals("Magic", DefenceRolls.describe(r.getWeakest()));
+		assertEquals("Ranged", DefenceRolls.describe(r.getFreeWeakest()));
 	}
 
-	/** Reading the raw bonuses alone would pick ranged here; the roll picks magic. */
 	@Test
-	public void rawBonusAndRollDisagree()
+	public void rollsUseTheLevelOfTheirOwnFamily()
 	{
 		MonsterData m = monster("{\"defence_level\":120,\"magic_level\":1,"
 			+ bonuses(20, 10, 10, -10, -10, -10, 50) + "}");
 
-		assertEquals("Magic", DefenceRolls.describe(DefenceRolls.of(m).getWeakest()));
+		Map<DefenceRolls.Style, Integer> rolls = DefenceRolls.rolls(m);
+
+		assertEquals(129 * 74, (int) rolls.get(DefenceRolls.Style.SLASH));
+		assertEquals(10 * 114, (int) rolls.get(DefenceRolls.Style.MAGIC));
 	}
 
-	/** Shellbane gryphon: stab leads slash by only 1.14x, which is not worth calling a weakness. */
+	/** Shellbane gryphon: slash is only 1.14x harder than stab, so the two are named as a tie. */
 	@Test
-	public void aNarrowLeadIsMarginal()
+	public void stylesWithinTheTieFactorShareTheAnswer()
 	{
 		MonsterData m = monster("{\"defence_level\":120,\"magic_level\":100,"
 			+ bonuses(10, 20, 40, 60, 60, 60, 100) + "}");
 
-		assertEquals(DefenceRolls.Band.MARGINAL, DefenceRolls.of(m).getBand());
+		assertEquals("Stab/Slash", DefenceRolls.describe(DefenceRolls.of(m).getWeakest()));
+	}
+
+	/** A free style that wins outright needs no second answer. */
+	@Test
+	public void aFreeWinnerHasNoFreeFallback()
+	{
+		MonsterData m = monster("{\"defence_level\":100,\"magic_level\":100,"
+			+ bonuses(-15, -15, -15, 60, 60, 60, 100) + "}");
+
+		DefenceRolls.Result r = DefenceRolls.of(m);
+
+		assertEquals("Melee", DefenceRolls.describe(r.getWeakest()));
+		assertTrue(r.getFreeWeakest().isEmpty());
+	}
+
+	/** Greater demon: when every free style is equally hard, naming one would be arbitrary. */
+	@Test
+	public void evenFreeStylesLeaveTheFallbackEmpty()
+	{
+		MonsterData m = monster("{\"defence_level\":80,\"magic_level\":1,"
+			+ bonuses(0, 0, 0, 0, 0, 0, 0) + "}");
+
+		DefenceRolls.Result r = DefenceRolls.of(m);
+
+		assertEquals(List.of(DefenceRolls.Style.MAGIC), r.getWeakest());
+		assertTrue(r.getFreeWeakest().isEmpty());
 	}
 
 	/** Ice demon rolls magic off its Defence level, not its Magic level of 390. */
 	@Test
 	public void theMagicExceptionListApplies()
 	{
-		String stats = "\"defence_level\":160,\"magic_level\":390," + bonuses(50, 50, 50, 50, 50, 50, 40);
+		String stats = "\"defence_level\":160,\"magic_level\":390," + bonuses(50, 50, 50, 50, 50, 50, 20);
 		MonsterData excepted = monster("{\"page_name\":\"Ice demon\"," + stats + "}");
 		MonsterData plain = monster("{\"page_name\":\"Ice giant\"," + stats + "}");
 
 		assertEquals("Magic", DefenceRolls.describe(DefenceRolls.of(excepted).getWeakest()));
 		// Without the exception the same numbers bury magic behind every other style.
-		assertFalse(DefenceRolls.of(plain).isMagicOnly());
+		assertFalse(DefenceRolls.of(plain).getWeakest().contains(DefenceRolls.Style.MAGIC));
 	}
 
 	/** Egg (Tombs of Amascut): every bonus is -100, so every roll clamps to zero. */
@@ -85,19 +115,16 @@ public class DefenceRollsTest
 		MonsterData m = monster("{\"defence_level\":0,\"magic_level\":1,"
 			+ bonuses(-100, -100, -100, -100, -100, -100, -100) + "}");
 
-		DefenceRolls.Result r = DefenceRolls.of(m);
-
-		assertEquals(DefenceRolls.Band.ALWAYS_HITS, r.getBand());
-		assertEquals(DefenceRolls.allStyles().size(), r.getWeakest().size());
+		assertEquals(DefenceRolls.Band.CANNOT_MISS, DefenceRolls.of(m).getBand());
 	}
 
 	@Test
-	public void everyStyleEqualIsFlat()
+	public void everyStyleEqualIsEven()
 	{
 		MonsterData m = monster("{\"defence_level\":50,\"magic_level\":50,"
 			+ bonuses(0, 0, 0, 0, 0, 0, 0) + "}");
 
-		assertEquals(DefenceRolls.Band.FLAT, DefenceRolls.of(m).getBand());
+		assertEquals(DefenceRolls.Band.EVEN, DefenceRolls.of(m).getBand());
 	}
 
 	/** A blank row must not read as a seven-way tie of zeroes. */
@@ -121,10 +148,10 @@ public class DefenceRollsTest
 	@Test
 	public void wholeFamiliesCollapseToOneLabel()
 	{
-		MonsterData m = monster("{\"defence_level\":135,\"magic_level\":1,"
-			+ bonuses(0, 0, 0, 0, 0, 0, 0) + "}");
+		List<DefenceRolls.Style> free = new ArrayList<>(DefenceRolls.allStyles());
+		free.remove(DefenceRolls.Style.MAGIC);
 
-		assertEquals("Melee/Ranged", DefenceRolls.describe(DefenceRolls.of(m).getBestNonMagic()));
+		assertEquals("Melee/Ranged", DefenceRolls.describe(free));
 	}
 
 	@Test

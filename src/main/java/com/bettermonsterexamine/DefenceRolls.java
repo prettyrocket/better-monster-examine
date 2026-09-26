@@ -20,6 +20,9 @@ import lombok.Getter;
  * bonus is the highest defence bonus it has, yet magic is 6x easier to land than anything else
  * because its Magic level is 1.
  *
+ * <p>Most of the bestiary is easiest to hit with magic, and magic costs runes, so the result also
+ * names the easiest free style whenever magic wins alone.
+ *
  * <p>Pure and unit-tested; the renderers shape the {@link Result} into text.
  */
 final class DefenceRolls
@@ -28,10 +31,11 @@ final class DefenceRolls
 	private static final Set<String> MAGIC_OFF_DEFENCE = Set.of(
 		"verzik vitur", "ice demon", "fragment of seren", "baboon brawler", "rabbit (prifddinas)");
 
-	/** Below this the winner is not worth naming — the styles are close enough to be a wash. */
-	private static final double MARGINAL = 1.25d;
-	/** At or above this the winner is decisively ahead. */
-	private static final double DECISIVE = 2.0d;
+	/**
+	 * Styles within this factor of the easiest roll count as tied with it. The ratio decides the
+	 * answer but is never shown — a bare "1.9x" needs explaining that a chat line can't give.
+	 */
+	private static final double TIE = 1.25d;
 
 	enum Family
 	{
@@ -61,55 +65,36 @@ final class DefenceRolls
 	}
 
 	/**
-	 * How much the ranking is worth saying out loud. {@link #NO_DATA} means the wiki carries no
-	 * defensive numbers at all — distinct from every bonus genuinely being zero.
+	 * What the ranking amounts to. {@link #NO_DATA} means the wiki carries no defensive numbers at
+	 * all — distinct from every bonus genuinely being zero, which is {@link #CANNOT_MISS}.
 	 */
 	enum Band
 	{
-		NO_DATA, ALWAYS_HITS, FLAT, MARGINAL, CLEAR, DECISIVE
+		NO_DATA, CANNOT_MISS, EVEN, RANKED
 	}
 
 	@Getter
 	static final class Result
 	{
 		private final Band band;
-		/** The easiest styles to land, tied. Empty when {@link Band#NO_DATA}. */
+		/** The easiest styles to land, ties included. Empty unless {@link Band#RANKED}. */
 		private final List<Style> weakest;
-		/** The styles at the next roll up — what {@link #getMargin()} is measured against. */
-		private final List<Style> runnerUp;
-		/** The easiest style that costs no runes — magic wins on ~70% of the bestiary. */
-		private final List<Style> bestNonMagic;
-		/** How much harder the next-best style is; 0 when there is no next. */
-		private final double margin;
-		/** How much accuracy you give up by not casting; 1 when a free style already ties. */
-		private final double nonMagicCost;
+		/**
+		 * The easiest styles that cost no runes, when magic alone is easiest and one free style
+		 * stands out from the rest. Empty otherwise — including when every free style is even.
+		 */
+		private final List<Style> freeWeakest;
 		/** Capitalised elemental weakness (a damage multiplier, not accuracy), or null. */
 		private final String element;
 		private final int elementPercent;
 
-		private Result(Band band, List<Style> weakest, List<Style> runnerUp, List<Style> bestNonMagic,
-			double margin, double nonMagicCost, String element, int elementPercent)
+		private Result(Band band, List<Style> weakest, List<Style> freeWeakest, String element, int elementPercent)
 		{
 			this.band = band;
 			this.weakest = weakest;
-			this.runnerUp = runnerUp;
-			this.bestNonMagic = bestNonMagic;
-			this.margin = margin;
-			this.nonMagicCost = nonMagicCost;
+			this.freeWeakest = freeWeakest;
 			this.element = element;
 			this.elementPercent = elementPercent;
-		}
-
-		/** True when magic alone is the easiest style — the case where the element is worth naming. */
-		boolean isMagicOnly()
-		{
-			return weakest.size() == 1 && weakest.get(0) == Style.MAGIC;
-		}
-
-		/** True when the ranking is worth showing at all. */
-		boolean isActionable()
-		{
-			return band == Band.CLEAR || band == Band.DECISIVE;
 		}
 	}
 
@@ -121,9 +106,41 @@ final class DefenceRolls
 	{
 		if (monster == null || !monster.hasDefenceRollInputs())
 		{
-			return new Result(Band.NO_DATA, List.of(), List.of(), List.of(), 0d, 0d, null, 0);
+			return new Result(Band.NO_DATA, List.of(), List.of(), null, 0);
 		}
 
+		String element = element(monster);
+		int percent = element == null ? 0 : monster.getWeaknessPercent();
+		Map<Style, Integer> rolls = rolls(monster);
+
+		if (rolls.values().stream().allMatch(v -> v == 0))
+		{
+			return new Result(Band.CANNOT_MISS, List.of(), List.of(), element, percent);
+		}
+
+		List<Style> weakest = nearest(rolls, allStyles());
+		if (weakest.size() == Style.values().length)
+		{
+			return new Result(Band.EVEN, List.of(), List.of(), element, percent);
+		}
+
+		List<Style> freeWeakest = List.of();
+		if (weakest.equals(List.of(Style.MAGIC)))
+		{
+			List<Style> free = new ArrayList<>(allStyles());
+			free.remove(Style.MAGIC);
+			List<Style> nearestFree = nearest(rolls, free);
+			if (nearestFree.size() < free.size())
+			{
+				freeWeakest = nearestFree;
+			}
+		}
+		return new Result(Band.RANKED, weakest, freeWeakest, element, percent);
+	}
+
+	/** Each style's defence roll. Lower is easier to hit. */
+	static Map<Style, Integer> rolls(MonsterData monster)
+	{
 		int defence = monster.getDefenceLevel();
 		int magic = rollsMagicOffDefence(monster.getPageName()) ? defence : monster.getMagicLevel();
 
@@ -135,42 +152,22 @@ final class DefenceRolls
 			// means the attacker cannot miss. Clamp, or the ranking inverts.
 			rolls.put(style, Math.max(0, (level + 9) * (bonus(monster, style) + 64)));
 		}
+		return rolls;
+	}
 
-		int best = rolls.values().stream().mapToInt(Integer::intValue).min().orElse(0);
-		List<Style> weakest = stylesAt(rolls, best);
-
-		int altBest = rolls.entrySet().stream()
-			.filter(e -> e.getKey() != Style.MAGIC)
-			.mapToInt(Map.Entry::getValue)
-			.min().orElse(0);
-		List<Style> bestNonMagic = new ArrayList<>();
-		for (Style style : Style.values())
+	/** The styles among {@code among} whose roll is within {@link #TIE} of the easiest one. */
+	private static List<Style> nearest(Map<Style, Integer> rolls, List<Style> among)
+	{
+		int best = among.stream().mapToInt(rolls::get).min().orElse(0);
+		List<Style> out = new ArrayList<>();
+		for (Style style : among)
 		{
-			if (style != Style.MAGIC && rolls.get(style) == altBest)
+			if (rolls.get(style) <= best * TIE)
 			{
-				bestNonMagic.add(style);
+				out.add(style);
 			}
 		}
-
-		String element = element(monster);
-		int percent = element == null ? 0 : monster.getWeaknessPercent();
-
-		if (best == 0)
-		{
-			return new Result(Band.ALWAYS_HITS, weakest, List.of(), bestNonMagic, 0d, 0d, element, percent);
-		}
-
-		int next = rolls.values().stream().mapToInt(Integer::intValue)
-			.filter(v -> v > best).min().orElse(0);
-		if (next == 0)
-		{
-			return new Result(Band.FLAT, weakest, List.of(), bestNonMagic, 0d, 1d, element, percent);
-		}
-
-		double margin = (double) next / best;
-		Band band = margin >= DECISIVE ? Band.DECISIVE : margin >= MARGINAL ? Band.CLEAR : Band.MARGINAL;
-		return new Result(band, weakest, stylesAt(rolls, next), bestNonMagic,
-			margin, (double) altBest / best, element, percent);
+		return out;
 	}
 
 	/**
@@ -209,19 +206,6 @@ final class DefenceRolls
 		for (Style style : Style.values())
 		{
 			if (style.getFamily() == family)
-			{
-				out.add(style);
-			}
-		}
-		return out;
-	}
-
-	private static List<Style> stylesAt(Map<Style, Integer> rolls, int value)
-	{
-		List<Style> out = new ArrayList<>();
-		for (Style style : Style.values())
-		{
-			if (rolls.get(style) == value)
 			{
 				out.add(style);
 			}

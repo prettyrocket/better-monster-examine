@@ -10,8 +10,6 @@ import net.runelite.client.util.Text;
 /** Formatter for the compact combat block appended to a normal NPC Examine response. */
 final class ExamineSummary
 {
-	private static final Color MELEE_COLOR = new Color(0xFF4040);
-	private static final Color RANGED_COLOR = new Color(0x5FC96B);
 	private static final Color ELEMENT_COLOR = new Color(0x56B4E9);
 
 	private ExamineSummary()
@@ -36,30 +34,31 @@ final class ExamineSummary
 			return lines;
 		}
 
-		lines.add(colored("Melee:", MELEE_COLOR) + " Stab " + StatFormat.bonus(monster.getStabDefenceBonus())
+		lines.add("Melee: Stab " + StatFormat.bonus(monster.getStabDefenceBonus())
 			+ " | Slash " + StatFormat.bonus(monster.getSlashDefenceBonus())
 			+ " | Crush " + StatFormat.bonus(monster.getCrushDefenceBonus()));
-		lines.add(colored("Ranged:", RANGED_COLOR) + " Standard " + StatFormat.bonus(monster.getStandardRangeDefenceBonus())
+		lines.add("Ranged: Standard " + StatFormat.bonus(monster.getStandardRangeDefenceBonus())
 			+ " | Heavy " + StatFormat.bonus(monster.getHeavyRangeDefenceBonus())
 			+ " | Light " + StatFormat.bonus(monster.getLightRangeDefenceBonus()));
 
 		String element = element(monster);
 		if (element != null)
 		{
-			lines.add(colored("Elemental weakness:", ELEMENT_COLOR) + ' ' + element + ' '
-				+ monster.getWeaknessPercent() + '%');
+			lines.add("Elemental weakness: " + colored(element + ' ' + monster.getWeaknessPercent() + '%', ELEMENT_COLOR));
 		}
 		return lines;
 	}
 
 	/**
 	 * The one line that answers "what do I hit this with", ranked by defence roll rather than by
-	 * raw bonus — see {@link DefenceRolls}. Null when the wiki carries no defensive numbers, which
-	 * drops the line rather than printing a seven-way tie of zeroes.
+	 * raw bonus — see {@link DefenceRolls}. A comma means "then" and a slash means "tied":
+	 * {@code Magic (Water), Ranged} is magic first and ranged as the best style that costs no
+	 * runes. Null when the wiki carries no defensive numbers, which drops the line rather than
+	 * printing a seven-way tie of zeroes.
 	 *
-	 * <p>The elemental weakness rides in the magic label ("Magic (Fire)") and nowhere else: it is a
-	 * damage multiplier, not accuracy, so naming it beside a melee or ranged answer would read as
-	 * an endorsement of casting on a monster that resists it.
+	 * <p>The elemental weakness rides in the magic label and nowhere else: it is a damage
+	 * multiplier, not accuracy, so naming it beside a melee or ranged answer would read as an
+	 * endorsement of casting on a monster that resists it. It is the only thing coloured.
 	 */
 	private static String weakness(MonsterData monster)
 	{
@@ -68,66 +67,30 @@ final class ExamineSummary
 		{
 			case NO_DATA:
 				return null;
-			case ALWAYS_HITS:
-				return label(rolls) + (rolls.getWeakest().size() == DefenceRolls.allStyles().size()
-					? "anything (cannot miss)"
-					: DefenceRolls.describe(rolls.getWeakest()) + " (cannot miss)");
-			case FLAT:
-			case MARGINAL:
-				return label(rolls) + "nothing in particular";
+			case CANNOT_MISS:
+				return "Weakness: anything";
+			case EVEN:
+				return "Weakness: none";
 			default:
 				break;
 		}
 
-		String weakest = DefenceRolls.describe(rolls.getWeakest());
-		if (rolls.isMagicOnly())
+		String line = "Weakness: " + styles(rolls.getWeakest(), rolls.getElement());
+		if (!rolls.getFreeWeakest().isEmpty())
 		{
-			String element = rolls.getElement();
-			if (element != null)
-			{
-				weakest += " (" + Text.escapeJagex(element) + ')';
-			}
-			return label(rolls) + weakest + ", or " + DefenceRolls.describe(rolls.getBestNonMagic());
+			line += ", " + DefenceRolls.describe(rolls.getFreeWeakest());
 		}
-		return label(rolls) + weakest + " ("
-			+ String.format("%.1f", rolls.getMargin()) + "x over "
-			+ DefenceRolls.describe(rolls.getRunnerUp()) + ')';
+		return line;
 	}
 
-	/**
-	 * The label carries the colour, so the winning family reads at a glance without colouring the
-	 * values themselves. A tie spanning families gets no colour rather than an arbitrary one.
-	 */
-	private static String label(DefenceRolls.Result rolls)
+	private static String styles(List<DefenceRolls.Style> styles, String element)
 	{
-		Color color = familyColor(rolls.getWeakest());
-		String text = "Weakest to:";
-		return (color == null ? text : colored(text, color)) + ' ';
-	}
-
-	private static Color familyColor(List<DefenceRolls.Style> styles)
-	{
-		if (styles.isEmpty())
+		String described = DefenceRolls.describe(styles);
+		if (element == null || !styles.contains(DefenceRolls.Style.MAGIC))
 		{
-			return null;
+			return described;
 		}
-		DefenceRolls.Family family = styles.get(0).getFamily();
-		for (DefenceRolls.Style style : styles)
-		{
-			if (style.getFamily() != family)
-			{
-				return null;
-			}
-		}
-		switch (family)
-		{
-			case MELEE:
-				return MELEE_COLOR;
-			case RANGED:
-				return RANGED_COLOR;
-			default:
-				return ELEMENT_COLOR;
-		}
+		return described.replace("Magic", "Magic (" + colored(Text.escapeJagex(element), ELEMENT_COLOR) + ')');
 	}
 
 	/**

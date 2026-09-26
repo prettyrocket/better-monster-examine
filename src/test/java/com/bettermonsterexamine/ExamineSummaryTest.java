@@ -17,6 +17,24 @@ public class ExamineSummaryTest
 		return GSON.fromJson(json, MonsterData.class);
 	}
 
+	private static String defences(int defence, int magic, int stab, int slash, int crush,
+		int standard, int heavy, int light, int magicBonus)
+	{
+		return defences(defence, magic, stab, slash, crush, standard, heavy, light, magicBonus, null);
+	}
+
+	private static String defences(int defence, int magic, int stab, int slash, int crush,
+		int standard, int heavy, int light, int magicBonus, String element)
+	{
+		return "{\"defence_level\":" + defence + ",\"magic_level\":" + magic
+			+ ",\"stab_defence_bonus\":" + stab + ",\"slash_defence_bonus\":" + slash
+			+ ",\"crush_defence_bonus\":" + crush + ",\"standard_range_defence_bonus\":" + standard
+			+ ",\"heavy_range_defence_bonus\":" + heavy + ",\"light_range_defence_bonus\":" + light
+			+ ",\"magic_defence_bonus\":" + magicBonus
+			+ (element == null ? "" : ",\"elemental_weakness\":\"" + element + "\",\"elemental_weakness_percent\":50")
+			+ "}";
+	}
+
 	private static final String ICE_GIANT = "{\"name\":\"Ice giant\",\"defence_level\":40,"
 		+ "\"magic_level\":1,\"stab_defence_bonus\":20,"
 		+ "\"slash_defence_bonus\":20,\"crush_defence_bonus\":0,\"standard_range_defence_bonus\":40,"
@@ -35,10 +53,10 @@ public class ExamineSummaryTest
 	public void allDefencesLeadsWithTheWeaknessThenTheNumbers()
 	{
 		assertEquals(List.of(
-			"<col=56b4e9>Weakest to:</col> Magic (Fire), or Crush",
-			"<col=ff4040>Melee:</col> Stab +20 | Slash +20 | Crush +0",
-			"<col=5fc96b>Ranged:</col> Standard +40 | Heavy +20 | Light +60",
-			"<col=56b4e9>Elemental weakness:</col> Fire 50%"),
+			"Weakness: Magic (<col=56b4e9>Fire</col>), Crush",
+			"Melee: Stab +20 | Slash +20 | Crush +0",
+			"Ranged: Standard +40 | Heavy +20 | Light +60",
+			"Elemental weakness: <col=56b4e9>Fire 50%</col>"),
 			ExamineSummary.format(monster(ICE_GIANT), ExamineSummaryMode.ALL_DEFENCES));
 	}
 
@@ -49,15 +67,24 @@ public class ExamineSummaryTest
 		List<String> lines = ExamineSummary.format(monster(ICE_GIANT), ExamineSummaryMode.WEAKNESSES);
 
 		assertEquals(1, lines.size());
-		assertTrue(lines.get(0).contains("Weakest to:"));
+		assertTrue(lines.get(0).startsWith("Weakness:"));
 	}
 
-	/** The magic bonus is the same 0 as crush, but a Magic level of 1 makes casting far easier. */
+	/** Magic wins, then the comma names the best style that costs no runes. */
 	@Test
-	public void weaknessesNamesTheElementOnlyWhenMagicWins()
+	public void magicIsFollowedByTheBestFreeStyle()
 	{
-		assertEquals(List.of("<col=56b4e9>Weakest to:</col> Magic (Fire), or Crush"),
+		assertEquals(List.of("Weakness: Magic (<col=56b4e9>Fire</col>), Crush"),
 			ExamineSummary.format(monster(ICE_GIANT), ExamineSummaryMode.WEAKNESSES));
+	}
+
+	/** When every free style is even there is no second answer to give. */
+	@Test
+	public void magicStandsAloneWhenFreeStylesAreEven()
+	{
+		MonsterData m = monster(defences(80, 1, 0, 0, 0, 0, 0, 0, 0));
+
+		assertEquals(List.of("Weakness: Magic"), ExamineSummary.format(m, ExamineSummaryMode.WEAKNESSES));
 	}
 
 	/**
@@ -67,30 +94,38 @@ public class ExamineSummaryTest
 	@Test
 	public void aNonMagicWinnerDropsTheElement()
 	{
-		MonsterData m = monster("{\"defence_level\":100,\"magic_level\":100,"
-			+ "\"stab_defence_bonus\":-15,\"slash_defence_bonus\":-15,\"crush_defence_bonus\":-15,"
-			+ "\"standard_range_defence_bonus\":60,\"heavy_range_defence_bonus\":60,"
-			+ "\"light_range_defence_bonus\":60,\"magic_defence_bonus\":100,"
-			+ "\"elemental_weakness\":\"air\",\"elemental_weakness_percent\":50}");
+		MonsterData m = monster(defences(100, 100, -15, -15, -15, 60, 60, 60, 100, "air"));
 
 		List<String> lines = ExamineSummary.format(m, ExamineSummaryMode.WEAKNESSES);
 
-		assertEquals(List.of("<col=ff4040>Weakest to:</col> Melee (2.5x over Ranged)"), lines);
+		assertEquals(List.of("Weakness: Melee"), lines);
 		assertFalse(lines.get(0).contains("Air"));
 	}
 
-	/** A close race is not a weakness, and it does not get to mention the element either. */
+	/** Styles within the tie factor are joined with a slash, and the element still stays off. */
 	@Test
-	public void aMarginalLeadSaysSoAndDropsTheElement()
+	public void aNarrowLeadIsATie()
 	{
-		MonsterData m = monster("{\"defence_level\":120,\"magic_level\":100,"
-			+ "\"stab_defence_bonus\":10,\"slash_defence_bonus\":20,\"crush_defence_bonus\":40,"
-			+ "\"standard_range_defence_bonus\":60,\"heavy_range_defence_bonus\":60,"
-			+ "\"light_range_defence_bonus\":60,\"magic_defence_bonus\":100,"
-			+ "\"elemental_weakness\":\"air\",\"elemental_weakness_percent\":50}");
+		MonsterData m = monster(defences(120, 100, 10, 20, 40, 60, 60, 60, 100, "air"));
 
-		assertEquals(List.of("<col=ff4040>Weakest to:</col> nothing in particular"),
-			ExamineSummary.format(m, ExamineSummaryMode.WEAKNESSES));
+		assertEquals(List.of("Weakness: Stab/Slash"), ExamineSummary.format(m, ExamineSummaryMode.WEAKNESSES));
+	}
+
+	@Test
+	public void evenStylesSayNone()
+	{
+		MonsterData m = monster(defences(50, 50, 0, 0, 0, 0, 0, 0, 0));
+
+		assertEquals(List.of("Weakness: none"), ExamineSummary.format(m, ExamineSummaryMode.WEAKNESSES));
+	}
+
+	/** Every roll at zero means nothing can miss, the opposite of "none". */
+	@Test
+	public void unmissableSaysAnything()
+	{
+		MonsterData m = monster(defences(0, 1, -100, -100, -100, -100, -100, -100, -100));
+
+		assertEquals(List.of("Weakness: anything"), ExamineSummary.format(m, ExamineSummaryMode.WEAKNESSES));
 	}
 
 	/** No defensive data drops the line rather than printing a seven-way tie of zeroes. */
@@ -100,7 +135,7 @@ public class ExamineSummaryTest
 		List<String> lines = ExamineSummary.format(monster("{}"), ExamineSummaryMode.ALL_DEFENCES);
 
 		assertEquals(2, lines.size());
-		assertEquals("<col=ff4040>Melee:</col> Stab +0 | Slash +0 | Crush +0", lines.get(0));
+		assertEquals("Melee: Stab +0 | Slash +0 | Crush +0", lines.get(0));
 		assertTrue(ExamineSummary.format(monster("{}"), ExamineSummaryMode.WEAKNESSES).isEmpty());
 	}
 
