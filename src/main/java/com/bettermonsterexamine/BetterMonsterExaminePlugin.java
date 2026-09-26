@@ -17,6 +17,7 @@ import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
 import net.runelite.api.KeyCode;
 import net.runelite.api.MenuAction;
+import net.runelite.api.MenuEntry;
 import net.runelite.api.MessageNode;
 import net.runelite.api.NPC;
 import net.runelite.api.NPCComposition;
@@ -422,7 +423,15 @@ public class BetterMonsterExaminePlugin extends Plugin
 		// approach the Loot Lookup plugin uses. Resolve now so name fallback must match the live
 		// combat level; otherwise a cosmetic pet sharing a monster's name would gain these options.
 		NPC npc = client.getTopLevelWorldView().npcs().byIndex(event.getIdentifier());
-		if (resolveMonster(npc) == null)
+		MonsterData monster = resolveMonster(npc);
+		if (monster == null)
+		{
+			return;
+		}
+
+		// A stack of identical monsters would otherwise add one pair per NPC; every copy opens the
+		// same card, so one is enough.
+		if (hasEntryFor(monster, event.getTarget()))
 		{
 			return;
 		}
@@ -438,6 +447,26 @@ public class BetterMonsterExaminePlugin extends Plugin
 		{
 			addMenuEntry(STATS_OPTION, event);
 		}
+	}
+
+	/**
+	 * Whether the menu already carries one of our entries for this monster variant under the same
+	 * target text. Matching on both keeps apart NPCs that share a label but resolve to different
+	 * variants, which would open different cards.
+	 */
+	private boolean hasEntryFor(MonsterData monster, String target)
+	{
+		for (MenuEntry entry : client.getMenu().getMenuEntries())
+		{
+			if (entry.getType() == MenuAction.RUNELITE
+				&& (STATS_OPTION.equals(entry.getOption()) || DROPS_OPTION.equals(entry.getOption()))
+				&& target.equals(entry.getTarget())
+				&& resolveMonster(client.getTopLevelWorldView().npcs().byIndex(entry.getIdentifier())) == monster)
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** Append a RUNELITE menu entry for one of our options, anchored on the NPC's Examine entry. */
