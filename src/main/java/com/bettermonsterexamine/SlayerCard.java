@@ -2,6 +2,8 @@ package com.bettermonsterexamine;
 
 import com.bettermonsterexamine.loot.ItemIdService;
 import com.bettermonsterexamine.slayer.GearSetup;
+import com.bettermonsterexamine.slayer.Guides;
+import com.bettermonsterexamine.slayer.RequiredItems;
 import com.bettermonsterexamine.slayer.SpawnLocation;
 import java.awt.BorderLayout;
 import java.awt.Color;
@@ -9,6 +11,7 @@ import java.awt.Component;
 import java.awt.Container;
 import java.awt.Cursor;
 import java.awt.Dimension;
+import java.awt.FlowLayout;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
@@ -36,9 +39,10 @@ import static com.bettermonsterexamine.PanelStyle.sectionHeader;
 import static com.bettermonsterexamine.PanelStyle.wrappedLabel;
 
 /**
- * The Slayer tab body: the Slayer block (level, XP, category, masters), the page's spawn locations,
- * and the wiki's recommended gear. Locations arrive with the drop page and gear with its own Bucket
- * query, so both land async and {@link #show} is re-called as they do; a null list reads as loading.
+ * The Slayer tab body: the Slayer block (level, XP, category, masters), the items the monster needs,
+ * links to its strategy / task guides, the page's spawn locations, and the wiki's recommended gear.
+ * Locations and guides arrive with the drop page and gear with its own Bucket query, so they land
+ * async and {@link #show} is re-called as they do; a null reads as loading.
  * Item icons come from the client by id, filled with one {@link ClientThread} hop as the drops are.
  */
 class SlayerCard extends JPanel
@@ -52,27 +56,30 @@ class SlayerCard extends JPanel
 	private final ItemManager itemManager;
 	private final ClientThread clientThread;
 	private final ItemIdService itemIds;
+	private final RequiredItems requiredItems;
 
 	/** The gear setup picked for {@link #gearPage}, kept across the re-renders async loads trigger. */
 	private int selectedSetup;
 	private String gearPage;
 
-	SlayerCard(MonsterCard stats, ItemManager itemManager, ClientThread clientThread, ItemIdService itemIds)
+	SlayerCard(MonsterCard stats, ItemManager itemManager, ClientThread clientThread, ItemIdService itemIds,
+		RequiredItems requiredItems)
 	{
 		this.stats = stats;
 		this.itemManager = itemManager;
 		this.clientThread = clientThread;
 		this.itemIds = itemIds;
+		this.requiredItems = requiredItems;
 		setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
 		setAlignmentX(LEFT_ALIGNMENT);
 	}
 
-	void show(MonsterData m, List<SpawnLocation> locations, List<GearSetup> gear)
+	void show(MonsterData m, List<SpawnLocation> locations, Guides guides, List<GearSetup> gear)
 	{
 		removeAll();
-		if (!m.getName().equalsIgnoreCase(gearPage))
+		if (!m.getWikiPage().equalsIgnoreCase(gearPage))
 		{
-			gearPage = m.getName();
+			gearPage = m.getWikiPage();
 			selectedSetup = 0;
 		}
 
@@ -86,8 +93,21 @@ class SlayerCard extends JPanel
 			add(note("Not a Slayer assignment."));
 		}
 
+		RequiredItems.Requirement need = requiredItems.forMonster(m.getName());
+		if (need != null)
+		{
+			add(Box.createRigidArea(new Dimension(0, 6)));
+			add(requiredBlock(need));
+		}
+
+		if (guides != null && guides != Guides.NONE)
+		{
+			add(Box.createRigidArea(new Dimension(0, 6)));
+			add(guidesBlock(guides));
+		}
+
 		add(Box.createRigidArea(new Dimension(0, 6)));
-		add(locationsBlock(m, locations));
+		add(locationsBlock(locations));
 
 		JComponent gearBlock = gearBlock(gear);
 		if (gearBlock != null)
@@ -106,14 +126,91 @@ class SlayerCard extends JPanel
 		repaint();
 	}
 
-	// ---------------------------------------------------------------- locations
+	// ----------------------------------------------------------- required items
 
 	/**
-	 * Where it spawns, one row per location with the spawn count on the right. When a page lists
-	 * several levels, the rows that aren't the selected variant's are dimmed, so the variant dropdown
-	 * doubles as a "where do I find this one" filter.
+	 * The items the monster needs: their icons (each opens its wiki page), then the usual one and what
+	 * can stand in for it, what it's for, and any condition ("In the Karuulm Slayer Dungeon").
 	 */
-	private JComponent locationsBlock(MonsterData m, List<SpawnLocation> locations)
+	private JComponent requiredBlock(RequiredItems.Requirement need)
+	{
+		JPanel b = block();
+		JPanel head = rowX();
+		head.add(PanelStyle.headerLabel("Required"));
+		head.add(Box.createHorizontalGlue());
+		if (need.getUse() != null)
+		{
+			head.add(note(need.getUse()));
+		}
+		capHeight(head);
+		b.add(head);
+		b.add(Box.createRigidArea(new Dimension(0, 3)));
+
+		JPanel strip = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 0));
+		strip.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		strip.setAlignmentX(LEFT_ALIGNMENT);
+		List<IconCell> cells = new ArrayList<>();
+		for (String item : need.getItems())
+		{
+			JLabel icon = iconLabel();
+			icon.setToolTipText(item);
+			cells.add(new IconCell(item, icon));
+			applyClick(icon, browse(WIKI + item.replace(' ', '_')));
+			strip.add(icon);
+		}
+		capHeight(strip);
+		b.add(strip);
+
+		List<String> items = need.getItems();
+		b.add(wrappedLabel(items.get(0), Color.WHITE, false));
+		if (items.size() > 1)
+		{
+			b.add(wrappedLabel("or " + String.join(", ", items.subList(1, items.size())), ColorScheme.LIGHT_GRAY_COLOR, false));
+		}
+		if (need.getNote() != null && !need.getNote().isEmpty())
+		{
+			b.add(wrappedLabel(need.getNote(), ColorScheme.LIGHT_GRAY_COLOR, true));
+		}
+		fillIcons(cells);
+		capHeight(b);
+		return b;
+	}
+
+	// ------------------------------------------------------------------ guides
+
+	/** Links to the monster's strategy guide and its Slayer task guide, as its article names them. */
+	private JComponent guidesBlock(Guides guides)
+	{
+		JPanel b = block();
+		b.add(sectionHeader("Guides"));
+		if (guides.getStrategyPage() != null)
+		{
+			b.add(link("Strategy guide", guides.getStrategyPage()));
+		}
+		if (guides.getTaskPage() != null)
+		{
+			String task = guides.getTaskPage().replaceFirst("^Slayer task/", "");
+			b.add(link("Slayer task guide: " + task, guides.getTaskPage()));
+		}
+		capHeight(b);
+		return b;
+	}
+
+	private JComponent link(String text, String page)
+	{
+		JLabel l = new JLabel(text);
+		l.setFont(FontManager.getRunescapeSmallFont());
+		l.setForeground(ColorScheme.BRAND_ORANGE);
+		l.setAlignmentX(LEFT_ALIGNMENT);
+		l.setToolTipText("Open " + page + " on the wiki");
+		applyClick(l, browse(WIKI + page.replace(' ', '_')));
+		return l;
+	}
+
+	// ---------------------------------------------------------------- locations
+
+	/** Where it spawns, one row per location with the spawn count on the right. */
+	private JComponent locationsBlock(List<SpawnLocation> locations)
 	{
 		JPanel b = block();
 		b.add(sectionHeader("Locations"));
@@ -127,29 +224,26 @@ class SlayerCard extends JPanel
 		}
 		else
 		{
-			boolean anyMatch = locations.stream().anyMatch(l -> l.hasLevel(m.getLevel()));
 			for (SpawnLocation l : locations)
 			{
-				boolean dim = anyMatch && !l.hasLevel(m.getLevel());
-				b.add(locationRow(l, dim));
+				b.add(locationRow(l));
 			}
 		}
 		capHeight(b);
 		return b;
 	}
 
-	private JComponent locationRow(SpawnLocation l, boolean dim)
+	private JComponent locationRow(SpawnLocation l)
 	{
 		JPanel r = new JPanel(new BorderLayout());
 		r.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 		r.setBorder(new EmptyBorder(1, 0, 1, 0));
 		r.setAlignmentX(LEFT_ALIGNMENT);
 
-		Color c = dim ? ColorScheme.MEDIUM_GRAY_COLOR : Color.WHITE;
-		r.add(wrappedLabel(l.getLocation(), c, false, 140), BorderLayout.CENTER);
+		r.add(wrappedLabel(l.getLocation(), Color.WHITE, false, 140), BorderLayout.CENTER);
 		JLabel spawns = new JLabel(l.getSpawns());
 		spawns.setFont(FontManager.getRunescapeSmallFont());
-		spawns.setForeground(dim ? ColorScheme.MEDIUM_GRAY_COLOR : ColorScheme.LIGHT_GRAY_COLOR);
+		spawns.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
 		spawns.setVerticalAlignment(JLabel.TOP);
 		r.add(spawns, BorderLayout.EAST);
 
@@ -246,17 +340,8 @@ class SlayerCard extends JPanel
 		source.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
 		source.setBorder(new EmptyBorder(4, 0, 0, 0));
 		source.setAlignmentX(LEFT_ALIGNMENT);
-		String url = WIKI + setup.getPage().replace(' ', '_');
 		source.setToolTipText("Open " + setup.getPage() + " on the wiki");
-		source.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-		source.addMouseListener(new MouseAdapter()
-		{
-			@Override
-			public void mouseClicked(MouseEvent e)
-			{
-				LinkBrowser.browse(url);
-			}
-		});
+		applyClick(source, browse(WIKI + setup.getPage().replace(' ', '_')));
 		body.add(source);
 
 		fillIcons(cells);
@@ -274,11 +359,7 @@ class SlayerCard extends JPanel
 		GearSetup.Item top = best.getItems().get(0);
 
 		JPanel r = rowX();
-		JLabel icon = new JLabel();
-		Dimension d = new Dimension(ICON_W, ICON_H);
-		icon.setPreferredSize(d);
-		icon.setMinimumSize(d);
-		icon.setMaximumSize(d);
+		JLabel icon = iconLabel();
 		cells.add(new IconCell(top.getImageName(), icon));
 		r.add(icon);
 		r.add(Box.createRigidArea(new Dimension(4, 0)));
@@ -304,16 +385,7 @@ class SlayerCard extends JPanel
 		r.add(slotName);
 
 		setTooltip(r, rankedTooltip(slot));
-		String url = WIKI + top.getLink().replace(' ', '_');
-		MouseAdapter open = new MouseAdapter()
-		{
-			@Override
-			public void mouseClicked(MouseEvent e)
-			{
-				LinkBrowser.browse(url);
-			}
-		};
-		applyClick(r, open);
+		applyClick(r, browse(WIKI + top.getLink().replace(' ', '_')));
 		capHeight(r);
 		return r;
 	}
@@ -389,6 +461,29 @@ class SlayerCard extends JPanel
 	}
 
 	// ------------------------------------------------------------ small helpers
+
+	/** A fixed item-sprite-sized slot, blank until {@link #fillIcons} sets its image. */
+	private static JLabel iconLabel()
+	{
+		JLabel l = new JLabel();
+		Dimension d = new Dimension(ICON_W, ICON_H);
+		l.setPreferredSize(d);
+		l.setMinimumSize(d);
+		l.setMaximumSize(d);
+		return l;
+	}
+
+	private static MouseAdapter browse(String url)
+	{
+		return new MouseAdapter()
+		{
+			@Override
+			public void mouseClicked(MouseEvent e)
+			{
+				LinkBrowser.browse(url);
+			}
+		};
+	}
 
 	private static JLabel note(String text)
 	{

@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.time.Duration;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -25,10 +26,10 @@ import okhttp3.Response;
 /**
  * Recommended gear for a monster, from the wiki's {@code recommended_equipment} Bucket. Coverage is
  * thin — only a monster's {@code /Strategies} guide or its Slayer task page carries setups, about 85
- * pages in all — so rather than bulk-load 2.7 MB for them, each monster asks for its own candidate
- * pages in <b>one</b> query ({@link GearParser#candidatePages}) the first time it's viewed, cached per
- * monster under {@code .runelite/better-monster-examine/slayergear/} and refreshed weekly: the same
- * on-demand pattern as the drop pages.
+ * pages in all — so rather than bulk-load 2.7 MB for them, each monster asks for the guide pages its
+ * article links ({@link Guides}) in <b>one</b> query the first time it's viewed, cached per monster
+ * under {@code .runelite/better-monster-examine/slayergear/} and refreshed weekly: the same on-demand
+ * pattern as the drop pages.
  */
 @Slf4j
 @Singleton
@@ -63,10 +64,13 @@ public class SlayerGearService
 		this.updateListener = listener;
 	}
 
-	/** Ensure this monster's gear is loaded, fetching off-thread if needed. Returns immediately. */
-	public void request(String pageName, List<String> categories)
+	/**
+	 * Ensure this monster's gear is loaded from the guides its article links, fetching off-thread if
+	 * needed. Returns immediately. A monster with no guides publishes an empty list with no query.
+	 */
+	public void request(String pageName, Guides guides)
 	{
-		if (pageName == null || pageName.isEmpty())
+		if (pageName == null || pageName.isEmpty() || guides == null)
 		{
 			return;
 		}
@@ -75,7 +79,13 @@ public class SlayerGearService
 		{
 			return;
 		}
-		List<String> pages = GearParser.candidatePages(pageName, categories);
+		List<String> pages = guides.pages();
+		if (pages.isEmpty())
+		{
+			loading.remove(key);
+			publish(key, Collections.emptyList(), pageName);
+			return;
+		}
 		executor.execute(() -> load(pageName, key, pages));
 	}
 
@@ -156,7 +166,7 @@ public class SlayerGearService
 		}
 	}
 
-	/** One query over every candidate page — Bucket matches {@code page_name} case-insensitively. */
+	/** One query over every guide page. */
 	static String buildQuery(List<String> pages)
 	{
 		StringBuilder or = new StringBuilder();

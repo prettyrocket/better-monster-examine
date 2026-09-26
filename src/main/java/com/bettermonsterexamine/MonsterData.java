@@ -186,6 +186,16 @@ public class MonsterData
 
 	// ---- derived accessors -------------------------------------------------
 
+	/**
+	 * The wiki article this row describes, for anything read off the page (drops, locations, guides)
+	 * and the Wiki link. Not {@link #name}: "Troll" names a Construction, a Realm of Memories and a
+	 * historical row, while the page called "Troll" is an article about the race.
+	 */
+	public String getWikiPage()
+	{
+		return pageName == null || pageName.isEmpty() ? name : pageName;
+	}
+
 	public int getAttackLevel()
 	{
 		return attackLevel == null ? 0 : attackLevel;

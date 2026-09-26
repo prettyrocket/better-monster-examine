@@ -7,11 +7,9 @@ import com.google.gson.JsonParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -35,34 +33,6 @@ public final class GearParser
 
 	private GearParser()
 	{
-	}
-
-	/**
-	 * The pages that may hold gear for a monster, best first: its own {@code /Strategies} subpage,
-	 * then the Slayer task page for each of its categories. Task pages don't follow one naming rule
-	 * ("Slayer task/Kurasks" for the Kurask category, "Slayer task/Suqah" for Suqahs), so both the
-	 * singular and plural spellings are offered; Bucket's page match ignores case, which covers the rest.
-	 */
-	public static List<String> candidatePages(String pageName, List<String> categories)
-	{
-		Set<String> out = new LinkedHashSet<>();
-		if (pageName != null && !pageName.isEmpty())
-		{
-			out.add(pageName + "/Strategies");
-		}
-		if (categories != null)
-		{
-			for (String c : categories)
-			{
-				if (c == null || c.isEmpty())
-				{
-					continue;
-				}
-				out.add("Slayer task/" + c);
-				out.add("Slayer task/" + (c.endsWith("s") ? c.substring(0, c.length() - 1) : c + "s"));
-			}
-		}
-		return new ArrayList<>(out);
 	}
 
 	/**

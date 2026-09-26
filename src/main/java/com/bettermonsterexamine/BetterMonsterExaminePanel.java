@@ -2,6 +2,8 @@ package com.bettermonsterexamine;
 
 import com.bettermonsterexamine.loot.DropPageService;
 import com.bettermonsterexamine.loot.DropsCard;
+import com.bettermonsterexamine.slayer.Guides;
+import com.bettermonsterexamine.slayer.RequiredItems;
 import com.bettermonsterexamine.slayer.SlayerGearService;
 import com.bettermonsterexamine.loot.ItemIdService;
 import com.google.gson.Gson;
@@ -114,7 +116,7 @@ public class BetterMonsterExaminePanel extends PluginPanel
 	 */
 	private Consumer<MonsterData> selectionListener;
 
-	public BetterMonsterExaminePanel(MonsterIcons icons, MonsterDataService data, DropPageService drops, ItemIdService itemIds, DropsCard dropsCard, SlayerGearService gear, ItemManager itemManager, ClientThread clientThread, BetterMonsterExamineConfig config, ConfigManager configManager, Gson gson, IntSupplier playerCombatLevel, IntSupplier playerHpLevel, IntSupplier playerSlayerLevel, BufferedImage titleIcon)
+	public BetterMonsterExaminePanel(MonsterIcons icons, MonsterDataService data, DropPageService drops, ItemIdService itemIds, DropsCard dropsCard, SlayerGearService gear, RequiredItems requiredItems, ItemManager itemManager, ClientThread clientThread, BetterMonsterExamineConfig config, ConfigManager configManager, Gson gson, IntSupplier playerCombatLevel, IntSupplier playerHpLevel, IntSupplier playerSlayerLevel, BufferedImage titleIcon)
 	{
 		super(false);
 		this.data = data;
@@ -130,7 +132,7 @@ public class BetterMonsterExaminePanel extends PluginPanel
 			this::selectVariant);
 		this.card = new MonsterCard(icons, config, playerHpLevel, playerSlayerLevel);
 		this.gear = gear;
-		this.slayerCard = new SlayerCard(card, itemManager, clientThread, itemIds);
+		this.slayerCard = new SlayerCard(card, itemManager, clientThread, itemIds, requiredItems);
 
 		// Re-render the Drops tab when a page's drops — or the bulk item-id map that supplies its
 		// icons/prices — land in the background (background thread → EDT).
@@ -361,7 +363,7 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		header.show(m, currentVariants);
 		card.show(m);
 		// Warm this monster's drops so the Drops tab is ready; render now if it's the active tab.
-		drops.request(m.getName());
+		drops.request(m.getWikiPage());
 		if (dropsTabActive)
 		{
 			renderDrops();
@@ -478,15 +480,15 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		}
 		// Ensure the page is loading, then show whatever's parsed so far. A null table means the
 		// page hasn't landed yet; the update listener re-renders when it does.
-		drops.request(m.getName());
-		dropsCard.show(drops.tableFor(m.getName()));
+		drops.request(m.getWikiPage());
+		dropsCard.show(drops.tableFor(m.getWikiPage()));
 	}
 
 	/** A page's drops landed async: re-render the Drops or Slayer tab if it's showing this monster. */
 	private void onDropsLoaded(String page)
 	{
 		MonsterData m = currentSelection;
-		if (m == null || !m.getName().equalsIgnoreCase(page))
+		if (m == null || !m.getWikiPage().equalsIgnoreCase(page))
 		{
 			return;
 		}
@@ -501,8 +503,9 @@ public class BetterMonsterExaminePanel extends PluginPanel
 	}
 
 	/**
-	 * Render the Slayer tab for the current selection. Locations ride on the drop page; gear is only
-	 * asked for here, so a monster whose Slayer tab is never opened costs no gear query.
+	 * Render the Slayer tab for the current selection. Locations and guide links ride on the drop page;
+	 * gear is only asked for here, once that page has named the guides to read it from, so a monster
+	 * whose Slayer tab is never opened costs no gear query.
 	 */
 	private void renderSlayer()
 	{
@@ -512,16 +515,18 @@ public class BetterMonsterExaminePanel extends PluginPanel
 			slayerCard.clear();
 			return;
 		}
-		drops.request(m.getName());
-		gear.request(m.getName(), m.getSlayerCategory());
-		slayerCard.show(m, drops.locationsFor(m.getName()), gear.setupsFor(m.getName()));
+		String page = m.getWikiPage();
+		drops.request(page);
+		Guides guides = drops.guidesFor(page);
+		gear.request(page, guides);
+		slayerCard.show(m, drops.locationsFor(page), guides, gear.setupsFor(page));
 	}
 
 	/** A monster's gear landed async: re-render the Slayer tab if it's showing that monster. */
 	private void onGearLoaded(String page)
 	{
 		MonsterData m = currentSelection;
-		if (slayerTabActive && m != null && m.getName().equalsIgnoreCase(page))
+		if (slayerTabActive && m != null && m.getWikiPage().equalsIgnoreCase(page))
 		{
 			renderSlayer();
 		}

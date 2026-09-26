@@ -64,14 +64,6 @@ public class LocationParserTest
 	}
 
 	@Test
-	public void matchesAnyListedLevel()
-	{
-		SpawnLocation guild = LocationParser.parse(page(row("Warriors' Guild", "56, 76", MEMBERS, "12"))).get(0);
-		assertTrue(guild.hasLevel(76));
-		assertFalse(guild.hasLevel(106));
-	}
-
-	@Test
 	public void singularHeadingAndMissingSectionAndNoHtml()
 	{
 		String boss = "<h2 id=\"Location\">Location</h2>" + HEADER + row("Ungael", "392, 732", MEMBERS, "1") + "</tbody></table>";

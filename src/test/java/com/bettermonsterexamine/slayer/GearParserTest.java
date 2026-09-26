@@ -92,7 +92,7 @@ public class GearParserTest
 	{
 		JsonObject task = row("Slayer task/Abyssal demons", "Melee", "head", plink("Slayer helmet (i)", "Slayer helmet (i)", null));
 		JsonObject strat = row("Abyssal demon/Strategies", "Ranged", "weapon", plink("Twisted bow", "Twisted bow", null));
-		List<String> pages = GearParser.candidatePages("Abyssal demon", Collections.singletonList("Abyssal Demons"));
+		List<String> pages = Arrays.asList("Abyssal demon/Strategies", "Slayer task/Abyssal demons");
 		List<GearSetup> setups = GearParser.parse(GSON, response(task, strat), pages);
 		assertEquals(2, setups.size());
 		assertEquals("Abyssal demon/Strategies", setups.get(0).getPage());
@@ -115,14 +115,6 @@ public class GearParserTest
 		assertEquals("weapon", s.getSlots().get(1).getName());
 		assertEquals("ring", s.getSlots().get(2).getName());
 		assertEquals("", s.getStyle());
-	}
-
-	@Test
-	public void offersBothSpellingsOfTheTaskPage()
-	{
-		List<String> pages = GearParser.candidatePages("Kurask", Arrays.asList("Kurask", "Suqahs"));
-		assertEquals(Arrays.asList("Kurask/Strategies", "Slayer task/Kurask", "Slayer task/Kurasks",
-			"Slayer task/Suqahs", "Slayer task/Suqah"), pages);
 	}
 
 	@Test

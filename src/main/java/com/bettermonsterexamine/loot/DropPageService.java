@@ -1,5 +1,6 @@
 package com.bettermonsterexamine.loot;
 
+import com.bettermonsterexamine.slayer.Guides;
 import com.bettermonsterexamine.slayer.LocationParser;
 import com.bettermonsterexamine.slayer.SpawnLocation;
 import com.google.gson.Gson;
@@ -46,8 +47,9 @@ import okhttp3.Response;
  * index without blocking and returns null until a page lands. Item icon / GE price / High Alch are
  * <b>not</b> parsed here — they come from the RuneLite client by item id at render time.
  *
- * <p>The same page also carries the monster's Locations table, which Bucket can't supply by name, so
- * it's parsed here too ({@link LocationParser}) and served by {@link #locationsFor}.
+ * <p>The same page also carries the monster's Locations table, which Bucket can't supply by name, and
+ * the guide pages it links; both are parsed here too and served by {@link #locationsFor} and
+ * {@link #guidesFor}.
  */
 @Slf4j
 @Singleton
@@ -133,6 +135,13 @@ public class DropPageService
 	{
 		Page page = byPage.get(pageName.toLowerCase(Locale.ROOT));
 		return page == null ? null : page.locations;
+	}
+
+	/** The strategy / Slayer task guides the page links, or null until the page is loaded. */
+	public Guides guidesFor(String pageName)
+	{
+		Page page = byPage.get(pageName.toLowerCase(Locale.ROOT));
+		return page == null ? null : page.guides;
 	}
 
 	/** True once this page's drops have been loaded (from cache or network), so reads return real data. */
@@ -239,7 +248,7 @@ public class DropPageService
 	private static Page parsePage(String html)
 	{
 		List<DropRow> rows = parse(html);
-		return rows == null ? null : new Page(rows, LocationParser.parse(html));
+		return rows == null ? null : new Page(rows, LocationParser.parse(html), Guides.parse(html));
 	}
 
 	private static String htmlOf(ParseResponse response)
@@ -504,11 +513,13 @@ public class DropPageService
 	{
 		private final List<DropRow> rows;
 		private final List<SpawnLocation> locations;
+		private final Guides guides;
 
-		private Page(List<DropRow> rows, List<SpawnLocation> locations)
+		private Page(List<DropRow> rows, List<SpawnLocation> locations, Guides guides)
 		{
 			this.rows = rows;
 			this.locations = locations;
+			this.guides = guides;
 		}
 	}
 
