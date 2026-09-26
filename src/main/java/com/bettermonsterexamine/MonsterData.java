@@ -370,6 +370,16 @@ public class MonsterData
 	}
 
 	/**
+	 * Clean the name in place, before it is indexed or matched on. A template in the infobox name
+	 * ({@code Zombies{{sic}} Champion}) reaches Bucket as rendered HTML, which would otherwise show
+	 * in the panel and never match the in-game name.
+	 */
+	void cleanName()
+	{
+		name = WikiSanitizer.text(name);
+	}
+
+	/**
 	 * Absorb another row's spawn ids when it collapses into this one. Without this, dropping a
 	 * duplicate would strand its ids (1,005 of them bestiary-wide) and right-clicking those spawns
 	 * would miss the id index entirely and fall back to the far weaker name+level match.
@@ -438,12 +448,13 @@ public class MonsterData
 	/** The max-hit values, one clean line each (plainlist/strip-markers/&lt;br&gt;/links removed). */
 	public List<String> getMaxHitLines()
 	{
-		return WikiSanitizer.maxHitLines(maxHit);
+		return WikiSanitizer.lines(maxHit);
 	}
 
+	/** The attack styles, one clean entry each (Vespula packs two into one element with a {@code <br>}). */
 	public List<String> getAttackStyles()
 	{
-		return attackStyles != null ? attackStyles : Collections.emptyList();
+		return WikiSanitizer.lines(attackStyles);
 	}
 
 	public List<String> getAttributes()

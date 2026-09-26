@@ -129,7 +129,13 @@ scraping — cut over to Bucket in #26.)
 3. **`WikiSanitizer`** (static, unit-tested) — cleans the few non-uniform shapes Bucket leaves in
    TEXT/`max_hit` fields: MediaWiki strip-markers, `<div class="plainlist">` + `*` bullet wrappers,
    `<br>` line breaks, and `[[wikilinks]]`. This is what makes the old `{{template}}` max-hit
-   garbage render correctly (#24).
+   garbage render correctly (#24). Bucket stores fields **after templates expand**, so any template
+   an editor puts in an infobox arrives as HTML (`{{sic}}` → a `<sup class="noprint">` note, a thin
+   space → `&thinsp;`); rather than chase each one, `text` strips every tag, drops `noprint` notes
+   whole, decodes entities, and turns `<br>` into a line break (examine can list several). The
+   **name** is cleaned too, once, before indexing (`MonsterData.cleanName`) — otherwise
+   "Zombies Champion" never matches search or the in-game name. `lines` is the list form, used by
+   max hit and attack style.
 
 4. **`InfoboxLevels`** (static, unit-tested) — recovers the levels Bucket **structurally cannot
    carry**. The wiki's `Module:Infobox Monster` writes each level with `tonumber()`, so a level that

@@ -28,7 +28,7 @@ public class WikiSanitizerTest
 		List<String> raw = Collections.singletonList(
 			"<div class=\"plainlist \" >\n*31 (auto)\n*45 (special)\n</div>");
 
-		assertEquals(Arrays.asList("31 (auto)", "45 (special)"), WikiSanitizer.maxHitLines(raw));
+		assertEquals(Arrays.asList("31 (auto)", "45 (special)"), WikiSanitizer.lines(raw));
 	}
 
 	@Test
@@ -39,7 +39,7 @@ public class WikiSanitizerTest
 			"30-37 (Melee)" + marker("UNIQ--ref-00000049-QINU"),
 			"?? (axes)");
 
-		assertEquals(Arrays.asList("30-37 (Melee)", "?? (axes)"), WikiSanitizer.maxHitLines(raw));
+		assertEquals(Arrays.asList("30-37 (Melee)", "?? (axes)"), WikiSanitizer.lines(raw));
 	}
 
 	@Test
@@ -47,7 +47,7 @@ public class WikiSanitizerTest
 	{
 		List<String> raw = Collections.singletonList("16 (Stab)<br/>50 (Dragonfire)");
 
-		assertEquals(Arrays.asList("16 (Stab)", "50 (Dragonfire)"), WikiSanitizer.maxHitLines(raw));
+		assertEquals(Arrays.asList("16 (Stab)", "50 (Dragonfire)"), WikiSanitizer.lines(raw));
 	}
 
 	@Test
@@ -56,7 +56,7 @@ public class WikiSanitizerTest
 		// Vorkath: already-clean per-style array — unchanged.
 		List<String> raw = Arrays.asList("30 (Magic)", "28 (Ranged)", "121 (Dragonfire Bomb/Special)");
 
-		assertEquals(raw, WikiSanitizer.maxHitLines(raw));
+		assertEquals(raw, WikiSanitizer.lines(raw));
 	}
 
 	@Test
@@ -64,8 +64,8 @@ public class WikiSanitizerTest
 	{
 		List<String> raw = Arrays.asList("32", null, "", "  ");
 
-		assertEquals(Collections.singletonList("32"), WikiSanitizer.maxHitLines(raw));
-		assertEquals(Collections.emptyList(), WikiSanitizer.maxHitLines(null));
+		assertEquals(Collections.singletonList("32"), WikiSanitizer.lines(raw));
+		assertEquals(Collections.emptyList(), WikiSanitizer.lines(null));
 	}
 
 	@Test
@@ -82,6 +82,69 @@ public class WikiSanitizerTest
 		// Stranger (#24): the max-hit description carries a trailing <ref> strip-marker.
 		assertEquals("115% of targeted player's max hit",
 			WikiSanitizer.text("115% of targeted player's max hit" + marker("UNIQ--ref-0000001A-QINU")));
+	}
+
+	/** The rendered {@code {{sic}}} template, as Bucket stores it. */
+	private static final String SIC = "<sup class=\"noprint\">&#91;<span class=\"fact-text\" title=\"The "
+		+ "preceding quoted material has been reproduced verbatim from the quoted original and is not a "
+		+ "transcription error.\">sic</span>&#93;</sup>";
+
+	@Test
+	public void textDropsSicNoteFromName()
+	{
+		// Zombies Champion: |name = Zombies{{sic}} Champion. The note goes, not just its tags.
+		assertEquals("Zombies Champion", WikiSanitizer.text("Zombies" + SIC + " Champion"));
+		assertEquals("Bloodthirst rockslug", WikiSanitizer.text("Bloodthirst rockslug" + SIC));
+	}
+
+	@Test
+	public void textDropsSicNoteFromExamine()
+	{
+		// Crawling Hand: the wiki quotes the game's typo verbatim.
+		assertEquals("I'm glad its just the hand I can see...",
+			WikiSanitizer.text("I'm glad its" + SIC + " just the hand I can see..."));
+	}
+
+	@Test
+	public void textStripsOtherTagsAndDecodesEntities()
+	{
+		assertEquals("a b", WikiSanitizer.text("<span class=\"x\">a</span> <i>b</i>"));
+		assertEquals("[1] & <2>", WikiSanitizer.text("&#91;1&#x5D; &amp; &lt;2&gt;"));
+		assertEquals("&unknown;", WikiSanitizer.text("&unknown;"));
+	}
+
+	@Test
+	public void thinSpaceBeforeFootnoteDropped()
+	{
+		// TzKal-Zuk: a thin space separates the value from its <ref> footnote.
+		List<String> raw = Collections.singletonList("148&thinsp;" + marker("'\"`UNIQ--ref-000000E6-QINU`\"'"));
+
+		assertEquals(Collections.singletonList("148"), WikiSanitizer.lines(raw));
+	}
+
+	@Test
+	public void multipleExaminesSplitOntoLines()
+	{
+		// Cyclops: several examines, each behind a bold bullet span, separated by <br/>.
+		String bullet = "<span style=\"user-select:none;\">'''&bull;'''</span> ";
+		assertEquals("A one-eyed man eater.\nA one-eyed woman eater.",
+			WikiSanitizer.text(bullet + "A one-eyed man eater.<br/>" + bullet + "A one-eyed woman eater."));
+	}
+
+	@Test
+	public void wikitextBoldLabelUnwrapped()
+	{
+		// Icefiend: a bold location label on the second examine.
+		assertEquals("A small ice demon.\nIn the Chambers of Xeric: Servant of the Ice Demon.",
+			WikiSanitizer.text("A small ice demon.<br>'''In the Chambers of Xeric:''' Servant of the Ice Demon."));
+	}
+
+	@Test
+	public void attackStyleElementSplitOnBr()
+	{
+		// Vespula: two styles packed into one array element.
+		assertEquals(Arrays.asList("Ranged", "Typeless"),
+			WikiSanitizer.lines(Collections.singletonList("Ranged <br/> Typeless")));
 	}
 
 	@Test
