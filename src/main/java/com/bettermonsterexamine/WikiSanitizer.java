@@ -31,6 +31,12 @@ final class WikiSanitizer
 	private static final Map<Pattern, String> RULES = new LinkedHashMap<>();
 	private static final Pattern ENTITY = Pattern.compile("&(#[0-9]+|#[xX][0-9a-fA-F]+|[a-zA-Z]+);");
 	private static final Pattern SPACES = Pattern.compile("[ \\t]+");
+	/**
+	 * How the wiki writes "no value" in any field (an attack style or weakness of {@code None}, a max
+	 * hit of {@code N/A}). Read as absent, so each renderer shows its own blank rather than the word.
+	 * Not {@code "No"}: that is a real answer ("Poisonous: No").
+	 */
+	private static final Pattern PLACEHOLDER = Pattern.compile("(?i)n/a|none");
 	private static final Map<String, String> NAMED = new HashMap<>();
 	private static final Type STRING_LIST = new TypeToken<List<String>>()
 	{
@@ -51,6 +57,8 @@ final class WikiSanitizer
 		rule("</?[a-zA-Z][^>]*>", "");
 		// Unrendered wikitext bold/italic ('''In the Chambers of Xeric:''') and list bullets.
 		rule("'{2,}|(?m)^[ \\t]*\\*+", "");
+		// The RuneScape fonts have no en dash glyph (Fever spider's "1–12").
+		rule("–", "-");
 
 		NAMED.put("amp", "&");
 		NAMED.put("lt", "<");
@@ -73,12 +81,17 @@ final class WikiSanitizer
 
 	/**
 	 * A copy of {@code base} that cleans every string as a Bucket row is parsed: a scalar through
-	 * {@link #text}, a list through {@link #lines} (so one element packing several values splits).
+	 * {@link #text}, a list through {@link #lines} (so one element packing several values splits),
+	 * and a placeholder value dropped as absent.
 	 */
 	static Gson bucketGson(Gson base)
 	{
 		return base.newBuilder()
-			.registerTypeAdapter(String.class, (JsonDeserializer<String>) (json, t, c) -> text(json.getAsString()))
+			.registerTypeAdapter(String.class, (JsonDeserializer<String>) (json, t, c) ->
+			{
+				String s = text(json.getAsString());
+				return PLACEHOLDER.matcher(s).matches() ? null : s;
+			})
 			.registerTypeAdapter(STRING_LIST, (JsonDeserializer<List<String>>) (json, t, c) ->
 			{
 				List<String> raw = new ArrayList<>();
@@ -89,7 +102,9 @@ final class WikiSanitizer
 						raw.add(e.getAsString());
 					}
 				}
-				return lines(raw);
+				List<String> out = lines(raw);
+				out.removeIf(s -> PLACEHOLDER.matcher(s).matches());
+				return out;
 			})
 			.create();
 	}
