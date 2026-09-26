@@ -17,11 +17,9 @@ import java.awt.Dimension;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -39,7 +37,6 @@ import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.util.AsyncBufferedImage;
 import net.runelite.client.util.LinkBrowser;
-import net.runelite.http.api.item.ItemPrice;
 
 /**
  * The drops list for the currently-viewed monster, as a self-contained Swing component (the
@@ -736,7 +733,7 @@ public class DropsCard extends JPanel
 			List<Runnable> updates = new ArrayList<>();
 			for (PriceCell c : cells)
 			{
-				Integer id = resolveId(c.itemName);
+				Integer id = itemIds.resolve(itemManager, c.itemName);
 				if (id == null)
 				{
 					continue;
@@ -779,55 +776,6 @@ public class DropsCard extends JPanel
 				repaint();
 			});
 		});
-	}
-
-	/**
-	 * Resolve an item name to a client item id, on the client thread. The bulk Bucket {@code item_id}
-	 * map is tried first (it covers untradeables the client's search index misses); then a small hand
-	 * map for items the bucket can't pin to one id (clue scrolls, whose bucket id is {@code "N/A"});
-	 * finally {@link ItemManager#search} on an exact name match (covers tradeables the bucket misses,
-	 * e.g. dose potions like {@code "Strength potion(2)"}).
-	 */
-	private Integer resolveId(String name)
-	{
-		Integer id = itemIds.idFor(name);
-		if (id != null)
-		{
-			return id;
-		}
-		Integer known = KNOWN_IDS.get(name);
-		if (known != null)
-		{
-			return known;
-		}
-		try
-		{
-			for (ItemPrice match : itemManager.search(name))
-			{
-				if (name.equalsIgnoreCase(match.getName()))
-				{
-					return match.getId();
-				}
-			}
-		}
-		catch (RuntimeException e)
-		{
-			return null;
-		}
-		return null;
-	}
-
-	/** Items the Bucket {@code item_id} map returns {@code "N/A"} for (many ids) — pinned by hand. */
-	private static final Map<String, Integer> KNOWN_IDS = new HashMap<>();
-
-	static
-	{
-		KNOWN_IDS.put("Clue scroll (beginner)", 23182);
-		KNOWN_IDS.put("Clue scroll (easy)", 2677);
-		KNOWN_IDS.put("Clue scroll (medium)", 2801);
-		KNOWN_IDS.put("Clue scroll (hard)", 2722);
-		KNOWN_IDS.put("Clue scroll (elite)", 12073);
-		KNOWN_IDS.put("Clue scroll (master)", 19835);
 	}
 
 	// ------------------------------------------------------------ small helpers

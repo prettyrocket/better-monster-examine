@@ -18,6 +18,8 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.RuneLite;
+import net.runelite.client.game.ItemManager;
+import net.runelite.http.api.item.ItemPrice;
 import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -79,6 +81,55 @@ public class ItemIdService
 	public Integer idFor(String itemName)
 	{
 		return itemName == null ? null : byName.get(itemName);
+	}
+
+	/**
+	 * Resolve an item name to a client item id, on the client thread. The bulk Bucket {@code item_id}
+	 * map is tried first (it covers untradeables the client's search index misses); then a small hand
+	 * map for items the bucket can't pin to one id (clue scrolls, whose bucket id is {@code "N/A"});
+	 * finally {@link ItemManager#search} on an exact name match (covers tradeables the bucket misses,
+	 * e.g. dose potions like {@code "Strength potion(2)"}).
+	 */
+	public Integer resolve(ItemManager itemManager, String name)
+	{
+		Integer id = idFor(name);
+		if (id != null)
+		{
+			return id;
+		}
+		Integer known = KNOWN_IDS.get(name);
+		if (known != null)
+		{
+			return known;
+		}
+		try
+		{
+			for (ItemPrice match : itemManager.search(name))
+			{
+				if (name.equalsIgnoreCase(match.getName()))
+				{
+					return match.getId();
+				}
+			}
+		}
+		catch (RuntimeException e)
+		{
+			return null;
+		}
+		return null;
+	}
+
+	/** Items the Bucket {@code item_id} map returns {@code "N/A"} for (many ids) — pinned by hand. */
+	private static final Map<String, Integer> KNOWN_IDS = new HashMap<>();
+
+	static
+	{
+		KNOWN_IDS.put("Clue scroll (beginner)", 23182);
+		KNOWN_IDS.put("Clue scroll (easy)", 2677);
+		KNOWN_IDS.put("Clue scroll (medium)", 2801);
+		KNOWN_IDS.put("Clue scroll (hard)", 2722);
+		KNOWN_IDS.put("Clue scroll (elite)", 12073);
+		KNOWN_IDS.put("Clue scroll (master)", 19835);
 	}
 
 	private void init()
