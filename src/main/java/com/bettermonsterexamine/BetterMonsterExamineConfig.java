@@ -21,7 +21,7 @@ public interface BetterMonsterExamineConfig extends Config
 
 	@ConfigSection(
 		name = "Examine",
-		description = "",
+		description = "What happens on the default Examine.",
 		position = 3
 	)
 	String examineSection = "examineSection";
