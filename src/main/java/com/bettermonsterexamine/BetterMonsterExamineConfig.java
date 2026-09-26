@@ -134,7 +134,7 @@ public interface BetterMonsterExamineConfig extends Config
 	@ConfigItem(
 		keyName = "examineSummaryDetail",
 		name = "Summary detail",
-		description = "How much the chat summary shows: just the weakest melee and ranged styles, or every melee and ranged defence.",
+		description = "How much the chat summary shows: just the weakest styles, or every defence with the weakest highlighted.<br>All defences follows 'Show defence rolls'.",
 		section = examineSection,
 		position = 2
 	)

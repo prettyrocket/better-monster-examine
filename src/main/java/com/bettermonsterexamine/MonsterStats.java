@@ -2,7 +2,6 @@ package com.bettermonsterexamine;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -379,14 +378,7 @@ final class MonsterStats
 	 */
 	Map<DefenceRolls.Style, ColourRole> defenceRollRoles()
 	{
-		Map<DefenceRolls.Style, ColourRole> roles = new EnumMap<>(DefenceRolls.Style.class);
-		DefenceRolls.Result result = DefenceRolls.of(m);
-		if (result.getBand() == DefenceRolls.Band.RANKED)
-		{
-			result.getWeakest().forEach(s -> roles.put(s, ColourRole.GOOD));
-			result.getFreeWeakest().forEach(s -> roles.put(s, ColourRole.NEXT));
-		}
-		return roles;
+		return DefenceRolls.roles(m);
 	}
 
 	private List<String> rolls(DefenceRolls.Style... styles)
@@ -399,7 +391,7 @@ final class MonsterStats
 		List<String> v = new ArrayList<>(styles.length);
 		for (DefenceRolls.Style style : styles)
 		{
-			v.add(String.format(Locale.ROOT, "%,d", rolls.get(style)));
+			v.add(StatFormat.roll(rolls.get(style)));
 		}
 		return v;
 	}

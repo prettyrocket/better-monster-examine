@@ -25,6 +25,12 @@ final class StatFormat
 		return (v >= 0 ? "+" : "") + v;
 	}
 
+	/** A defence roll, grouped for reading, e.g. {@code 12,345}. */
+	static String roll(int v)
+	{
+		return String.format(Locale.ROOT, "%,d", v);
+	}
+
 	/** A skill level, or an em dash when absent/zero. */
 	static String num(int v)
 	{
