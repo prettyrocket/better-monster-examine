@@ -14,5 +14,7 @@ enum ColourRole
 	/** Bad for the player (aggressive, positive flat armour, over-HP max hit, immunities). */
 	DANGER,
 	/** In the player's favour (negative flat armour, an XP bonus). */
-	GOOD
+	GOOD,
+	/** The runner-up to a {@link #GOOD} choice (the easiest free style when magic wins alone). */
+	NEXT
 }

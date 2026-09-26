@@ -8,7 +8,9 @@ import java.awt.Graphics2D;
 import java.awt.GridLayout;
 import java.awt.Image;
 import java.awt.image.BufferedImage;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.function.IntSupplier;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
@@ -171,11 +173,13 @@ class MonsterCard extends JPanel
 			// Rolls only when every input is there, so the three blocks never mix rolls and bonuses.
 			boolean rolls = config.showDefenceRolls() && stats.magicDefenceRoll() != null;
 			String suffix = rolls ? " roll" : "";
+			Map<DefenceRolls.Style, ColourRole> roles = rolls ? stats.defenceRollRoles() : Map.of();
 
 			List<String> meleeBonus = stats.meleeDefence();
 			add(gridBlock("Melee defence" + suffix,
 				new BufferedImage[]{icons.stabIcon, icons.slashIcon, icons.crushIcon},
 				(rolls ? stats.meleeDefenceRoll() : meleeBonus).toArray(new String[0]),
+				rollColors(roles, DefenceRolls.Style.STAB, DefenceRolls.Style.SLASH, DefenceRolls.Style.CRUSH),
 				defenceTips(rolls, new String[]{"Stab", "Slash", "Crush"}, meleeBonus)));
 			add(Box.createRigidArea(new Dimension(0, 6)));
 
@@ -185,6 +189,7 @@ class MonsterCard extends JPanel
 			add(gridBlock("Magic defence" + suffix,
 				new BufferedImage[]{icons.magicDefenceIcon, weaknessIcon(element)},
 				new String[]{rolls ? stats.magicDefenceRoll() : stats.magicDefence(), stats.weaknessSeverity()},
+				new Color[]{rollColors(roles, DefenceRolls.Style.MAGIC)[0], Color.WHITE},
 				new String[]{magicTip, weakLabel}));
 			add(Box.createRigidArea(new Dimension(0, 6)));
 
@@ -192,6 +197,7 @@ class MonsterCard extends JPanel
 			add(gridBlock("Ranged defence" + suffix,
 				new BufferedImage[]{icons.lightIcon, icons.standardIcon, icons.heavyIcon},
 				(rolls ? stats.rangedDefenceRoll() : rangedBonus).toArray(new String[0]),
+				rollColors(roles, DefenceRolls.Style.LIGHT, DefenceRolls.Style.STANDARD, DefenceRolls.Style.HEAVY),
 				defenceTips(rolls, new String[]{"Light", "Standard", "Heavy"}, rangedBonus)));
 		}
 
@@ -309,8 +315,26 @@ class MonsterCard extends JPanel
 		return tips;
 	}
 
-	/** A titled block whose stats are laid out as icon-over-value cells (wiki style). */
+	/** Each style's highlight, white where the ranking doesn't name it. */
+	private Color[] rollColors(Map<DefenceRolls.Style, ColourRole> roles, DefenceRolls.Style... styles)
+	{
+		Color[] colors = new Color[styles.length];
+		for (int i = 0; i < styles.length; i++)
+		{
+			colors[i] = resolve(roles.getOrDefault(styles[i], ColourRole.NEUTRAL));
+		}
+		return colors;
+	}
+
 	private JPanel gridBlock(String title, BufferedImage[] cellIcons, String[] values, String[] labels)
+	{
+		Color[] colors = new Color[values.length];
+		Arrays.fill(colors, Color.WHITE);
+		return gridBlock(title, cellIcons, values, colors, labels);
+	}
+
+	/** A titled block whose stats are laid out as icon-over-value cells (wiki style). */
+	private JPanel gridBlock(String title, BufferedImage[] cellIcons, String[] values, Color[] colors, String[] labels)
 	{
 		JPanel b = block();
 		b.add(sectionHeader(title));
@@ -322,7 +346,7 @@ class MonsterCard extends JPanel
 		grid.setAlignmentX(LEFT_ALIGNMENT);
 		for (int i = 0; i < cellIcons.length; i++)
 		{
-			grid.add(statCell(cellIcons[i], values[i], labels[i]));
+			grid.add(statCell(cellIcons[i], values[i], colors[i], labels[i]));
 		}
 		capHeight(grid);
 		b.add(grid);

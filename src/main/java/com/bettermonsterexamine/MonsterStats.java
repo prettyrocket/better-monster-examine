@@ -2,6 +2,7 @@ package com.bettermonsterexamine;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -369,6 +370,23 @@ final class MonsterStats
 	List<String> rangedDefenceRoll()
 	{
 		return rolls(DefenceRolls.Style.LIGHT, DefenceRolls.Style.STANDARD, DefenceRolls.Style.HEAVY);
+	}
+
+	/**
+	 * Which defence rolls to highlight, by the same ranking as the chat summary's Weakness line:
+	 * its first answer {@link ColourRole#GOOD}, the free style it names second {@link ColourRole#NEXT}.
+	 * Styles it doesn't name are absent, as is everything when no style stands out.
+	 */
+	Map<DefenceRolls.Style, ColourRole> defenceRollRoles()
+	{
+		Map<DefenceRolls.Style, ColourRole> roles = new EnumMap<>(DefenceRolls.Style.class);
+		DefenceRolls.Result result = DefenceRolls.of(m);
+		if (result.getBand() == DefenceRolls.Band.RANKED)
+		{
+			result.getWeakest().forEach(s -> roles.put(s, ColourRole.GOOD));
+			result.getFreeWeakest().forEach(s -> roles.put(s, ColourRole.NEXT));
+		}
+		return roles;
 	}
 
 	private List<String> rolls(DefenceRolls.Style... styles)

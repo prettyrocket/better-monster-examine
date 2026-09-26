@@ -250,4 +250,29 @@ public class MonsterStatsTest
 		assertNull(s.magicDefenceRoll());
 		assertNull(s.rangedDefenceRoll());
 	}
+
+	@Test
+	public void defenceRollRolesFollowTheChatRanking()
+	{
+		// Magic wins alone (Magic level 1); Light is the easiest free style, Standard ties with it.
+		Map<DefenceRolls.Style, ColourRole> roles = stats(monster("{\"defence_level\":20,\"magic_level\":1,"
+			+ "\"stab_defence_bonus\":60,\"slash_defence_bonus\":60,\"crush_defence_bonus\":60,"
+			+ "\"magic_defence_bonus\":50,\"light_range_defence_bonus\":0,"
+			+ "\"standard_range_defence_bonus\":5,\"heavy_range_defence_bonus\":60}")).defenceRollRoles();
+
+		assertEquals(ColourRole.GOOD, roles.get(DefenceRolls.Style.MAGIC));
+		assertEquals(ColourRole.NEXT, roles.get(DefenceRolls.Style.LIGHT));
+		assertEquals("Within the tie band, so the same colour", ColourRole.NEXT, roles.get(DefenceRolls.Style.STANDARD));
+		assertNull(roles.get(DefenceRolls.Style.STAB));
+		assertNull(roles.get(DefenceRolls.Style.HEAVY));
+	}
+
+	@Test
+	public void defenceRollRolesEmptyWhenNoStyleStandsOut()
+	{
+		assertTrue(stats(monster("{\"defence_level\":1,\"magic_level\":1,"
+			+ "\"stab_defence_bonus\":0,\"slash_defence_bonus\":0,\"crush_defence_bonus\":0,"
+			+ "\"magic_defence_bonus\":0,\"light_range_defence_bonus\":0,"
+			+ "\"standard_range_defence_bonus\":0,\"heavy_range_defence_bonus\":0}")).defenceRollRoles().isEmpty());
+	}
 }
