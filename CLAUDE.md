@@ -229,19 +229,29 @@ Item icon / GE price / High Alch come from the **RuneLite client by item id** (z
 ### Slayer tab (`slayer/`)
 
 The Slayer block moved off the Stats card into its own tab (`SlayerCard`, flat package, since it reuses
-`MonsterCard.slayerBlock`), alongside two things Bucket's `infobox_monster` can't give:
+`MonsterCard.slayerBlock`), alongside what Bucket's `infobox_monster` can't give:
 
+- **Page lookups key on `MonsterData.getWikiPage()`** (Bucket's `page_name`), not the name — for drops,
+  locations, guides and the header's Wiki link. A name can span unrelated pages: "Troll" names a
+  Construction, a Realm of Memories and a historical row, while the page *called* "Troll" is the race
+  article; "Rock" is both Rock lobster and Rock (Troll).
 - **Locations** — `LocationParser` reads the page's Locations table from the **same `action=parse`
   response** as the drops (`DropPageService.locationsFor`); no extra fetch. Bucket's `locline` has only
-  coordinates — the `{{LocLine}}` location *name* isn't stored. Rows not at the selected variant's level
-  are dimmed, which is why the variant dropdown stays visible on this tab.
-- **Recommended gear** — `SlayerGearService` queries the `recommended_equipment` bucket, which only
-  `<Monster>/Strategies` and `Slayer task/<Category>` pages fill (~85 pages), so it's **one OR query per
-  monster, on first opening the tab**, cached weekly under `slayergear/` — not a 2.7 MB bulk load. Task
-  pages mix singular/plural ("Slayer task/Kurasks" for category Kurask, "Slayer task/Suqah" for Suqahs),
-  so `GearParser.candidatePages` offers both; Bucket's page match is case-insensitive. The JSON holds
-  **unexpanded wikitext**: items are read from each `{{plink}}` (image name → item id, since the link can
-  be a disambiguation page like "Mitre").
+  coordinates — the `{{LocLine}}` location *name* isn't stored.
+- **Guides** — `Guides` reads the article's own "This article has a strategy guide" / "…a Slayer task
+  guide: Trolls" message boxes from the same response (`DropPageService.guidesFor`), and the tab links
+  both. These name the pages **exactly**; don't derive them from `slayer_category`, whose task pages
+  mix singular and plural ("Slayer task/Kurasks" for Kurask, "Slayer task/Suqah" for Suqahs).
+- **Recommended gear** — `SlayerGearService` queries the `recommended_equipment` bucket for the guide
+  pages above in **one OR query per monster, once its page has landed and the tab is open**, cached
+  weekly under `slayergear/` — only ~85 pages have setups, so no 2.7 MB bulk load. The JSON holds
+  **unexpanded wikitext**: items are read from each `{{plink}}` (image name → item id, since the link
+  can be a disambiguation page like "Mitre").
+- **Required items** — rock hammer, nose peg, … have **no structured source** (prose only; the Slayer
+  equipment table's "Use(s)" is free text), so they're hand-kept in `resources/slayer/required-items.json`
+  (`RequiredItems`), keyed by **monster name, not category** — Dawn shares Dusk's Gargoyles category
+  but needs no hammer, sulphur lizards are "Lizards" but need no ice cooler. Only add a pairing the
+  monster's own page states.
 
 ### Plugin + UI
 
@@ -399,8 +409,9 @@ The `loot/` layer adds `DropPageServiceTest` (the rendered-page HTML parse: rows
 `DropTableTest` (group → section grouping in wiki page order; like-named sections in different groups
 stay distinct), `ItemIdServiceTest` (the `item_id` name→id parse), `DropRowTest` (the `isAlways`
 helper) and `DropFormatTest` (the drops display shaping).
-The `slayer/` layer adds `LocationParserTest` (Locations table by header, UK floor only) and
-`GearParserTest` (plink items, slot order, candidate task-page spellings, query escaping).
+The `slayer/` layer adds `LocationParserTest` (Locations table by header, UK floor only),
+`GuidesTest` (the guide message boxes, not prose links), `GearParserTest` (plink items, slot order,
+query escaping) and `RequiredItemsTest` (the bundled table loads; keyed by name, not category).
 `MonsterLookupMessageTest` covers the inbound cross-plugin contract — precedence, defaults, and above
 all that a wrongly-typed or empty payload is ignored rather than thrown.
 `BetterMonsterExaminePluginTest` and `OverlayPreview` are dev launchers, not assertions.
