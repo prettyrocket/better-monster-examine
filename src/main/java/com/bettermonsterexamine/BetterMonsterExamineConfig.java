@@ -15,35 +15,35 @@ public interface BetterMonsterExamineConfig extends Config
 	@ConfigSection(
 		name = "Right-click menu",
 		description = "The Stats/Drops entries added to a monster's right-click Examine.",
-		position = 1
+		position = 2
 	)
 	String menuSection = "menuSection";
 
 	@ConfigSection(
 		name = "Examine",
 		description = "What the plugin adds to the game's own Examine, without touching the right-click menu.",
-		position = 2
+		position = 3
 	)
 	String examineSection = "examineSection";
 
 	@ConfigSection(
 		name = "Side panel",
 		description = "The searchable side panel and its Recent/Favorites lists.",
-		position = 3
+		position = 4
 	)
 	String panelSection = "panelSection";
 
 	@ConfigSection(
 		name = "Accessibility",
 		description = "Colour palette for player-relevant stats and drop values, including a colour-blind-friendly mode.",
-		position = 4
+		position = 5
 	)
 	String highlightSection = "highlightSection";
 
 	@ConfigSection(
 		name = "Integrations",
 		description = "Hand-offs to other plugins. Each needs that plugin installed and enabled to do anything.",
-		position = 5
+		position = 6
 	)
 	String integrationSection = "integrationSection";
 
