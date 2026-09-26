@@ -2,6 +2,7 @@ package com.bettermonsterexamine;
 
 import com.bettermonsterexamine.loot.DropPageService;
 import com.bettermonsterexamine.loot.DropsCard;
+import com.bettermonsterexamine.slayer.SlayerGearService;
 import com.bettermonsterexamine.loot.ItemIdService;
 import com.google.gson.Gson;
 import java.awt.BorderLayout;
@@ -34,15 +35,17 @@ import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
 import net.runelite.client.ui.components.IconTextField;
+import net.runelite.client.callback.ClientThread;
+import net.runelite.client.game.ItemManager;
 import net.runelite.client.ui.components.materialtabs.MaterialTab;
 import net.runelite.client.ui.components.materialtabs.MaterialTabGroup;
 import net.runelite.client.util.LinkBrowser;
 
 /**
  * The searchable monster side panel. Owns the search field, the Recent/Favorites views, and the
- * selection state machine. A shared {@link MonsterHeader} sits above a {@code Stats | Drops} tab
- * strip whose body swaps between the stats {@link MonsterCard} and the {@link DropsCard}, so the
- * selected monster + variant stay put across both tabs. The Recent/Favorites model lives in
+ * selection state machine. A shared {@link MonsterHeader} sits above a {@code Stats | Drops | Slayer}
+ * tab strip whose body swaps between the stats {@link MonsterCard}, the {@link DropsCard} and the
+ * {@link SlayerCard}, so the selected monster + variant stay put across the tabs. The Recent/Favorites model lives in
  * {@link LookupHistory}. One of four sibling regions shows at a time: live search results, the card
  * area, a list view, or the empty-state hint.
  */
@@ -69,6 +72,9 @@ public class BetterMonsterExaminePanel extends PluginPanel
 	private final MonsterCard card;
 	/** The Drops tab body: the current monster's drop list. */
 	private final DropsCard dropsCard;
+	/** The Slayer tab body: Slayer info, spawn locations and recommended gear. */
+	private final SlayerCard slayerCard;
+	private final SlayerGearService gear;
 	/** header + Stats|Drops tab strip + swappable body; shown once a monster is selected. */
 	private final JPanel cardArea = new JPanel();
 	/** The body region the tab strip swaps between {@link #card} and {@link #dropsCard}. */
@@ -77,11 +83,14 @@ public class BetterMonsterExaminePanel extends PluginPanel
 	private MaterialTabGroup contentTabs;
 	private MaterialTab statsTab;
 	private MaterialTab dropsTab;
+	private MaterialTab slayerTab;
 	/** Empty-state hint, shown in place of {@link #cardArea} when nothing is selected. */
 	private final JPanel hintPanel = new JPanel();
 	private final JLabel hintLabel = new JLabel();
 	/** True while the Drops tab is the active one, so async drop loads know to re-render it. */
 	private boolean dropsTabActive;
+	/** True while the Slayer tab is the active one, so async location/gear loads re-render it. */
+	private boolean slayerTabActive;
 	/** Recent/Favorites list view, shown in place of the card area while a mode is active. */
 	private final JPanel listPanel = new JPanel();
 
@@ -105,7 +114,7 @@ public class BetterMonsterExaminePanel extends PluginPanel
 	 */
 	private Consumer<MonsterData> selectionListener;
 
-	public BetterMonsterExaminePanel(MonsterIcons icons, MonsterDataService data, DropPageService drops, ItemIdService itemIds, DropsCard dropsCard, BetterMonsterExamineConfig config, ConfigManager configManager, Gson gson, IntSupplier playerCombatLevel, IntSupplier playerHpLevel, IntSupplier playerSlayerLevel, BufferedImage titleIcon)
+	public BetterMonsterExaminePanel(MonsterIcons icons, MonsterDataService data, DropPageService drops, ItemIdService itemIds, DropsCard dropsCard, SlayerGearService gear, ItemManager itemManager, ClientThread clientThread, BetterMonsterExamineConfig config, ConfigManager configManager, Gson gson, IntSupplier playerCombatLevel, IntSupplier playerHpLevel, IntSupplier playerSlayerLevel, BufferedImage titleIcon)
 	{
 		super(false);
 		this.data = data;
@@ -120,11 +129,14 @@ public class BetterMonsterExaminePanel extends PluginPanel
 			this::toggleFavorite,
 			this::selectVariant);
 		this.card = new MonsterCard(icons, config, playerHpLevel, playerSlayerLevel);
+		this.gear = gear;
+		this.slayerCard = new SlayerCard(card, itemManager, clientThread, itemIds);
 
 		// Re-render the Drops tab when a page's drops — or the bulk item-id map that supplies its
 		// icons/prices — land in the background (background thread → EDT).
 		drops.setUpdateListener(page -> SwingUtilities.invokeLater(() -> onDropsLoaded(page)));
 		itemIds.setUpdateListener(() -> SwingUtilities.invokeLater(this::onItemIdsLoaded));
+		gear.setUpdateListener(page -> SwingUtilities.invokeLater(() -> onGearLoaded(page)));
 
 		setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
 		setBorder(new EmptyBorder(8, 8, 8, 8));
@@ -354,6 +366,10 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		{
 			renderDrops();
 		}
+		if (slayerTabActive)
+		{
+			renderSlayer();
+		}
 		showCardArea();
 		revalidate();
 		repaint();
@@ -379,21 +395,34 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		contentTabs.setAlignmentX(LEFT_ALIGNMENT);
 		statsTab = new MaterialTab("Stats", contentTabs, card);
 		dropsTab = new MaterialTab("Drops", contentTabs, dropsCard);
+		slayerTab = new MaterialTab("Slayer", contentTabs, slayerCard);
 		statsTab.setOnSelectEvent(() ->
 		{
 			dropsTabActive = false;
+			slayerTabActive = false;
 			header.setVariantSelectorVisible(true);
 			return true;
 		});
 		dropsTab.setOnSelectEvent(() ->
 		{
 			dropsTabActive = true;
+			slayerTabActive = false;
 			header.setVariantSelectorVisible(false);
 			renderDrops();
 			return true;
 		});
+		// The variant selector stays: switching it re-highlights the locations that variant spawns at.
+		slayerTab.setOnSelectEvent(() ->
+		{
+			dropsTabActive = false;
+			slayerTabActive = true;
+			header.setVariantSelectorVisible(true);
+			renderSlayer();
+			return true;
+		});
 		contentTabs.addTab(statsTab);
 		contentTabs.addTab(dropsTab);
+		contentTabs.addTab(slayerTab);
 
 		cardArea.add(header);
 		cardArea.add(Box.createRigidArea(new Dimension(0, 6)));
@@ -453,13 +482,48 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		dropsCard.show(drops.tableFor(m.getName()));
 	}
 
-	/** A page's drops landed async: re-render the Drops tab if it's showing this monster. */
+	/** A page's drops landed async: re-render the Drops or Slayer tab if it's showing this monster. */
 	private void onDropsLoaded(String page)
 	{
 		MonsterData m = currentSelection;
-		if (dropsTabActive && m != null && m.getName().equalsIgnoreCase(page))
+		if (m == null || !m.getName().equalsIgnoreCase(page))
+		{
+			return;
+		}
+		if (dropsTabActive)
 		{
 			renderDrops();
+		}
+		else if (slayerTabActive)
+		{
+			renderSlayer();
+		}
+	}
+
+	/**
+	 * Render the Slayer tab for the current selection. Locations ride on the drop page; gear is only
+	 * asked for here, so a monster whose Slayer tab is never opened costs no gear query.
+	 */
+	private void renderSlayer()
+	{
+		MonsterData m = currentSelection;
+		if (m == null)
+		{
+			slayerCard.clear();
+			return;
+		}
+		drops.request(m.getName());
+		gear.request(m.getName(), m.getSlayerCategory());
+		slayerCard.show(m, drops.locationsFor(m.getName()), gear.setupsFor(m.getName()));
+	}
+
+	/** A monster's gear landed async: re-render the Slayer tab if it's showing that monster. */
+	private void onGearLoaded(String page)
+	{
+		MonsterData m = currentSelection;
+		if (slayerTabActive && m != null && m.getName().equalsIgnoreCase(page))
+		{
+			renderSlayer();
 		}
 	}
 
@@ -469,6 +533,10 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		if (dropsTabActive && currentSelection != null)
 		{
 			renderDrops();
+		}
+		else if (slayerTabActive && currentSelection != null)
+		{
+			renderSlayer();
 		}
 	}
 
@@ -500,6 +568,7 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		header.clear();
 		card.clear();
 		dropsCard.clear();
+		slayerCard.clear();
 		currentSelection = null;
 		search(text, false, null);
 	}

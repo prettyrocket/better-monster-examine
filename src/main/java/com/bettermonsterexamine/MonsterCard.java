@@ -30,7 +30,7 @@ import static com.bettermonsterexamine.PanelStyle.wrappedLabel;
 
 /**
  * The wiki-style stats infobox body, as a self-contained Swing component: the attribute / combat /
- * max-hit / stat / immunity / slayer blocks, colour-coding player-relevant values via
+ * max-hit / stat / immunity blocks, colour-coding player-relevant values via
  * {@link StatColors}. The monster-identity header (name, variant selector, links) is drawn
  * separately by {@link MonsterHeader}, which sits above the Stats|Drops tab strip so it stays put
  * while this body swaps with the drops list.
@@ -90,7 +90,7 @@ class MonsterCard extends JPanel
 
 	private void buildWiki(MonsterStats stats)
 	{
-		// ATTRIBUTES — size/attributes/slayer/flat armour/XP bonus/poisonous.
+		// ATTRIBUTES — size/attributes/flat armour/XP bonus/poisonous.
 		JPanel props = block();
 		props.add(sectionHeader("Attributes"));
 		boolean anyProp = false;
@@ -241,56 +241,63 @@ class MonsterCard extends JPanel
 			capHeight(imm);
 			add(imm);
 		}
+	}
 
-		// SLAYER — last block, only for Slayer targets: the required level (red when above your
-		// Slayer level) sits inline on the header row next to the Slayer icon; XP is its own line;
-		// the assignment categories are plain text and the masters show as chatheads.
-		if (stats.slayerMonster())
+	/**
+	 * The Slayer block for {@code m}, or null when it isn't a Slayer target: the required level (red
+	 * when above your Slayer level) inline on the header row next to the Slayer icon, XP on its own
+	 * line, the assignment categories as plain text and the masters as chatheads. Built here, where the
+	 * stat-card helpers live, but shown on the Slayer tab.
+	 */
+	JComponent slayerBlock(MonsterData m)
+	{
+		MonsterStats stats = new MonsterStats(m, config.statHighlighting(), playerHpLevel.getAsInt(), playerSlayerLevel.getAsInt());
+		if (!stats.slayerMonster())
 		{
-			JPanel slayer = block();
-
-			MonsterStats.StatField req = stats.slayerRequirement();
-			String reqTip = req.tooltip() != null ? req.tooltip() : "Slayer level";
-			JPanel head = rowX();
-			head.add(headerLabel("Slayer"));
-			head.add(Box.createHorizontalGlue());
-			JLabel slayerLvlIcon = new JLabel(uniformIcon(icons.slayerIcon, 16));
-			slayerLvlIcon.setToolTipText(reqTip);
-			JLabel lvl = new JLabel(req.value());
-			lvl.setFont(FontManager.getRunescapeSmallFont());
-			lvl.setForeground(resolve(req.role()));
-			lvl.setToolTipText(reqTip);
-			head.add(slayerLvlIcon);
-			head.add(Box.createRigidArea(new Dimension(3, 0)));
-			head.add(lvl);
-			capHeight(head);
-			slayer.add(head);
-			slayer.add(Box.createRigidArea(new Dimension(0, 3)));
-
-			String slayerXp = stats.slayerXp();
-			if (slayerXp != null)
-			{
-				slayer.add(kv("Slayer XP", slayerXp, Color.WHITE));
-			}
-
-			List<String> categories = stats.slayerCategories();
-			if (!categories.isEmpty())
-			{
-				slayer.add(kvWrappedRight("Category", String.join(", ", categories)));
-			}
-
-			List<String> masters = stats.slayerMasters();
-			if (!masters.isEmpty())
-			{
-				slayer.add(Box.createRigidArea(new Dimension(0, 4)));
-				slayer.add(caption("Assigned by"));
-				slayer.add(masterIconStrip(masters));
-			}
-
-			capHeight(slayer);
-			add(Box.createRigidArea(new Dimension(0, 6)));
-			add(slayer);
+			return null;
 		}
+		JPanel slayer = block();
+
+		MonsterStats.StatField req = stats.slayerRequirement();
+		String reqTip = req.tooltip() != null ? req.tooltip() : "Slayer level";
+		JPanel head = rowX();
+		head.add(headerLabel("Slayer"));
+		head.add(Box.createHorizontalGlue());
+		JLabel slayerLvlIcon = new JLabel(uniformIcon(icons.slayerIcon, 16));
+		slayerLvlIcon.setToolTipText(reqTip);
+		JLabel lvl = new JLabel(req.value());
+		lvl.setFont(FontManager.getRunescapeSmallFont());
+		lvl.setForeground(resolve(req.role()));
+		lvl.setToolTipText(reqTip);
+		head.add(slayerLvlIcon);
+		head.add(Box.createRigidArea(new Dimension(3, 0)));
+		head.add(lvl);
+		capHeight(head);
+		slayer.add(head);
+		slayer.add(Box.createRigidArea(new Dimension(0, 3)));
+
+		String slayerXp = stats.slayerXp();
+		if (slayerXp != null)
+		{
+			slayer.add(kv("Slayer XP", slayerXp, Color.WHITE));
+		}
+
+		List<String> categories = stats.slayerCategories();
+		if (!categories.isEmpty())
+		{
+			slayer.add(kvWrappedRight("Category", String.join(", ", categories)));
+		}
+
+		List<String> masters = stats.slayerMasters();
+		if (!masters.isEmpty())
+		{
+			slayer.add(Box.createRigidArea(new Dimension(0, 4)));
+			slayer.add(caption("Assigned by"));
+			slayer.add(masterIconStrip(masters));
+		}
+
+		capHeight(slayer);
+		return slayer;
 	}
 
 	/**

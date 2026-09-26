@@ -10,6 +10,7 @@ import java.util.Collections;
 import com.bettermonsterexamine.loot.DropPageService;
 import com.bettermonsterexamine.loot.DropsCard;
 import com.bettermonsterexamine.loot.ItemIdService;
+import com.bettermonsterexamine.slayer.SlayerGearService;
 import com.google.gson.Gson;
 import com.google.inject.Provides;
 import lombok.extern.slf4j.Slf4j;
@@ -87,6 +88,9 @@ public class BetterMonsterExaminePlugin extends Plugin
 
 	@Inject
 	private ItemIdService itemIdService;
+
+	@Inject
+	private SlayerGearService slayerGearService;
 
 	@Inject
 	private ItemManager itemManager;
@@ -205,7 +209,7 @@ public class BetterMonsterExaminePlugin extends Plugin
 		log.debug("Adding side panel navigation button");
 		BufferedImage icon = titleIcon;
 		DropsCard dropsCard = new DropsCard(itemManager, clientThread, itemIdService, config, new NotEnoughRunesLink(eventBus, pluginManager, config));
-		monsterStatsPanel = new BetterMonsterExaminePanel(monsterIcons, dataService, dropPageService, itemIdService, dropsCard, config, configManager, gson, () -> playerCombatLevel, () -> playerHpLevel, () -> playerSlayerLevel, icon);
+		monsterStatsPanel = new BetterMonsterExaminePanel(monsterIcons, dataService, dropPageService, itemIdService, dropsCard, slayerGearService, itemManager, clientThread, config, configManager, gson, () -> playerCombatLevel, () -> playerHpLevel, () -> playerSlayerLevel, icon);
 		// Mirror whatever the panel is showing into the overlay (when the overlay is a target).
 		monsterStatsPanel.setSelectionListener(this::showInOverlay);
 		navButton = NavigationButton.builder()
