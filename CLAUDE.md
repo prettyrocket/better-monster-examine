@@ -261,7 +261,10 @@ Item icon / GE price / High Alch come from the **RuneLite client by item id** (z
   `enableHistory`, `statHighlighting`, and `statsRenderTarget` (`RenderTarget`: panel / overlay /
   both — where the right-click **"Stats"** action renders). **`showDefenceRolls`** swaps both
   renderers' defence bonuses for `DefenceRolls.rolls` (the bonus moves to the panel tooltip); it
-  falls back to bonuses wholesale when a monster lacks any roll input, so a card never mixes the two. The three things the plugin can attach to
+  falls back to bonuses wholesale when a monster lacks any roll input, so a card never mixes the two.
+  The chat summary's **All defences** mode follows it too, and drops the Weakness line there: the
+  styles it would name (`DefenceRolls.roles`) are coloured in place, with darker shades for the
+  parchment chatbox. The three things the plugin can attach to
   a monster's Examine are **three independent checkboxes**, not one enum: **`statsMenuEntry`** adds
   the right-click **Stats** entry (rendering per `statsRenderTarget`), **`dropsMenuEntry`** adds
   **Drops** (opening the side panel on its Drops tab), and **`examineSummaryEnabled`** appends a

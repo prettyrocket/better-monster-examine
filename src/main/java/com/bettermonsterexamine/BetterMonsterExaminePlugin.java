@@ -597,7 +597,8 @@ public class BetterMonsterExaminePlugin extends Plugin
 
 		// Unknown monsters deliberately add an empty slot so rapid Examine responses stay aligned.
 		examineSummaryQueue.add(monster == null ? null : monster.getName(),
-			ExamineSummary.format(monster, config.examineSummaryDetail(), isChatTransparent()), client.getTickCount());
+			ExamineSummary.format(monster, config.examineSummaryDetail(), isChatTransparent(),
+				config.showDefenceRolls(), config.statHighlighting()), client.getTickCount());
 	}
 
 	/** The same test RuneLite's own chat colours use to pick their transparent-chatbox variant. */

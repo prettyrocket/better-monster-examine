@@ -1,10 +1,11 @@
 package com.bettermonsterexamine;
 
 import java.awt.Color;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.function.Function;
 import net.runelite.client.util.ColorUtil;
 import net.runelite.client.util.Text;
 
@@ -22,43 +23,91 @@ final class ExamineSummary
 	private static final Color AIR_OPAQUE = new Color(0x4F5B66);
 	private static final Color AIR_TRANSPARENT = new Color(0xB9E6F2);
 
+	// The panel's highlights, with a darker shade for the parchment chatbox. The colour-blind
+	// shade is Okabe-Ito blue; yellow is already colour-blind safe, so one shade serves both modes.
+	private static final Color GOOD_OPAQUE = new Color(0x006600);
+	private static final Color CB_GOOD_OPAQUE = new Color(0x0072B2);
+	private static final Color NEXT_OPAQUE = new Color(0x7A5C00);
+
+	private static final String GAP = "  ";
+
 	private ExamineSummary()
 	{
 	}
 
-	/** @param transparentChat whether the chatbox is transparent, which picks the element's shade */
-	static List<String> format(MonsterData monster, ExamineSummaryMode mode, boolean transparentChat)
+	/**
+	 * @param transparentChat whether the chatbox is transparent, which picks each colour's shade
+	 * @param rolls show defence rolls rather than bonuses, when the monster has every roll input
+	 * @param highlight the palette for the styles the Weakness line would name
+	 */
+	static List<String> format(MonsterData monster, ExamineSummaryMode mode, boolean transparentChat,
+		boolean rolls, HighlightMode highlight)
 	{
 		if (monster == null || mode == null)
 		{
 			return Collections.emptyList();
 		}
+		if (mode == ExamineSummaryMode.ALL_DEFENCES)
+		{
+			return allDefences(monster, transparentChat, rolls && monster.hasDefenceRollInputs(), highlight);
+		}
 
-		List<String> lines = new ArrayList<>(4);
 		String weakness = weakness(monster, transparentChat);
-		if (weakness != null)
-		{
-			lines.add(weakness);
-		}
-		if (mode == ExamineSummaryMode.WEAKNESSES)
-		{
-			return lines;
-		}
+		return weakness == null ? Collections.emptyList() : List.of(weakness);
+	}
 
-		lines.add("Melee: Stab " + StatFormat.bonus(monster.getStabDefenceBonus())
-			+ " | Slash " + StatFormat.bonus(monster.getSlashDefenceBonus())
-			+ " | Crush " + StatFormat.bonus(monster.getCrushDefenceBonus()));
-		lines.add("Ranged: Standard " + StatFormat.bonus(monster.getStandardRangeDefenceBonus())
-			+ " | Heavy " + StatFormat.bonus(monster.getHeavyRangeDefenceBonus())
-			+ " | Light " + StatFormat.bonus(monster.getLightRangeDefenceBonus()));
+	/**
+	 * Every defence in the panel's order, melee then magic and ranged, in place of the Weakness
+	 * line: the styles it would name are coloured instead, so it would only repeat them.
+	 */
+	private static List<String> allDefences(MonsterData monster, boolean transparentChat, boolean rolls,
+		HighlightMode highlight)
+	{
+		Map<DefenceRolls.Style, Integer> values = rolls ? DefenceRolls.rolls(monster) : null;
+		Map<DefenceRolls.Style, ColourRole> roles = DefenceRolls.roles(monster);
+		Function<DefenceRolls.Style, String> cell = style ->
+		{
+			String value = rolls ? StatFormat.roll(values.get(style)) : StatFormat.bonus(DefenceRolls.bonus(monster, style));
+			String text = shortLabel(style) + ' ' + value;
+			Color color = roleColor(roles.get(style), highlight, transparentChat);
+			return color == null ? text : ColorUtil.wrapWithColorTag(text, color);
+		};
 
+		String magic = cell.apply(DefenceRolls.Style.MAGIC);
 		String element = element(monster);
 		if (element != null)
 		{
-			lines.add("Elemental weakness: "
-				+ colored(element + ' ' + monster.getWeaknessPercent() + '%', element, transparentChat));
+			magic += " (" + colored(element + ' ' + monster.getWeaknessPercent() + '%', element, transparentChat) + ')';
 		}
-		return lines;
+		return List.of(
+			String.join(GAP, cell.apply(DefenceRolls.Style.STAB), cell.apply(DefenceRolls.Style.SLASH),
+				cell.apply(DefenceRolls.Style.CRUSH)),
+			String.join(GAP, magic, cell.apply(DefenceRolls.Style.LIGHT), cell.apply(DefenceRolls.Style.STANDARD),
+				cell.apply(DefenceRolls.Style.HEAVY)));
+	}
+
+	/** "Std" keeps the magic and ranged line from wrapping in a fixed-size chatbox. */
+	private static String shortLabel(DefenceRolls.Style style)
+	{
+		return style == DefenceRolls.Style.STANDARD ? "Std" : style.getLabel();
+	}
+
+	/** A highlight in a shade that reads on this chatbox, or null to leave the text plain. */
+	private static Color roleColor(ColourRole role, HighlightMode highlight, boolean transparentChat)
+	{
+		if (role == null || highlight == HighlightMode.OFF)
+		{
+			return null;
+		}
+		if (role == ColourRole.NEXT)
+		{
+			return transparentChat ? StatColors.NEXT_YELLOW : NEXT_OPAQUE;
+		}
+		if (highlight == HighlightMode.COLOUR_BLIND)
+		{
+			return transparentChat ? StatColors.CB_GOOD : CB_GOOD_OPAQUE;
+		}
+		return transparentChat ? StatColors.resolve(ColourRole.GOOD, highlight) : GOOD_OPAQUE;
 	}
 
 	/**

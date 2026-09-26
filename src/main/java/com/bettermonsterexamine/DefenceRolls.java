@@ -138,6 +138,22 @@ final class DefenceRolls
 		return new Result(Band.RANKED, weakest, freeWeakest, element, percent);
 	}
 
+	/**
+	 * The highlight for each style the Weakness line names: its first answer {@link ColourRole#GOOD},
+	 * the free style it names second {@link ColourRole#NEXT}. Unnamed styles are absent.
+	 */
+	static Map<Style, ColourRole> roles(MonsterData monster)
+	{
+		Map<Style, ColourRole> roles = new EnumMap<>(Style.class);
+		Result result = of(monster);
+		if (result.getBand() == Band.RANKED)
+		{
+			result.getWeakest().forEach(s -> roles.put(s, ColourRole.GOOD));
+			result.getFreeWeakest().forEach(s -> roles.put(s, ColourRole.NEXT));
+		}
+		return roles;
+	}
+
 	/** Each style's defence roll. Lower is easier to hit. */
 	static Map<Style, Integer> rolls(MonsterData monster)
 	{
@@ -231,7 +247,7 @@ final class DefenceRolls
 			: StatFormat.cap(element.trim());
 	}
 
-	private static int bonus(MonsterData monster, Style style)
+	static int bonus(MonsterData monster, Style style)
 	{
 		switch (style)
 		{
