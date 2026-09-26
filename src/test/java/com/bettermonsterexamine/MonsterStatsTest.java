@@ -227,4 +227,27 @@ public class MonsterStatsTest
 		assertEquals("280", s.combatLevels().get(1).value());
 		assertEquals("—", s.combatLevels().get(5).value());
 	}
+
+	@Test
+	public void defenceRollsUseTheMatchingLevel()
+	{
+		MonsterStats s = stats(monster("{\"defence_level\":20,\"magic_level\":1,"
+			+ "\"stab_defence_bonus\":10,\"slash_defence_bonus\":20,\"crush_defence_bonus\":30,"
+			+ "\"magic_defence_bonus\":50,\"light_range_defence_bonus\":0,"
+			+ "\"standard_range_defence_bonus\":5,\"heavy_range_defence_bonus\":-70}"));
+
+		assertEquals(List.of("2,146", "2,436", "2,726"), s.meleeDefenceRoll());
+		assertEquals("Magic rolls off Magic level 1, not Defence", "1,140", s.magicDefenceRoll());
+		assertEquals("A bonus below -64 clamps to 0", List.of("1,856", "2,001", "0"), s.rangedDefenceRoll());
+	}
+
+	@Test
+	public void defenceRollsAbsentWithoutEveryInput()
+	{
+		MonsterStats s = stats(monster("{\"defence_level\":20,\"stab_defence_bonus\":10}"));
+
+		assertNull(s.meleeDefenceRoll());
+		assertNull(s.magicDefenceRoll());
+		assertNull(s.rangedDefenceRoll());
+	}
 }
