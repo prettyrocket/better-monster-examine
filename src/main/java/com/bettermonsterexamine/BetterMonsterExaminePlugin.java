@@ -403,11 +403,23 @@ public class BetterMonsterExaminePlugin extends Plugin
 	@Subscribe
 	public void onMenuEntryAdded(MenuEntryAdded event)
 	{
+		if (event.getType() != MenuAction.EXAMINE_NPC.getId())
+		{
+			return;
+		}
+
+		// A stack of the same NPC gives one identical Examine per copy, and they all print the same
+		// text. Keeping the first also skips our entries below, since that copy already has them.
+		if (collapseDuplicateExamine(event))
+		{
+			return;
+		}
+
 		// Anchor on the NPC's Examine entry — every NPC has exactly one, so the options appear once
 		// per monster regardless of its other entries (Attack, Talk-to, …).
 		boolean wantStats = config.statsMenuEntry();
 		boolean wantDrops = config.dropsMenuEntry();
-		if ((!wantStats && !wantDrops) || event.getType() != MenuAction.EXAMINE_NPC.getId())
+		if (!wantStats && !wantDrops)
 		{
 			return;
 		}
@@ -447,6 +459,36 @@ public class BetterMonsterExaminePlugin extends Plugin
 		{
 			addMenuEntry(STATS_OPTION, event);
 		}
+	}
+
+	/**
+	 * Remove this Examine when the menu already has one for the same NPC id under the same target.
+	 * The id is what fixes the examine text, so NPCs that merely share a name keep their own.
+	 */
+	private boolean collapseDuplicateExamine(MenuEntryAdded event)
+	{
+		NPC npc = client.getTopLevelWorldView().npcs().byIndex(event.getIdentifier());
+		if (npc == null)
+		{
+			return false;
+		}
+
+		// Skip this NPC's own entry by index, not identity: an NPC only ever has one Examine.
+		for (MenuEntry entry : client.getMenu().getMenuEntries())
+		{
+			if (entry.getIdentifier() == event.getIdentifier() || entry.getType() != MenuAction.EXAMINE_NPC
+				|| !event.getTarget().equals(entry.getTarget()))
+			{
+				continue;
+			}
+			NPC other = client.getTopLevelWorldView().npcs().byIndex(entry.getIdentifier());
+			if (other != null && other.getId() == npc.getId())
+			{
+				client.getMenu().removeMenuEntry(event.getMenuEntry());
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
