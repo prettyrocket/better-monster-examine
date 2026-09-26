@@ -72,7 +72,7 @@ public class MonsterDataService
 		"attack_style", "attack_speed", "max_hit", "experience_bonus",
 		"attribute", "elemental_weakness", "elemental_weakness_percent",
 		"examine", "poisonous",
-		"cannon_immune", "thrall_immune", "burn_immune", "freeze_resistance",
+		"cannon_immune", "thrall_immune", "burn_immune", "freeze_resistance", "poison_resistance", "venom_resistance",
 		"slayer_level", "slayer_experience", "slayer_category", "assigned_by", "uses_skill",
 		"image", "league_region", "release_date", "is_members_only",
 	};
@@ -158,13 +158,13 @@ public class MonsterDataService
 	}
 
 	/**
-	 * True when cached rows carry the fields this build expects. Only {@code page_name} is checked:
-	 * every Bucket row has a source page, so its total absence means the cache predates the field
-	 * being selected. Cheap and self-maintaining — a later field addition just moves this probe.
+	 * True when cached rows carry the fields this build expects. Only the newest field is checked,
+	 * {@code poison_resistance}: ~96% of rows carry it, so its total absence means the cache predates
+	 * the field being selected. Cheap and self-maintaining — a later field addition just moves this probe.
 	 */
 	static boolean hasCurrentFields(List<MonsterData> rows)
 	{
-		return rows != null && rows.stream().anyMatch(m -> m != null && m.getPageName() != null);
+		return rows != null && rows.stream().anyMatch(m -> m != null && m.getPoisonResistance() != null);
 	}
 
 	/** Remove the pre-Bucket Weirdgloop dataset left in every upgraded user's cache dir. */

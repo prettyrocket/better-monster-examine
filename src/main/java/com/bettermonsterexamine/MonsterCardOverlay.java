@@ -411,6 +411,16 @@ class MonsterCardOverlay extends Overlay
 		{
 			rows.add(Row.kv("Burn", burn, white));
 		}
+		MonsterStats.StatField poison = stats.poison();
+		if (poison != null)
+		{
+			rows.add(Row.kv("Poison", poison.value(), StatColors.resolve(poison.role(), mode)));
+		}
+		MonsterStats.StatField venom = stats.venom();
+		if (venom != null)
+		{
+			rows.add(Row.kv("Venom", venom.value(), StatColors.resolve(venom.role(), mode)));
+		}
 		MonsterStats.StatField cannon = stats.cannon();
 		if (cannon != null)
 		{

@@ -211,6 +211,18 @@ class MonsterCard extends JPanel
 			imm.add(kv("Burn", burn, Color.WHITE));
 			anyImm = true;
 		}
+		MonsterStats.StatField poison = stats.poison();
+		if (poison != null)
+		{
+			imm.add(kv("Poison", poison.value(), resolve(poison.role())));
+			anyImm = true;
+		}
+		MonsterStats.StatField venom = stats.venom();
+		if (venom != null)
+		{
+			imm.add(kv("Venom", venom.value(), resolve(venom.role())));
+			anyImm = true;
+		}
 		MonsterStats.StatField cannon = stats.cannon();
 		if (cannon != null)
 		{

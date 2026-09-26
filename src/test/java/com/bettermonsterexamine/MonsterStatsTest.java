@@ -116,6 +116,21 @@ public class MonsterStatsTest
 	}
 
 	@Test
+	public void poisonAndVenomResistanceLabelsFollowTheWiki()
+	{
+		// Zulrah: immune to both. Only a resistance takes a row, so 0 (most monsters) is null.
+		MonsterStats zulrah = stats(monster("{\"poison_resistance\":\"100\",\"venom_resistance\":\"100\"}"));
+		assertEquals("Immune", zulrah.poison().value());
+		assertEquals(ColourRole.DANGER, zulrah.venom().role());
+		assertNull(stats(monster("{\"poison_resistance\":\"0\"}")).poison());
+		assertNull(stats(monster("{}")).venom());
+
+		// Venom that lands as poison instead, and the wiki's 200 (Maggot King) shown as written.
+		assertEquals("Converts to poison", stats(monster("{\"venom_resistance\":\"Poisons\"}")).venom().value());
+		assertEquals("200% resistance", stats(monster("{\"poison_resistance\":\"200\"}")).poison().value());
+	}
+
+	@Test
 	public void slayerMonsterOnlyWhenCategoryPresent()
 	{
 		assertTrue(stats(monster("{\"slayer_category\":[\"Abyssal demons\"]}")).slayerMonster());
