@@ -1,5 +1,7 @@
 package com.bettermonsterexamine.loot;
 
+import com.bettermonsterexamine.slayer.LocationParser;
+import com.bettermonsterexamine.slayer.SpawnLocation;
 import com.google.gson.Gson;
 import com.google.gson.annotations.SerializedName;
 import java.io.File;
@@ -43,6 +45,9 @@ import okhttp3.Response;
  * All loading happens off the client thread and EDT; {@link #tableFor} reads the concurrent by-page
  * index without blocking and returns null until a page lands. Item icon / GE price / High Alch are
  * <b>not</b> parsed here — they come from the RuneLite client by item id at render time.
+ *
+ * <p>The same page also carries the monster's Locations table, which Bucket can't supply by name, so
+ * it's parsed here too ({@link LocationParser}) and served by {@link #locationsFor}.
  */
 @Slf4j
 @Singleton
@@ -73,8 +78,8 @@ public class DropPageService
 	private final OkHttpClient http;
 	private final ScheduledExecutorService executor;
 
-	/** lower-case page name -> that page's parsed drop rows; an entry means "loaded". */
-	private final Map<String, List<DropRow>> byPage = new ConcurrentHashMap<>();
+	/** lower-case page name -> that page's parsed drops and locations; an entry means "loaded". */
+	private final Map<String, Page> byPage = new ConcurrentHashMap<>();
 	/** Pages with a fetch in flight, so concurrent requests coalesce into one network call. */
 	private final Set<String> loading = ConcurrentHashMap.newKeySet();
 
@@ -119,8 +124,15 @@ public class DropPageService
 	 */
 	public DropTable tableFor(String pageName)
 	{
-		List<DropRow> rows = byPage.get(pageName.toLowerCase(Locale.ROOT));
-		return rows == null ? null : DropTable.of(rows);
+		Page page = byPage.get(pageName.toLowerCase(Locale.ROOT));
+		return page == null ? null : DropTable.of(page.rows);
+	}
+
+	/** The page's spawn locations in table order, or null until the page is loaded. */
+	public List<SpawnLocation> locationsFor(String pageName)
+	{
+		Page page = byPage.get(pageName.toLowerCase(Locale.ROOT));
+		return page == null ? null : page.locations;
 	}
 
 	/** True once this page's drops have been loaded (from cache or network), so reads return real data. */
@@ -141,10 +153,10 @@ public class DropPageService
 		{
 			try (Reader r = Files.newBufferedReader(cacheFile.toPath(), StandardCharsets.UTF_8))
 			{
-				List<DropRow> rows = parse(htmlOf(gson.fromJson(r, ParseResponse.class)));
-				if (rows != null)
+				Page page = parsePage(htmlOf(gson.fromJson(r, ParseResponse.class)));
+				if (page != null)
 				{
-					publish(key, rows, pageName);
+					publish(key, page, pageName);
 					haveCache = true;
 				}
 			}
@@ -192,16 +204,16 @@ public class DropPageService
 				}
 				String json = res.body().string();
 				String html = htmlOf(gson.fromJson(json, ParseResponse.class));
-				List<DropRow> rows = parse(html);
-				if (rows == null)
+				Page page = parsePage(html);
+				if (page == null)
 				{
 					log.debug("Drop page for {} carried no rendered text", pageName);
 					return;
 				}
 				// Parse (and publish) before caching so a corrupt download never poisons the cache.
-				publish(key, rows, pageName);
+				publish(key, page, pageName);
 				writeCache(cacheFile, json);
-				log.debug("Parsed and cached {} drop rows for {}", rows.size(), pageName);
+				log.debug("Parsed and cached {} drop rows for {}", page.rows.size(), pageName);
 			}
 		}
 		catch (Exception e)
@@ -214,14 +226,20 @@ public class DropPageService
 		}
 	}
 
-	private void publish(String key, List<DropRow> rows, String pageName)
+	private void publish(String key, Page page, String pageName)
 	{
-		byPage.put(key, rows);
+		byPage.put(key, page);
 		Consumer<String> listener = updateListener;
 		if (listener != null)
 		{
 			listener.accept(pageName);
 		}
+	}
+
+	private static Page parsePage(String html)
+	{
+		List<DropRow> rows = parse(html);
+		return rows == null ? null : new Page(rows, LocationParser.parse(html));
 	}
 
 	private static String htmlOf(ParseResponse response)
@@ -478,6 +496,19 @@ public class DropPageService
 		{
 			this.start = start;
 			this.title = title;
+		}
+	}
+
+	/** Everything read off one page. */
+	private static final class Page
+	{
+		private final List<DropRow> rows;
+		private final List<SpawnLocation> locations;
+
+		private Page(List<DropRow> rows, List<SpawnLocation> locations)
+		{
+			this.rows = rows;
+			this.locations = locations;
 		}
 	}
 
