@@ -520,7 +520,12 @@ public class MonsterDataService
 		Map<String, Map<String, InfoboxLevels.LevelText>> ranges = this.levelRanges;
 		for (MonsterData m : all)
 		{
-			if (m == null || m.getName() == null || !hasData(m))
+			if (m == null)
+			{
+				continue;
+			}
+			m.cleanName();
+			if (m.getName() == null || m.getName().isEmpty() || !hasData(m))
 			{
 				continue;
 			}
