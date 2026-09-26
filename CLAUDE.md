@@ -153,9 +153,12 @@ scraping — cut over to Bucket in #26.)
    counts *down* (215→145) otherwise reads as a bug.
 
 The view-model (`MonsterStats`, from #23) sits between the DTO and both renderers: it resolves
-which fields to show and their colour roles, so the panel and overlay stay in sync. Three fields
-the old wikitext layer showed have **no usable Bucket source and were dropped** (aggressive,
-poison/venom resistance) — tracked in #30.
+which fields to show and their colour roles, so the panel and overlay stay in sync. **Aggressive**
+("attacks on sight"), which the old wikitext layer showed, has **no Bucket source** and stays
+dropped (#30). Poison and venom resistance were dropped with it, because `poison_resistance` then
+rendered a broken `ERR` value, but the wiki has since fixed it: `poison_resistance` /
+`venom_resistance` now carry `0` / `100` / `200` / (venom only) `Poisons`, shown in the immunities
+block as Immune / `200% resistance` / Converts to poison, with 0 taking no row.
 
 ### Drops feature (`loot/`, data #41 · panel #45 · epic #39)
 

@@ -308,7 +308,7 @@ public class MonsterDataServiceTest
 	}
 
 	@Test
-	public void aCachePredatingPageNameCountsAsStale()
+	public void aCachePredatingTheNewestFieldCountsAsStale()
 	{
 		// Parses fine, but carries none of the data the current build reasons over — serving it
 		// would make the fix look broken until MAX_AGE elapsed.
@@ -320,9 +320,11 @@ public class MonsterDataServiceTest
 	}
 
 	@Test
-	public void aCacheCarryingPageNameIsUsable()
+	public void aCacheCarryingTheNewestFieldIsUsable()
 	{
-		assertTrue(MonsterDataService.hasCurrentFields(Arrays.asList(monster(BOSS), monster(QUEST))));
+		// One row carrying poison_resistance is enough: ~4% of rows legitimately leave it blank.
+		assertTrue(MonsterDataService.hasCurrentFields(Arrays.asList(
+			monster(BOSS), monster("{\"name\":\"Cow\",\"poison_resistance\":\"0\"}"))));
 	}
 
 	@Test

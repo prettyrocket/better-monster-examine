@@ -158,6 +158,11 @@ public class MonsterData
 	private String burnImmune;
 	@SerializedName("freeze_resistance")
 	private String freezeResistance;
+	/** {@code "0"}, {@code "100"}, {@code "200"}, or (venom only) {@code "Poisons"} — converts to poison. */
+	@SerializedName("poison_resistance")
+	private String poisonResistance;
+	@SerializedName("venom_resistance")
+	private String venomResistance;
 
 	// --- Captured for completeness (not yet rendered — see #31) ---
 	@SerializedName("slayer_level")
@@ -362,7 +367,8 @@ public class MonsterData
 			.append(experienceBonus).append('|').append(weaknessElement).append('|')
 			.append(weaknessPercent).append('|').append(poisonous).append('|')
 			.append(cannonImmune).append('|').append(thrallImmune).append('|').append(burnImmune)
-			.append('|').append(freezeResistance).append('|').append(slayerLevel).append('|')
+			.append('|').append(freezeResistance).append('|').append(poisonResistance).append('|')
+			.append(venomResistance).append('|').append(slayerLevel).append('|')
 			.append(attackStyles).append('|').append(maxHit).append('|').append(attributes)
 			.toString();
 	}

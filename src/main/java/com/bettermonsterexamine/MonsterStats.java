@@ -422,4 +422,36 @@ final class MonsterStats
 	{
 		return MonsterData.isImmune(m.getThrallImmune()) ? new StatField("Immune", ColourRole.DANGER, null) : null;
 	}
+
+	/** Poison resistance; null when the monster can be poisoned normally. */
+	StatField poison()
+	{
+		return resistance(m.getPoisonResistance());
+	}
+
+	/** Venom resistance; null when the monster can be envenomed normally. */
+	StatField venom()
+	{
+		return resistance(m.getVenomResistance());
+	}
+
+	/**
+	 * The wiki's resistance value ({@code 0}, {@code 100}, {@code 200}, or venom's {@code Poisons})
+	 * as a field: 100 reads "Immune", 200 is shown as the wiki writes it, and {@code Poisons} is
+	 * "Converts to poison" (still poisoned, never envenomed). Null for 0 or anything unrecognised,
+	 * so only a resistance takes up a row.
+	 */
+	static StatField resistance(String raw)
+	{
+		String r = raw == null ? "" : raw.trim();
+		if (r.equalsIgnoreCase("poisons"))
+		{
+			return new StatField("Converts to poison", ColourRole.NEUTRAL, null);
+		}
+		if (r.equals("100"))
+		{
+			return new StatField("Immune", ColourRole.DANGER, null);
+		}
+		return r.matches("[1-9][0-9]*") ? new StatField(r + "% resistance", ColourRole.DANGER, null) : null;
+	}
 }
