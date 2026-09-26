@@ -82,8 +82,8 @@ When editing, match the surrounding tab indentation exactly or the build breaks.
 ## Architecture
 
 Mostly one flat package `com.bettermonsterexamine`, plus a `com.bettermonsterexamine.loot`
-sub-package for the drops/loot module (the first sub-package; the existing flat classes were
-**not** reorganised — a stats/shared split can come later). Both layers read the OSRS Wiki
+sub-package for the drops/loot module and `com.bettermonsterexamine.slayer` for the Slayer tab's data
+(the existing flat classes were **not** reorganised — a stats/shared split can come later). Both layers read the OSRS Wiki
 **Bucket API**: stats bulk-load the whole bestiary once (cached, offline-first); drops fetch
 **on demand per monster** and cache per page (the asymmetry is intentional — see the loot note
 below). (Stats began as a two-source design — Weirdgloop `monsters.json` + per-page wikitext
@@ -223,7 +223,25 @@ The **data layer** is `#41`; the **panel** (this branch) is `#45`, stacked on it
   commas and normalise en/em dashes to a plain hyphen (the RuneScape font can't render `–`/`—`).
 
 Item icon / GE price / High Alch come from the **RuneLite client by item id** (zero network); only the
-*drop list + sections* come from the page parse.
+*drop list + sections* come from the page parse. `ItemIdService.resolve` is the one name→id resolver
+(bucket map → hand-pinned clue ids → `ItemManager.search`), shared with the Slayer tab's gear icons.
+
+### Slayer tab (`slayer/`)
+
+The Slayer block moved off the Stats card into its own tab (`SlayerCard`, flat package, since it reuses
+`MonsterCard.slayerBlock`), alongside two things Bucket's `infobox_monster` can't give:
+
+- **Locations** — `LocationParser` reads the page's Locations table from the **same `action=parse`
+  response** as the drops (`DropPageService.locationsFor`); no extra fetch. Bucket's `locline` has only
+  coordinates — the `{{LocLine}}` location *name* isn't stored. Rows not at the selected variant's level
+  are dimmed, which is why the variant dropdown stays visible on this tab.
+- **Recommended gear** — `SlayerGearService` queries the `recommended_equipment` bucket, which only
+  `<Monster>/Strategies` and `Slayer task/<Category>` pages fill (~85 pages), so it's **one OR query per
+  monster, on first opening the tab**, cached weekly under `slayergear/` — not a 2.7 MB bulk load. Task
+  pages mix singular/plural ("Slayer task/Kurasks" for category Kurask, "Slayer task/Suqah" for Suqahs),
+  so `GearParser.candidatePages` offers both; Bucket's page match is case-insensitive. The JSON holds
+  **unexpanded wikitext**: items are read from each `{{plink}}` (image name → item id, since the link can
+  be a disambiguation page like "Mitre").
 
 ### Plugin + UI
 
@@ -239,8 +257,8 @@ Item icon / GE price / High Alch come from the **RuneLite client by item id** (z
   off-thread.
 - **`BetterMonsterExaminePanel`** (`PluginPanel`) — search field over a card area: a shared
   **`MonsterHeader`** (name, favourite star, combat level, examine, variant selector, Wiki/DPS
-  links) sits above a `MaterialTabGroup` **`Stats | Drops`** tab strip, whose body swaps between the
-  stats **`MonsterCard`** and the **`DropsCard`** — so the selected monster + variant stay put while
+  links) sits above a `MaterialTabGroup` **`Stats | Drops | Slayer`** tab strip, whose body swaps between
+  the stats **`MonsterCard`**, the **`DropsCard`** and the **`SlayerCard`** — so the selected monster + variant stay put while
   you toggle tabs. Exactly one of four sibling regions shows at a time (live results, the card area,
   a Recent/Favorites list, or the empty-state hint). Stats render synchronously from the cached
   dataset; colour-codes player-relevant values (combat level vs yours, negative flat armour green /
@@ -252,8 +270,9 @@ Item icon / GE price / High Alch come from the **RuneLite client by item id** (z
   so it stays put across the tab swap); surfaces favouriting and variant switching as callbacks. The
   variant dropdown is **hidden on the Drops tab** (drops show every variant regardless, so it doesn't
   apply).
-- **`MonsterCard`** — the stats **body only** now (attribute / combat / max-hit / stat / immunity /
-  slayer blocks); the header moved to `MonsterHeader`.
+- **`MonsterCard`** — the stats **body only** now (attribute / combat / max-hit / stat / immunity
+  blocks); the header moved to `MonsterHeader`, and the Slayer block is built here but shown on the
+  Slayer tab.
 - **`MonsterIcons`** (singleton) — loads the stat/attack/skill icons bundled in `resources/`.
 - **`MonsterCardOverlay`** (`Overlay`) — the in-game overlay option, modelled on the Monster
   Examine spell: a compact, tabbed box drawn directly with `Graphics2D` (not a snapshot of the
@@ -380,6 +399,8 @@ The `loot/` layer adds `DropPageServiceTest` (the rendered-page HTML parse: rows
 `DropTableTest` (group → section grouping in wiki page order; like-named sections in different groups
 stay distinct), `ItemIdServiceTest` (the `item_id` name→id parse), `DropRowTest` (the `isAlways`
 helper) and `DropFormatTest` (the drops display shaping).
+The `slayer/` layer adds `LocationParserTest` (Locations table by header, UK floor only) and
+`GearParserTest` (plink items, slot order, candidate task-page spellings, query escaping).
 `MonsterLookupMessageTest` covers the inbound cross-plugin contract — precedence, defaults, and above
 all that a wrongly-typed or empty payload is ignored rather than thrown.
 `BetterMonsterExaminePluginTest` and `OverlayPreview` are dev launchers, not assertions.
