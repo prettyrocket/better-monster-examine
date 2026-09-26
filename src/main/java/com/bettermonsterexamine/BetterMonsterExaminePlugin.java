@@ -42,6 +42,7 @@ import net.runelite.client.eventbus.EventBus;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.events.PluginMessage;
+import net.runelite.client.events.ProfileChanged;
 import net.runelite.api.events.MenuEntryAdded;
 import net.runelite.client.util.ImageUtil;
 import net.runelite.client.util.LinkBrowser;
@@ -123,6 +124,9 @@ public class BetterMonsterExaminePlugin extends Plugin
 	private final ExamineSummaryQueue examineSummaryQueue = new ExamineSummaryQueue();
 	private static final String STATS_OPTION = "Stats";
 	private static final String DROPS_OPTION = "Drops";
+	private static final String CONFIG_GROUP = "bettermonsterexamine";
+	/** Retired in favour of the statsMenuEntry/dropsMenuEntry checkboxes; read once to migrate. */
+	private static final String LEGACY_MENU_OPTIONS = "menuOptions";
 
 	@Provides
 	BetterMonsterExamineConfig provideConfig(ConfigManager configManager)
@@ -134,6 +138,7 @@ public class BetterMonsterExaminePlugin extends Plugin
 	protected void startUp() throws Exception
 	{
 		log.info("Better Monster Examine started");
+		migrateMenuOptions();
 		examineSummaryQueue.clear();
 		titleIcon = ImageUtil.loadImageResource(getClass(), "/icon.png");
 		cardOverlay = new MonsterCardOverlay(config, monsterIcons, () -> playerCombatLevel, () -> playerHpLevel, () -> playerSlayerLevel);
@@ -231,7 +236,7 @@ public class BetterMonsterExaminePlugin extends Plugin
 	@Subscribe
 	public void onConfigChanged(ConfigChanged event)
 	{
-		if (!event.getGroup().equals("bettermonsterexamine"))
+		if (!event.getGroup().equals(CONFIG_GROUP))
 		{
 			return;
 		}
@@ -252,7 +257,7 @@ public class BetterMonsterExaminePlugin extends Plugin
 			{
 				// The right-click Stats option is independently gated on enableSidePanel()
 				// in onMenuEntryAdded, so simply dropping the panel is enough — no need to
-				// touch showStatsMenuOption (doing so left it stuck off after a re-enable).
+				// touch statsMenuEntry (doing so left it stuck off after a re-enable).
 				removeNavBar();
 			}
 		}
@@ -293,7 +298,7 @@ public class BetterMonsterExaminePlugin extends Plugin
 				SwingUtilities.invokeLater(panel::onHistoryConfigChanged);
 			}
 		}
-		else if (event.getKey().equals("examineSummary"))
+		else if (event.getKey().equals("examineSummaryEnabled") || event.getKey().equals("examineSummaryDetail"))
 		{
 			// A response still in flight should not use the mode that was active before this change.
 			examineSummaryQueue.clearPending();
@@ -397,8 +402,9 @@ public class BetterMonsterExaminePlugin extends Plugin
 	{
 		// Anchor on the NPC's Examine entry — every NPC has exactly one, so the options appear once
 		// per monster regardless of its other entries (Attack, Talk-to, …).
-		MenuOption menu = config.menuOptions();
-		if (menu == MenuOption.NONE || event.getType() != MenuAction.EXAMINE_NPC.getId())
+		boolean wantStats = config.statsMenuEntry();
+		boolean wantDrops = config.dropsMenuEntry();
+		if ((!wantStats && !wantDrops) || event.getType() != MenuAction.EXAMINE_NPC.getId())
 		{
 			return;
 		}
@@ -422,11 +428,11 @@ public class BetterMonsterExaminePlugin extends Plugin
 		// Add each enabled option only when it can actually do something. Drops opens in the side
 		// panel; Stats can target the overlay or the panel (see statsActionAvailable). The entry
 		// created last sits on top, so add Drops first and Stats above it.
-		if (menu.showsDrops() && config.enableSidePanel())
+		if (wantDrops && config.enableSidePanel())
 		{
 			addMenuEntry(DROPS_OPTION, event);
 		}
-		if (menu.showsStats() && statsActionAvailable())
+		if (wantStats && statsActionAvailable())
 		{
 			addMenuEntry(STATS_OPTION, event);
 		}
@@ -493,9 +499,40 @@ public class BetterMonsterExaminePlugin extends Plugin
 			else
 			{
 				log.debug("Opening stats for {} (npc id {})", name, clickedNPC.getId());
-				openStats(name, version);
+				openStats(name, version, true);
 			}
 		});
+	}
+
+	/**
+	 * Profiles carry their own config, so a switch can bring a profile that still holds the
+	 * retired key — start-up alone would leave it unmigrated until the next restart.
+	 */
+	@Subscribe
+	public void onProfileChanged(ProfileChanged event)
+	{
+		migrateMenuOptions();
+	}
+
+	/**
+	 * Carry the retired {@code menuOptions} enum (Stats only / Drops only / Both / None) over to the
+	 * two checkboxes that replaced it. The plugin is on the hub, so without this everyone who had
+	 * narrowed or switched off the entries silently gets both back on update — the booleans would
+	 * simply fall to their defaults with nothing to read. Unsetting the old key makes it a one-off.
+	 */
+	private void migrateMenuOptions()
+	{
+		String legacy = configManager.getConfiguration(CONFIG_GROUP, LEGACY_MENU_OPTIONS);
+		if (legacy == null)
+		{
+			return;
+		}
+		configManager.setConfiguration(CONFIG_GROUP, BetterMonsterExamineConfig.STATS_MENU_ENTRY,
+			"STATS_ONLY".equals(legacy) || "BOTH".equals(legacy));
+		configManager.setConfiguration(CONFIG_GROUP, BetterMonsterExamineConfig.DROPS_MENU_ENTRY,
+			"DROPS_ONLY".equals(legacy) || "BOTH".equals(legacy));
+		configManager.unsetConfiguration(CONFIG_GROUP, LEGACY_MENU_OPTIONS);
+		log.debug("Migrated menuOptions={} to the Stats/Drops checkboxes", legacy);
 	}
 
 	/** Record a native Examine in history and, when enabled, await its vanilla chat response. */
@@ -505,23 +542,30 @@ public class BetterMonsterExaminePlugin extends Plugin
 		MonsterData monster = resolveMonster(npc);
 		if (monster != null)
 		{
-			BetterMonsterExaminePanel panel = monsterStatsPanel;
-			if (panel != null)
+			String name = monster.getName();
+			String version = monster.getVersion();
+			if (config.examineOpensStats() && statsActionAvailable())
 			{
-				String name = monster.getName();
-				String version = monster.getVersion();
-				SwingUtilities.invokeLater(() -> panel.recordLookup(name, version));
+				// Renders per statsRenderTarget and records the lookup on its own path.
+				openStats(name, version, false);
+			}
+			else if (config.examineSummaryEnabled())
+			{
+				BetterMonsterExaminePanel panel = monsterStatsPanel;
+				if (panel != null)
+				{
+					SwingUtilities.invokeLater(() -> panel.recordLookup(name, version));
+				}
 			}
 		}
 
-		ExamineSummaryMode mode = config.examineSummary();
-		if (mode == ExamineSummaryMode.OFF)
+		if (!config.examineSummaryEnabled())
 		{
 			return;
 		}
 
 		// Unknown monsters deliberately add an empty slot so rapid Examine responses stay aligned.
-		examineSummaryQueue.add(ExamineSummary.format(monster, mode), client.getTickCount());
+		examineSummaryQueue.add(ExamineSummary.format(monster, config.examineSummaryDetail()), client.getTickCount());
 	}
 
 	/**
@@ -575,14 +619,26 @@ public class BetterMonsterExaminePlugin extends Plugin
 		return dataService.variantForLevel(name, npc.getCombatLevel());
 	}
 
-	/** Handle a Stats click: render to the overlay and/or side panel per the render target. */
-	private void openStats(String name, String version)
+	/**
+	 * Show a monster per the render target, on the overlay and/or the side panel. A Stats click
+	 * passes {@code toggleOverlayOff} so repeating it closes the overlay; Examine doesn't, since
+	 * it's a repeat action and closing the card under the player mid-fight isn't what they asked
+	 * for. Records the lookup itself either way, so callers must not record it again.
+	 */
+	private void openStats(String name, String version, boolean toggleOverlayOff)
 	{
 		RenderTarget target = config.statsRenderTarget();
 		// The overlay draws on the client thread, so update it here; the panel is Swing (EDT).
 		if (target.showsOverlay())
 		{
-			toggleOverlay(name, version);
+			if (toggleOverlayOff)
+			{
+				toggleOverlay(name, version);
+			}
+			else
+			{
+				showOverlay(name, version);
+			}
 		}
 		// Feeding the panel records the lookup via its own select() choke point.
 		if (target.showsPanel() && openInPanel(name, version, false))
@@ -629,16 +685,25 @@ public class BetterMonsterExaminePlugin extends Plugin
 	 */
 	private void toggleOverlay(String name, String version)
 	{
-		MonsterCardOverlay overlay = cardOverlay;
-		if (overlay == null)
+		if (cardOverlay == null)
 		{
 			return;
 		}
-		String key = name + ' ' + version;
-		if (key.equals(overlayKey))
+		if ((name + ' ' + version).equals(overlayKey))
 		{
 			// Already showing this monster — a second Stats click closes it (and keeps it closed).
 			dismissOverlay();
+			return;
+		}
+		showOverlay(name, version);
+	}
+
+	/** Show the overlay for a monster, leaving it up if it's already the one showing. Client thread. */
+	private void showOverlay(String name, String version)
+	{
+		MonsterCardOverlay overlay = cardOverlay;
+		if (overlay == null)
+		{
 			return;
 		}
 		MonsterData selection = dataService.variant(name, version);
@@ -647,7 +712,7 @@ public class BetterMonsterExaminePlugin extends Plugin
 			return;
 		}
 		overlay.setMonster(selection);
-		overlayKey = key;
+		overlayKey = name + ' ' + version;
 		dismissedKey = null;
 	}
 

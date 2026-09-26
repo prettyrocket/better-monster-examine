@@ -8,56 +8,80 @@ import net.runelite.client.config.ConfigSection;
 @ConfigGroup("bettermonsterexamine")
 public interface BetterMonsterExamineConfig extends Config
 {
+	/** Shared with the plugin's one-off migration off the retired menuOptions enum. */
+	String STATS_MENU_ENTRY = "statsMenuEntry";
+	String DROPS_MENU_ENTRY = "dropsMenuEntry";
+
 	@ConfigSection(
 		name = "Right-click menu",
-		description = "The Stats/Drops entries added to a monster's right-click Examine, where they render, and the optional Examine summary.",
-		position = 0
+		description = "The Stats/Drops entries added to a monster's right-click Examine.",
+		position = 1
 	)
 	String menuSection = "menuSection";
 
 	@ConfigSection(
+		name = "Examine",
+		description = "What the plugin adds to the game's own Examine, without touching the right-click menu.",
+		position = 2
+	)
+	String examineSection = "examineSection";
+
+	@ConfigSection(
 		name = "Side panel",
 		description = "The searchable side panel and its Recent/Favorites lists.",
-		position = 1
+		position = 3
 	)
 	String panelSection = "panelSection";
 
 	@ConfigSection(
 		name = "Accessibility",
 		description = "Colour palette for player-relevant stats and drop values, including a colour-blind-friendly mode.",
-		position = 2
+		position = 4
 	)
 	String highlightSection = "highlightSection";
 
 	@ConfigSection(
 		name = "Integrations",
 		description = "Hand-offs to other plugins. Each needs that plugin installed and enabled to do anything.",
-		position = 3
+		position = 5
 	)
 	String integrationSection = "integrationSection";
 
-	@ConfigItem(
-		keyName = "menuOptions",
-		name = "Right-click menu",
-		description = "Which right-click options to add on a monster's Examine: Stats, Drops, both, or none. Drops needs the side panel enabled.",
-		section = menuSection,
-		position = 0
-	)
-	default MenuOption menuOptions()
-	{
-		return MenuOption.BOTH;
-	}
-
+	// Sectionless on purpose: the right-click Stats entry and Examine both render through this, so
+	// filing it under either section would misdescribe it.
 	@ConfigItem(
 		keyName = "statsRenderTarget",
 		name = "Show stats in",
-		description = "Where the right-click 'Stats' action shows a monster: the side panel, an in-game overlay, or both. Only applies when the Stats entry is enabled above.",
-		section = menuSection,
-		position = 1
+		description = "Where a monster's stats appear: the side panel, an in-game overlay, or both. Used by the right-click 'Stats' entry and by 'Open stats on Examine'.",
+		position = 0
 	)
 	default RenderTarget statsRenderTarget()
 	{
 		return RenderTarget.PANEL;
+	}
+
+	@ConfigItem(
+		keyName = STATS_MENU_ENTRY,
+		name = "Stats entry",
+		description = "Add a 'Stats' option to a monster's right-click Examine, showing it per 'Show stats in'.",
+		section = menuSection,
+		position = 0
+	)
+	default boolean statsMenuEntry()
+	{
+		return true;
+	}
+
+	@ConfigItem(
+		keyName = DROPS_MENU_ENTRY,
+		name = "Drops entry",
+		description = "Add a 'Drops' option to a monster's right-click Examine, opening the side panel on its Drops tab. Needs the side panel enabled.",
+		section = menuSection,
+		position = 1
+	)
+	default boolean dropsMenuEntry()
+	{
+		return true;
 	}
 
 	@ConfigItem(
@@ -73,15 +97,39 @@ public interface BetterMonsterExamineConfig extends Config
 	}
 
 	@ConfigItem(
-		keyName = "examineSummary",
-		name = "Examine combat summary",
-		description = "Append compact combat information after the monster's normal Examine text: its weakest styles or all melee and ranged defences.",
-		section = menuSection,
-		position = 3
+		keyName = "examineOpensStats",
+		name = "Open stats on Examine",
+		description = "Examining a monster also shows it per 'Show stats in', so the Stats entry isn't needed. Unlike that entry, re-examining the same monster won't close the overlay.",
+		section = examineSection,
+		position = 0
 	)
-	default ExamineSummaryMode examineSummary()
+	default boolean examineOpensStats()
 	{
-		return ExamineSummaryMode.OFF;
+		return false;
+	}
+
+	@ConfigItem(
+		keyName = "examineSummaryEnabled",
+		name = "Combat summary in chat",
+		description = "Append compact combat information after the game's own Examine text.",
+		section = examineSection,
+		position = 1
+	)
+	default boolean examineSummaryEnabled()
+	{
+		return false;
+	}
+
+	@ConfigItem(
+		keyName = "examineSummaryDetail",
+		name = "Summary detail",
+		description = "How much the chat summary shows: just the weakest melee and ranged styles, or every melee and ranged defence.",
+		section = examineSection,
+		position = 2
+	)
+	default ExamineSummaryMode examineSummaryDetail()
+	{
+		return ExamineSummaryMode.WEAKNESSES;
 	}
 
 	@ConfigItem(
@@ -99,7 +147,7 @@ public interface BetterMonsterExamineConfig extends Config
 	@ConfigItem(
 		keyName = "enableHistory",
 		name = "Recent & favorites",
-		description = "Show Recent and Favorites lists in the side panel, reached via the ↺ / ★ buttons in the search row. Normal monster Examines are added to Recent. Needs the side panel enabled.",
+		description = "Show Recent and Favorites lists in the side panel, reached via the ↺ / ★ buttons in the search row. Monster Examines are added to Recent when an Examine option above is on. Needs the side panel enabled.",
 		section = panelSection,
 		position = 1
 	)
