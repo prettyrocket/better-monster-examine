@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * The neutral view-model behind both renderers ({@link MonsterCard} and
@@ -345,6 +346,43 @@ final class MonsterStats
 		v.add(StatFormat.bonus(m.getLightRangeDefenceBonus()));
 		v.add(StatFormat.bonus(m.getStandardRangeDefenceBonus()));
 		v.add(StatFormat.bonus(m.getHeavyRangeDefenceBonus()));
+		return v;
+	}
+
+	/**
+	 * Melee defence rolls [Stab, Slash, Crush], or null when the wiki lacks an input — the
+	 * renderers then fall back to the bonuses.
+	 */
+	List<String> meleeDefenceRoll()
+	{
+		return rolls(DefenceRolls.Style.STAB, DefenceRolls.Style.SLASH, DefenceRolls.Style.CRUSH);
+	}
+
+	/** Magic defence roll, or null when the wiki lacks an input. */
+	String magicDefenceRoll()
+	{
+		List<String> v = rolls(DefenceRolls.Style.MAGIC);
+		return v == null ? null : v.get(0);
+	}
+
+	/** Ranged defence rolls [Light, Standard, Heavy], or null when the wiki lacks an input. */
+	List<String> rangedDefenceRoll()
+	{
+		return rolls(DefenceRolls.Style.LIGHT, DefenceRolls.Style.STANDARD, DefenceRolls.Style.HEAVY);
+	}
+
+	private List<String> rolls(DefenceRolls.Style... styles)
+	{
+		if (!m.hasDefenceRollInputs())
+		{
+			return null;
+		}
+		Map<DefenceRolls.Style, Integer> rolls = DefenceRolls.rolls(m);
+		List<String> v = new ArrayList<>(styles.length);
+		for (DefenceRolls.Style style : styles)
+		{
+			v.add(String.format(Locale.ROOT, "%,d", rolls.get(style)));
+		}
 		return v;
 	}
 

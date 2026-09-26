@@ -264,10 +264,10 @@ public class BetterMonsterExaminePlugin extends Plugin
 				removeNavBar();
 			}
 		}
-		else if (event.getKey().equals("statHighlighting"))
+		else if (event.getKey().equals("statHighlighting") || event.getKey().equals("showDefenceRolls"))
 		{
-			// Re-render the open side-panel card so the new palette/symbols apply immediately.
-			// The overlay reads the palette live each frame, so it needs no nudge.
+			// Re-render the open side-panel card so the change applies immediately. The overlay
+			// reads config live each frame, so it needs no nudge.
 			BetterMonsterExaminePanel panel = monsterStatsPanel;
 			if (panel != null)
 			{

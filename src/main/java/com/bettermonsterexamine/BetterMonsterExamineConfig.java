@@ -61,6 +61,17 @@ public interface BetterMonsterExamineConfig extends Config
 	}
 
 	@ConfigItem(
+		keyName = "showDefenceRolls",
+		name = "Show defence rolls",
+		description = "Show each style's defence roll instead of its defence bonus, in the side panel and overlay. The roll also counts the monster's Defence or Magic level, so it compares styles directly: lower is easier to hit. Hover a value for its bonus.",
+		position = 1
+	)
+	default boolean showDefenceRolls()
+	{
+		return false;
+	}
+
+	@ConfigItem(
 		keyName = STATS_MENU_ENTRY,
 		name = "Stats entry",
 		description = "Add a 'Stats' option to a monster's right-click Examine, showing it per 'Show stats in'.",

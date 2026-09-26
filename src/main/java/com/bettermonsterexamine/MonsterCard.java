@@ -168,24 +168,31 @@ class MonsterCard extends JPanel
 		// Defensive bonuses, grouped like the wiki
 		if (stats.hasDefensive())
 		{
-			add(gridBlock("Melee defence",
+			// Rolls only when every input is there, so the three blocks never mix rolls and bonuses.
+			boolean rolls = config.showDefenceRolls() && stats.magicDefenceRoll() != null;
+			String suffix = rolls ? " roll" : "";
+
+			List<String> meleeBonus = stats.meleeDefence();
+			add(gridBlock("Melee defence" + suffix,
 				new BufferedImage[]{icons.stabIcon, icons.slashIcon, icons.crushIcon},
-				stats.meleeDefence().toArray(new String[0]),
-				new String[]{"Stab", "Slash", "Crush"}));
+				(rolls ? stats.meleeDefenceRoll() : meleeBonus).toArray(new String[0]),
+				defenceTips(rolls, new String[]{"Stab", "Slash", "Crush"}, meleeBonus)));
 			add(Box.createRigidArea(new Dimension(0, 6)));
 
 			String element = stats.weaknessElement();
 			String weakLabel = element != null ? StatFormat.cap(element) + " weakness" : "Elemental weakness";
-			add(gridBlock("Magic defence",
+			String magicTip = defenceTips(rolls, new String[]{"Magic defence"}, List.of(stats.magicDefence()))[0];
+			add(gridBlock("Magic defence" + suffix,
 				new BufferedImage[]{icons.magicDefenceIcon, weaknessIcon(element)},
-				new String[]{stats.magicDefence(), stats.weaknessSeverity()},
-				new String[]{"Magic defence", weakLabel}));
+				new String[]{rolls ? stats.magicDefenceRoll() : stats.magicDefence(), stats.weaknessSeverity()},
+				new String[]{magicTip, weakLabel}));
 			add(Box.createRigidArea(new Dimension(0, 6)));
 
-			add(gridBlock("Ranged defence",
+			List<String> rangedBonus = stats.rangedDefence();
+			add(gridBlock("Ranged defence" + suffix,
 				new BufferedImage[]{icons.lightIcon, icons.standardIcon, icons.heavyIcon},
-				stats.rangedDefence().toArray(new String[0]),
-				new String[]{"Light", "Standard", "Heavy"}));
+				(rolls ? stats.rangedDefenceRoll() : rangedBonus).toArray(new String[0]),
+				defenceTips(rolls, new String[]{"Light", "Standard", "Heavy"}, rangedBonus)));
 		}
 
 		// Immunities — burn / cannon / thrall, all from Bucket.
@@ -285,6 +292,21 @@ class MonsterCard extends JPanel
 			tips[i] = level.tooltip() == null ? labels[i] : labels[i] + " — " + level.tooltip();
 		}
 		return gridBlock(title, cellIcons, values, tips);
+	}
+
+	/** With rolls shown, the bonus they hide moves to the tooltip. */
+	private static String[] defenceTips(boolean rolls, String[] labels, List<String> bonuses)
+	{
+		if (!rolls)
+		{
+			return labels;
+		}
+		String[] tips = new String[labels.length];
+		for (int i = 0; i < labels.length; i++)
+		{
+			tips[i] = labels[i] + " — bonus " + bonuses.get(i);
+		}
+		return tips;
 	}
 
 	/** A titled block whose stats are laid out as icon-over-value cells (wiki style). */

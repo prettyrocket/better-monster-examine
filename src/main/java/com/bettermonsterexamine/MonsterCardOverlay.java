@@ -314,16 +314,19 @@ class MonsterCardOverlay extends Overlay
 		Color white = Color.WHITE;
 		if (stats.hasDefensive())
 		{
+			// Rolls only when every input is there, so the tab never mixes rolls and bonuses.
+			boolean rolls = config.showDefenceRolls() && stats.magicDefenceRoll() != null;
+
 			// Grouped like the wiki: melee, then magic defence + elemental weakness, then ranged.
-			List<String> melee = stats.meleeDefence();
+			List<String> melee = rolls ? stats.meleeDefenceRoll() : stats.meleeDefence();
 			rows.add(Row.stat(icons.stabIcon, "Stab", melee.get(0), white));
 			rows.add(Row.stat(icons.slashIcon, "Slash", melee.get(1), white));
 			rows.add(Row.stat(icons.crushIcon, "Crush", melee.get(2), white));
 
-			rows.add(Row.stat(icons.magicDefenceIcon, "Magic", stats.magicDefence(), white));
+			rows.add(Row.stat(icons.magicDefenceIcon, "Magic", rolls ? stats.magicDefenceRoll() : stats.magicDefence(), white));
 			addWeakness(rows, stats, white);
 
-			List<String> ranged = stats.rangedDefence();
+			List<String> ranged = rolls ? stats.rangedDefenceRoll() : stats.rangedDefence();
 			rows.add(Row.stat(icons.lightIcon, "Light", ranged.get(0), white));
 			rows.add(Row.stat(icons.standardIcon, "Standard", ranged.get(1), white));
 			rows.add(Row.stat(icons.heavyIcon, "Heavy", ranged.get(2), white));
