@@ -78,6 +78,8 @@ public class MonsterDataService
 	};
 
 	private final Gson gson;
+	/** Parses Bucket rows, cleaning every string as it goes; see WikiSanitizer. */
+	private final Gson bucketGson;
 	private final OkHttpClient http;
 
 	private volatile Map<Integer, MonsterData> byId = Collections.emptyMap();
@@ -90,6 +92,7 @@ public class MonsterDataService
 	MonsterDataService(Gson gson, OkHttpClient http, ScheduledExecutorService executor)
 	{
 		this.gson = gson;
+		this.bucketGson = WikiSanitizer.bucketGson(gson);
 		this.http = http;
 		executor.execute(this::init);
 	}
@@ -112,7 +115,7 @@ public class MonsterDataService
 		{
 			try (Reader r = Files.newBufferedReader(CACHE_FILE.toPath(), StandardCharsets.UTF_8))
 			{
-				BucketResponse cached = gson.fromJson(r, BucketResponse.class);
+				BucketResponse cached = bucketGson.fromJson(r, BucketResponse.class);
 				// Only trust a cache that yielded rows; a truncated/empty/old-format file falls
 				// through to a fetch rather than masquerading as a valid (and "fresh") dataset.
 				if (cached != null && cached.bucket != null && !cached.bucket.isEmpty())
@@ -203,7 +206,7 @@ public class MonsterDataService
 						return;
 					}
 					String json = res.body().string();
-					BucketResponse parsed = gson.fromJson(json, BucketResponse.class);
+					BucketResponse parsed = bucketGson.fromJson(json, BucketResponse.class);
 					if (parsed == null || parsed.bucket == null || parsed.bucket.isEmpty())
 					{
 						log.debug("Monster dataset response carried no rows");
@@ -520,12 +523,7 @@ public class MonsterDataService
 		Map<String, Map<String, InfoboxLevels.LevelText>> ranges = this.levelRanges;
 		for (MonsterData m : all)
 		{
-			if (m == null)
-			{
-				continue;
-			}
-			m.cleanName();
-			if (m.getName() == null || m.getName().isEmpty() || !hasData(m))
+			if (m == null || m.getName() == null || !hasData(m))
 			{
 				continue;
 			}

@@ -13,8 +13,8 @@ import lombok.Setter;
 /**
  * One monster variant from the OSRS Wiki Bucket {@code infobox_monster} dataset — the single
  * source behind the plugin. Flat, mirroring the Bucket row; a single name can carry several
- * variants distinguished by {@link #versionAnchor}. TEXT and {@code max_hit} fields keep their raw
- * Bucket values and are cleaned on access via {@link WikiSanitizer}.
+ * variants distinguished by {@link #versionAnchor}. Every string arrives clean: the service parses
+ * rows with {@link WikiSanitizer#bucketGson}.
  *
  * <p>{@link #version} is not a Bucket field: it is the unique display label
  * {@link MonsterDataService} assigns per variant (the {@code version_anchor}, disambiguated with the
@@ -147,9 +147,7 @@ public class MonsterData
 	@SerializedName("elemental_weakness_percent")
 	private int weaknessPercent;
 
-	@Getter(AccessLevel.NONE)
 	private String examine;
-	@Getter(AccessLevel.NONE)
 	private String poisonous;
 
 	@SerializedName("cannon_immune")
@@ -370,16 +368,6 @@ public class MonsterData
 	}
 
 	/**
-	 * Clean the name in place, before it is indexed or matched on. A template in the infobox name
-	 * ({@code Zombies{{sic}} Champion}) reaches Bucket as rendered HTML, which would otherwise show
-	 * in the panel and never match the in-game name.
-	 */
-	void cleanName()
-	{
-		name = WikiSanitizer.text(name);
-	}
-
-	/**
 	 * Absorb another row's spawn ids when it collapses into this one. Without this, dropping a
 	 * duplicate would strand its ids (1,005 of them bestiary-wide) and right-clicking those spawns
 	 * would miss the id index entirely and fall back to the far weaker name+level match.
@@ -433,28 +421,15 @@ public class MonsterData
 		return slayerCategory != null && !slayerCategory.isEmpty();
 	}
 
-	/** Examine text, cleaned of wiki markup; null when absent. */
-	public String getExamine()
-	{
-		return WikiSanitizer.text(examine);
-	}
-
-	/** Poisonous flag (e.g. {@code "Yes (venom)"}), cleaned of wiki markup; null when absent. */
-	public String getPoisonous()
-	{
-		return WikiSanitizer.text(poisonous);
-	}
-
-	/** The max-hit values, one clean line each (plainlist/strip-markers/&lt;br&gt;/links removed). */
+	/** The max-hit values, one per line, e.g. {@code "45 (special)"}. */
 	public List<String> getMaxHitLines()
 	{
-		return WikiSanitizer.lines(maxHit);
+		return maxHit != null ? maxHit : Collections.emptyList();
 	}
 
-	/** The attack styles, one clean entry each (Vespula packs two into one element with a {@code <br>}). */
 	public List<String> getAttackStyles()
 	{
-		return WikiSanitizer.lines(attackStyles);
+		return attackStyles != null ? attackStyles : Collections.emptyList();
 	}
 
 	public List<String> getAttributes()

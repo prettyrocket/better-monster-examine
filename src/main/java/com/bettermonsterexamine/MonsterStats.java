@@ -124,9 +124,8 @@ final class MonsterStats
 	}
 
 	/**
-	 * The Slayer assignment categories, cleaned of wiki markers and de-junked (Bucket carries a few
-	 * {@code "No"}/{@code "None"} placeholders and the odd strip-marker), deduplicated in order.
-	 * Empty when none. E.g. {@code ["Blue dragons","Bosses"]}.
+	 * The Slayer assignment categories, de-junked (Bucket carries a few {@code "No"}/{@code "None"}
+	 * placeholders) and deduplicated in order. Empty when none. E.g. {@code ["Blue dragons","Bosses"]}.
 	 */
 	List<String> slayerCategories()
 	{
@@ -136,16 +135,11 @@ final class MonsterStats
 			return Collections.emptyList();
 		}
 		List<String> out = new ArrayList<>();
-		for (String raw : c)
+		for (String cat : c)
 		{
-			String clean = WikiSanitizer.text(raw);
-			if (clean == null || clean.isEmpty() || clean.equalsIgnoreCase("no") || clean.equalsIgnoreCase("none"))
+			if (!cat.equalsIgnoreCase("no") && !cat.equalsIgnoreCase("none") && !out.contains(cat))
 			{
-				continue;
-			}
-			if (!out.contains(clean))
-			{
-				out.add(clean);
+				out.add(cat);
 			}
 		}
 		return out;
