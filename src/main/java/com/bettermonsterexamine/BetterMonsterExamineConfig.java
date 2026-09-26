@@ -108,6 +108,18 @@ public interface BetterMonsterExamineConfig extends Config
 	}
 
 	@ConfigItem(
+		keyName = "collapseStackedExamine",
+		name = "One Examine per stack",
+		description = "When several of the same NPC share a tile, show a single Examine instead of one per NPC.",
+		section = menuSection,
+		position = 3
+	)
+	default boolean collapseStackedExamine()
+	{
+		return true;
+	}
+
+	@ConfigItem(
 		keyName = "examineOpensStats",
 		name = "Open stats on Examine",
 		description = "Examining a monster also shows it per 'Show stats in', so the Stats entry isn't needed. Unlike that entry, re-examining the same monster won't close the overlay.",
