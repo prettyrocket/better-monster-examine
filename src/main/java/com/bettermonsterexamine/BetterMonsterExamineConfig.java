@@ -14,35 +14,35 @@ public interface BetterMonsterExamineConfig extends Config
 
 	@ConfigSection(
 		name = "Right-click menu",
-		description = "The Stats/Drops entries added to a monster's right-click Examine.",
+		description = "",
 		position = 2
 	)
 	String menuSection = "menuSection";
 
 	@ConfigSection(
 		name = "Examine",
-		description = "What the plugin adds to the game's own Examine, without touching the right-click menu.",
+		description = "",
 		position = 3
 	)
 	String examineSection = "examineSection";
 
 	@ConfigSection(
 		name = "Side panel",
-		description = "The searchable side panel and its Recent/Favorites lists.",
+		description = "",
 		position = 4
 	)
 	String panelSection = "panelSection";
 
 	@ConfigSection(
 		name = "Accessibility",
-		description = "Colour palette for player-relevant stats and drop values, including a colour-blind-friendly mode.",
+		description = "",
 		position = 5
 	)
 	String highlightSection = "highlightSection";
 
 	@ConfigSection(
 		name = "Integrations",
-		description = "Hand-offs to other plugins. Each needs that plugin installed and enabled to do anything.",
+		description = "",
 		position = 6
 	)
 	String integrationSection = "integrationSection";
@@ -52,7 +52,7 @@ public interface BetterMonsterExamineConfig extends Config
 	@ConfigItem(
 		keyName = "statsRenderTarget",
 		name = "Show stats in",
-		description = "Where a monster's stats appear: the side panel, an in-game overlay, or both. Used by the right-click 'Stats' entry and by 'Open stats on Examine'.",
+		description = "Where to show monster info: side panel and/or in-game overlay.",
 		position = 0
 	)
 	default RenderTarget statsRenderTarget()
@@ -63,7 +63,7 @@ public interface BetterMonsterExamineConfig extends Config
 	@ConfigItem(
 		keyName = "showDefenceRolls",
 		name = "Show defence rolls",
-		description = "Show defence rolls instead of bonuses. Lower is easier to hit.<br>Green is the easiest style; yellow, the easiest free one when Magic wins.",
+		description = "Show defence rolls instead of bonuses.",
 		position = 1
 	)
 	default boolean showDefenceRolls()
@@ -74,7 +74,7 @@ public interface BetterMonsterExamineConfig extends Config
 	@ConfigItem(
 		keyName = STATS_MENU_ENTRY,
 		name = "Stats entry",
-		description = "Add a 'Stats' option to a monster's right-click Examine, showing it per 'Show stats in'.",
+		description = "Add a 'Stats' option to a monster's right-click menu.",
 		section = menuSection,
 		position = 0
 	)
@@ -86,7 +86,7 @@ public interface BetterMonsterExamineConfig extends Config
 	@ConfigItem(
 		keyName = DROPS_MENU_ENTRY,
 		name = "Drops entry",
-		description = "Add a 'Drops' option to a monster's right-click Examine, opening the side panel on its Drops tab. Needs the side panel enabled.",
+		description = "Add a 'Drops' option to a monster's right-click menu.",
 		section = menuSection,
 		position = 1
 	)
@@ -98,7 +98,7 @@ public interface BetterMonsterExamineConfig extends Config
 	@ConfigItem(
 		keyName = "requireShift",
 		name = "Only show when Shift held",
-		description = "Add the Stats/Drops right-click options only while Shift is held, to keep the normal menu uncluttered.",
+		description = "Right-click options only show while Shift is held.",
 		section = menuSection,
 		position = 2
 	)
@@ -110,7 +110,7 @@ public interface BetterMonsterExamineConfig extends Config
 	@ConfigItem(
 		keyName = "collapseStackedExamine",
 		name = "One Examine per stack",
-		description = "When several of the same NPC share a tile, show a single Examine instead of one per NPC.",
+		description = "",
 		section = menuSection,
 		position = 3
 	)
@@ -121,8 +121,8 @@ public interface BetterMonsterExamineConfig extends Config
 
 	@ConfigItem(
 		keyName = "examineOpensStats",
-		name = "Open stats on Examine",
-		description = "Examining a monster also shows it per 'Show stats in', so the Stats entry isn't needed. Unlike that entry, re-examining the same monster won't close the overlay.",
+		name = "Open stats",
+		description = "Toggles opening the side-panel and/or overlay when examining a monster.",
 		section = examineSection,
 		position = 0
 	)
@@ -134,7 +134,7 @@ public interface BetterMonsterExamineConfig extends Config
 	@ConfigItem(
 		keyName = "examineSummaryEnabled",
 		name = "Combat summary in chat",
-		description = "Append compact combat information after the game's own Examine text.",
+		description = "Toggle monster summary in the chat.",
 		section = examineSection,
 		position = 1
 	)
@@ -146,7 +146,7 @@ public interface BetterMonsterExamineConfig extends Config
 	@ConfigItem(
 		keyName = "examineSummaryDetail",
 		name = "Summary detail",
-		description = "How much the chat summary shows: just the weakest styles, or every defence with the weakest highlighted.<br>All defences follows 'Show defence rolls'.",
+		description = "Configure what shows in the chat when enabled.",
 		section = examineSection,
 		position = 2
 	)
@@ -158,7 +158,7 @@ public interface BetterMonsterExamineConfig extends Config
 	@ConfigItem(
 		keyName = "enableSidePanel",
 		name = "Enable side panel",
-		description = "Enables the searchable side panel to display more monster stats.",
+		description = "",
 		section = panelSection,
 		position = 0
 	)
@@ -170,7 +170,7 @@ public interface BetterMonsterExamineConfig extends Config
 	@ConfigItem(
 		keyName = "enableHistory",
 		name = "Recent & favorites",
-		description = "Show Recent and Favorites lists in the side panel, reached via the ↺ / ★ buttons in the search row. Monster Examines are added to Recent when an Examine option above is on. Needs the side panel enabled.",
+		description = "Show Recent and Favorites lists in the side panel.",
 		section = panelSection,
 		position = 1
 	)
@@ -182,7 +182,7 @@ public interface BetterMonsterExamineConfig extends Config
 	@ConfigItem(
 		keyName = "statHighlighting",
 		name = "Colour palette",
-		description = "Colour-code player-relevant stats. 'Colour-blind friendly' uses an orange/blue palette with warning symbols.",
+		description = "Colour-code player-relevant stats.",
 		section = highlightSection,
 		position = 0
 	)
@@ -194,7 +194,7 @@ public interface BetterMonsterExamineConfig extends Config
 	@ConfigItem(
 		keyName = "notEnoughRunesLink",
 		name = "Not Enough Runes",
-		description = "Requires the Not Enough Runes plugin. Clicking a drop opens the item there instead of the wiki; right-click opens the wiki. Falls back to the wiki when it isn't running.",
+		description = "",
 		section = integrationSection,
 		position = 0
 	)
