@@ -410,7 +410,7 @@ public class BetterMonsterExaminePlugin extends Plugin
 
 		// A stack of the same NPC gives one identical Examine per copy, and they all print the same
 		// text. Keeping the first also skips our entries below, since that copy already has them.
-		if (collapseDuplicateExamine(event))
+		if (config.collapseStackedExamine() && collapseDuplicateExamine(event))
 		{
 			return;
 		}
