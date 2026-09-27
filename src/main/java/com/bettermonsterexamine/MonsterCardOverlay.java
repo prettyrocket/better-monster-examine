@@ -274,7 +274,7 @@ class MonsterCardOverlay extends Overlay
 			rows.add(Row.stat(icons.rangedIcon, "Ranged", levels.get(5).value(), white));
 		}
 		rows.add(Row.kv("Speed", stats.attackSpeed(), white));
-		rows.add(Row.kvWrap("Style", stats.attackStyle(), white));
+		rows.add(Row.kv("Style", stats.attackStyle(), white));
 
 		// Max hits: the view-model splits the wiki list (or dataset fallback) and flags any line
 		// over the player's HP; in colour-blind mode it also gets a ⚠ glyph (parity with the panel).
@@ -296,7 +296,7 @@ class MonsterCardOverlay extends Overlay
 		MonsterStats.StatField pois = stats.poisonous();
 		if (pois != null)
 		{
-			rows.add(Row.kvWrap("Poisonous", pois.value(), StatColors.resolve(pois.role(), mode)));
+			rows.add(Row.kv("Poisonous", pois.value(), StatColors.resolve(pois.role(), mode)));
 		}
 
 		List<String> off = stats.offensiveBonuses();
@@ -377,7 +377,7 @@ class MonsterCardOverlay extends Overlay
 			List<String> categories = stats.slayerCategories();
 			if (!categories.isEmpty())
 			{
-				rows.add(Row.kvWrap("Category", String.join(", ", categories), white));
+				rows.add(Row.kv("Category", String.join(", ", categories), white));
 			}
 			List<BufferedImage> heads = new ArrayList<>();
 			for (String master : stats.slayerMasters())
@@ -486,10 +486,10 @@ class MonsterCardOverlay extends Overlay
 	}
 
 	/**
-	 * One line of tab content. A {@code kv} row is "label … value" on a single line; a {@code stat}
-	 * row swaps the text label for an {@code icon} on the left; a {@code kvWrap} row keeps the
-	 * label inline but lets the value wrap across several right-aligned lines; a {@code plain} row
-	 * is a label-less wrapping value (for long text like the attribute list).
+	 * One line of tab content. A {@code kv} row keeps the label inline and right-aligns the value,
+	 * wrapping it across further lines when it doesn't fit — any value can be free wiki text of
+	 * unbounded length; a {@code stat} row swaps the text label for an {@code icon} on the left; a
+	 * {@code plain} row is a label-less wrapping value (for long text like the attribute list).
 	 */
 	private static final class Row
 	{
@@ -500,19 +500,17 @@ class MonsterCardOverlay extends Overlay
 		private final BufferedImage icon;
 		private final String value;
 		private final Color color;
-		private final boolean wrap;
-		/** When wrapping, right-align the value lines and keep the label inline (vs. its own line). */
+		/** Right-align the value lines and keep the label inline (vs. its own line). */
 		private final boolean rightWrap;
 		/** A wrapped row of icons drawn under the label (Slayer master chatheads); null otherwise. */
 		private final List<BufferedImage> iconStrip;
 
-		private Row(String label, BufferedImage icon, String value, Color color, boolean wrap, boolean rightWrap)
+		private Row(String label, BufferedImage icon, String value, Color color, boolean rightWrap)
 		{
 			this.label = label;
 			this.icon = icon;
 			this.value = value;
 			this.color = color;
-			this.wrap = wrap;
 			this.rightWrap = rightWrap;
 			this.iconStrip = null;
 		}
@@ -523,29 +521,23 @@ class MonsterCardOverlay extends Overlay
 			this.icon = null;
 			this.value = null;
 			this.color = Color.WHITE;
-			this.wrap = false;
 			this.rightWrap = false;
 			this.iconStrip = iconStrip;
 		}
 
 		static Row kv(String label, String value, Color color)
 		{
-			return new Row(label, null, value, color, false, false);
+			return new Row(label, null, value, color, true);
 		}
 
 		static Row stat(BufferedImage icon, String label, String value, Color color)
 		{
-			return new Row(label, icon, value, color, false, false);
-		}
-
-		static Row kvWrap(String label, String value, Color color)
-		{
-			return new Row(label, null, value, color, true, true);
+			return new Row(label, icon, value, color, false);
 		}
 
 		static Row plain(String value, Color color)
 		{
-			return new Row(null, null, value, color, true, false);
+			return new Row(null, null, value, color, false);
 		}
 
 		static Row icons(String label, List<BufferedImage> iconStrip)
@@ -569,10 +561,6 @@ class MonsterCardOverlay extends Overlay
 			if (icon != null)
 			{
 				return Math.max(lineH, ICON_SIZE);
-			}
-			if (!wrap)
-			{
-				return lineH;
 			}
 			if (rightWrap)
 			{
@@ -622,15 +610,6 @@ class MonsterCardOverlay extends Overlay
 				g.setColor(color);
 				g.drawString(value, x + contentW - fm.stringWidth(value), baseline);
 				return rowH;
-			}
-
-			if (!wrap)
-			{
-				g.setColor(ColorScheme.LIGHT_GRAY_COLOR);
-				g.drawString(label, x, y + fm.getAscent());
-				g.setColor(color);
-				g.drawString(value, x + contentW - fm.stringWidth(value), y + fm.getAscent());
-				return lineH;
 			}
 
 			if (rightWrap)

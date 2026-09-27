@@ -117,7 +117,7 @@ class MonsterCard extends JPanel
 		MonsterStats.StatField pois = stats.poisonous();
 		if (pois != null)
 		{
-			props.add(kvWrappedRight("Poisonous", pois.value(), resolve(pois.role()), pois.tooltip()));
+			props.add(kv("Poisonous", pois.value(), resolve(pois.role()), pois.tooltip()));
 			anyProp = true;
 		}
 		if (anyProp)
@@ -130,7 +130,7 @@ class MonsterCard extends JPanel
 		// COMBAT INFO — attack style + speed (dataset).
 		JPanel combatInfo = block();
 		combatInfo.add(sectionHeader("Combat info"));
-		combatInfo.add(kvWrappedRight("Attack style", stats.attackStyle()));
+		combatInfo.add(kv("Attack style", stats.attackStyle(), Color.WHITE));
 		combatInfo.add(kv("Attack speed", stats.attackSpeed(), Color.WHITE));
 		capHeight(combatInfo);
 		add(combatInfo);
@@ -276,7 +276,7 @@ class MonsterCard extends JPanel
 			List<String> categories = stats.slayerCategories();
 			if (!categories.isEmpty())
 			{
-				slayer.add(kvWrappedRight("Category", String.join(", ", categories)));
+				slayer.add(kv("Category", String.join(", ", categories), Color.WHITE));
 			}
 
 			List<String> masters = stats.slayerMasters();
@@ -458,39 +458,12 @@ class MonsterCard extends JPanel
 		return kv(k, v, valueColor, null);
 	}
 
-	private JPanel kv(String k, String v, Color valueColor, String tooltip)
-	{
-		JPanel r = rowX();
-		JLabel kl = new JLabel(k);
-		kl.setFont(FontManager.getRunescapeSmallFont());
-		kl.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-		JLabel vl = new JLabel(v);
-		vl.setFont(FontManager.getRunescapeSmallFont());
-		vl.setForeground(valueColor);
-		// Tooltip on both labels (not just the row) so it shows wherever you hover the line.
-		if (tooltip != null)
-		{
-			r.setToolTipText(tooltip);
-			kl.setToolTipText(tooltip);
-			vl.setToolTipText(tooltip);
-		}
-		r.add(kl);
-		r.add(Box.createHorizontalGlue());
-		r.add(vl);
-		capHeight(r);
-		return r;
-	}
-
 	/**
-	 * Label on the left with a right-aligned value that wraps across as many lines as needed,
-	 * kept tight (used for the attack-style list). The value fills the width left by the label.
+	 * Label on the left with a right-aligned value that wraps across as many lines as needed.
+	 * Every row wraps, because any of these values can be free wiki text of unbounded length
+	 * (Adamant dragon's Poisonous is a full sentence); a short value still sits on one line.
 	 */
-	private JPanel kvWrappedRight(String k, String v)
-	{
-		return kvWrappedRight(k, v, Color.WHITE, null);
-	}
-
-	private JPanel kvWrappedRight(String k, String v, Color valueColor, String tooltip)
+	private JPanel kv(String k, String v, Color valueColor, String tooltip)
 	{
 		JPanel r = new JPanel(new BorderLayout());
 		r.setBackground(ColorScheme.DARKER_GRAY_COLOR);
@@ -511,6 +484,7 @@ class MonsterCard extends JPanel
 		vl.setFont(FontManager.getRunescapeSmallFont());
 		vl.setForeground(valueColor);
 		vl.setVerticalAlignment(JLabel.TOP);
+		// Tooltip on both labels (not just the row) so it shows wherever you hover the line.
 		if (tooltip != null)
 		{
 			r.setToolTipText(tooltip);
