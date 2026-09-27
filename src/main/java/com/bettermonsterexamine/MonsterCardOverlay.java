@@ -296,7 +296,7 @@ class MonsterCardOverlay extends Overlay
 		MonsterStats.StatField pois = stats.poisonous();
 		if (pois != null)
 		{
-			rows.add(Row.kv("Poisonous", pois.value(), StatColors.resolve(pois.role(), mode)));
+			rows.add(Row.kvWrap("Poisonous", pois.value(), StatColors.resolve(pois.role(), mode)));
 		}
 
 		List<String> off = stats.offensiveBonuses();

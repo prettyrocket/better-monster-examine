@@ -117,7 +117,7 @@ class MonsterCard extends JPanel
 		MonsterStats.StatField pois = stats.poisonous();
 		if (pois != null)
 		{
-			props.add(kv("Poisonous", pois.value(), resolve(pois.role()), pois.tooltip()));
+			props.add(kvWrappedRight("Poisonous", pois.value(), resolve(pois.role()), pois.tooltip()));
 			anyProp = true;
 		}
 		if (anyProp)
@@ -487,6 +487,11 @@ class MonsterCard extends JPanel
 	 */
 	private JPanel kvWrappedRight(String k, String v)
 	{
+		return kvWrappedRight(k, v, Color.WHITE, null);
+	}
+
+	private JPanel kvWrappedRight(String k, String v, Color valueColor, String tooltip)
+	{
 		JPanel r = new JPanel(new BorderLayout());
 		r.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 		r.setBorder(new EmptyBorder(1, 0, 1, 0));
@@ -504,8 +509,14 @@ class MonsterCard extends JPanel
 		JLabel vl = new JLabel("<html><body style='width:" + valueW + "px; text-align: right'>"
 			+ StatFormat.esc(v).replace("\n", "<br>") + "</body></html>");
 		vl.setFont(FontManager.getRunescapeSmallFont());
-		vl.setForeground(Color.WHITE);
+		vl.setForeground(valueColor);
 		vl.setVerticalAlignment(JLabel.TOP);
+		if (tooltip != null)
+		{
+			r.setToolTipText(tooltip);
+			kl.setToolTipText(tooltip);
+			vl.setToolTipText(tooltip);
+		}
 
 		r.add(kl, BorderLayout.WEST);
 		r.add(vl, BorderLayout.EAST);
