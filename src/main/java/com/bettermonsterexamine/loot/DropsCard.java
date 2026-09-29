@@ -614,7 +614,7 @@ public class DropsCard extends JPanel
 	}
 
 	/** The row's tooltip once priced: name, GE / High Alch (higher one highlighted), and the wiki hint. */
-	private String priceTooltip(String item, int ge, int ha, int alchRuneCost)
+	private String priceTooltip(String item, long ge, long ha, long alchRuneCost)
 	{
 		StringBuilder sb = new StringBuilder("<html>").append(esc(item));
 		String line = priceLineHtml(ge, ha, alchRuneCost);
@@ -650,7 +650,7 @@ public class DropsCard extends JPanel
 	 * below the cost) get no highlight, while a big-GE/low-alch drop (e.g. a herb seed) still highlights
 	 * its GE. When both clear the cost, the larger wins as before.
 	 */
-	private String priceLineHtml(int ge, int ha, int alchRuneCost)
+	private String priceLineHtml(long ge, long ha, long alchRuneCost)
 	{
 		String geStr = DropFormat.price(ge);
 		String haStr = DropFormat.price(ha);
@@ -731,7 +731,7 @@ public class DropsCard extends JPanel
 		}
 		clientThread.invoke(() ->
 		{
-			int alchRuneCost = itemManager.getItemPrice(NATURE_RUNE_ID)
+			long alchRuneCost = itemManager.getItemPrice(NATURE_RUNE_ID)
 				+ FIRE_RUNES_PER_ALCH * itemManager.getItemPrice(FIRE_RUNE_ID);
 			List<Runnable> updates = new ArrayList<>();
 			for (PriceCell c : cells)
@@ -742,7 +742,7 @@ public class DropsCard extends JPanel
 					continue;
 				}
 				ItemComposition comp = itemManager.getItemComposition(id);
-				int ge = itemManager.getItemPrice(id);
+				long ge = itemManager.getItemPrice(id);
 				int ha = comp == null ? 0 : comp.getHaPrice();
 				// A noted drop renders the item's noted graphic — a separate, stackable item id. The
 				// quantity draws the stack-number badge on the icon.
