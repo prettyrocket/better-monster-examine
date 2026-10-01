@@ -43,6 +43,7 @@ public class DropFormatTest
 		assertEquals("3.9M", DropFormat.price(3_900_000));
 		assertEquals("2M", DropFormat.price(2_000_000));
 		assertEquals("2.1B", DropFormat.price(2_100_000_000));
+		assertEquals("5B", DropFormat.price(5_000_000_000L));
 	}
 
 	@Test

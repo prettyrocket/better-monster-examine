@@ -132,7 +132,7 @@ final class DropFormat
 	}
 
 	/** Compact coin value: plain digits under a million, else one-decimal {@code M}/{@code B}; blank for ≤0. */
-	static String price(int n)
+	static String price(long n)
 	{
 		if (n <= 0)
 		{
@@ -140,7 +140,7 @@ final class DropFormat
 		}
 		if (n < 1_000_000)
 		{
-			return Integer.toString(n);
+			return Long.toString(n);
 		}
 		if (n < 1_000_000_000)
 		{
