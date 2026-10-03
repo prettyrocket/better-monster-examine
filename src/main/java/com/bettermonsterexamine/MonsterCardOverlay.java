@@ -273,7 +273,7 @@ class MonsterCardOverlay extends Overlay
 			rows.add(Row.stat(icons.magicIcon, "Magic", levels.get(4).value(), white));
 			rows.add(Row.stat(icons.rangedIcon, "Ranged", levels.get(5).value(), white));
 		}
-		rows.add(Row.kv("Speed", stats.attackSpeed(), white));
+		rows.add(Row.kv("Speed", stats.attackSpeed().value(), white));
 		rows.add(Row.kv("Style", stats.attackStyle(), white));
 
 		// Max hits: the view-model splits the wiki list (or dataset fallback) and flags any line

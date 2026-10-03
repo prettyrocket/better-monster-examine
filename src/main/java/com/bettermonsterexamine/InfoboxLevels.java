@@ -22,6 +22,9 @@ import lombok.Getter;
  * ranges ({@code |str1 = 270-<br />360}), which is why they rendered as a dash. Every other
  * Bucket-missing level really is blank on the wiki, and must keep rendering as a dash.
  *
+ * <p>Attack speed has the same hole with a different symptom: Bucket stores a non-numeric speed
+ * as {@code 0} rather than omitting it, so Basilisk Knight's {@code Varies} rendered as "0 ticks".
+ *
  * <p>Pure and static, so it stays unit-testable without the network ({@link WikiSanitizer} does the
  * same for Bucket's TEXT fields). {@link MonsterDataService} fetches the handful of affected pages
  * in bulk and feeds their wikitext through here.
@@ -39,6 +42,7 @@ final class InfoboxLevels
 		p.put("defence_level", "def");
 		p.put("magic_level", "mage");
 		p.put("ranged_level", "range");
+		p.put("attack_speed", "attack speed");
 		PARAMS = Collections.unmodifiableMap(p);
 	}
 
@@ -47,6 +51,8 @@ final class InfoboxLevels
 	private static final Pattern VERSION_PARAM = Pattern.compile("(?i)^version(\\d*)$");
 	/** A plain integer level — already in Bucket, so nothing was dropped. */
 	private static final Pattern PLAIN_INT = Pattern.compile("-?\\d+");
+	/** The wiki's "no value" ({@code N/A} on an impling's attack speed): a dash, not a word. */
+	private static final Pattern PLACEHOLDER = Pattern.compile("(?i)n/a|none|no");
 	private static final Pattern BR = Pattern.compile("(?i)<br\\s*/?>");
 
 	private InfoboxLevels()
@@ -187,7 +193,7 @@ final class InfoboxLevels
 		String value = plain(text.toString()).replaceAll("\\s+", "");
 		// Test before dropping thousands commas: "1,000" is a value Bucket dropped (Lua's tonumber
 		// rejects the comma), so it has to survive the plain-integer check that "280" is caught by.
-		if (value.isEmpty() || PLAIN_INT.matcher(value).matches())
+		if (value.isEmpty() || PLAIN_INT.matcher(value).matches() || PLACEHOLDER.matcher(value).matches())
 		{
 			return null;
 		}

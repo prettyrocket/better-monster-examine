@@ -237,9 +237,11 @@ final class MonsterStats
 		return st.isEmpty() ? "—" : String.join(", ", st);
 	}
 
-	String attackSpeed()
+	/** The speed, with the wiki's footnote as the tooltip when it was recovered from the page. */
+	StatField attackSpeed()
 	{
-		return StatFormat.attackSpeed(m);
+		InfoboxLevels.LevelText text = m.getAttackSpeed() <= 0 ? m.getLevelRange("attack_speed") : null;
+		return new StatField(StatFormat.attackSpeed(m), ColourRole.NEUTRAL, text == null ? null : text.getNote());
 	}
 
 	// ---- Max hit -------------------------------------------------------------

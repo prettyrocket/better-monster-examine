@@ -131,7 +131,8 @@ class MonsterCard extends JPanel
 		JPanel combatInfo = block();
 		combatInfo.add(sectionHeader("Combat info"));
 		combatInfo.add(kv("Attack style", stats.attackStyle(), Color.WHITE));
-		combatInfo.add(kv("Attack speed", stats.attackSpeed(), Color.WHITE));
+		MonsterStats.StatField speed = stats.attackSpeed();
+		combatInfo.add(kv("Attack speed", speed.value(), Color.WHITE, speed.tooltip()));
 		capHeight(combatInfo);
 		add(combatInfo);
 		add(Box.createRigidArea(new Dimension(0, 6)));

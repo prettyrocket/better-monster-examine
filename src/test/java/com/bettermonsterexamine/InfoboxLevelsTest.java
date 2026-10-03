@@ -127,6 +127,35 @@ public class InfoboxLevelsTest
 		}
 	}
 
+	/** Bucket stores a non-numeric attack speed as 0, so the wiki's word is recovered (#99). */
+	@Test
+	public void recoversANonNumericAttackSpeed()
+	{
+		Map<String, Map<String, InfoboxLevels.LevelText>> levels = InfoboxLevels.parse(String.join("\n",
+			"{{Infobox Monster",
+			"|version1 = Normal",
+			"|version2 = Weakened",
+			"|attack speed1 = 5",
+			"|attack speed2 = Varies",
+			"}}"));
+
+		assertNull(levels.getOrDefault("normal", java.util.Collections.emptyMap()).get("attack_speed"));
+		assertEquals("Varies", levels.get("weakened").get("attack_speed").getValue());
+	}
+
+	/** An impling's "N/A" means it doesn't attack: a dash, not the word. */
+	@Test
+	public void readsTheWikisNoValuePlaceholderAsAbsent()
+	{
+		for (String placeholder : new String[]{"N/A", "None", "No"})
+		{
+			Map<String, Map<String, InfoboxLevels.LevelText>> levels = InfoboxLevels.parse(
+				"{{Infobox Monster\n|attack speed = " + placeholder + "\n}}");
+
+			assertNull(placeholder, levels.getOrDefault("", java.util.Collections.emptyMap()).get("attack_speed"));
+		}
+	}
+
 	@Test
 	public void toleratesAPageWithNoInfobox()
 	{

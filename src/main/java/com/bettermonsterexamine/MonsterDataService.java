@@ -50,7 +50,7 @@ public class MonsterDataService
 	private static final String USER_AGENT = "better-monster-examine (RuneLite plugin)";
 	private static final File CACHE_DIR = new File(RuneLite.RUNELITE_DIR, "better-monster-examine");
 	private static final File CACHE_FILE = new File(CACHE_DIR, "bucket-monsters.json");
-	private static final File LEVELS_CACHE_FILE = new File(CACHE_DIR, "level-ranges.json");
+	private static final File LEVELS_CACHE_FILE = new File(CACHE_DIR, "infobox-gaps.json");
 	private static final Duration MAX_AGE = Duration.ofDays(7);
 	/** MediaWiki caps a multi-title query at 50 pages. */
 	private static final int TITLES_PER_QUERY = 50;
@@ -167,16 +167,20 @@ public class MonsterDataService
 		return rows != null && rows.stream().anyMatch(m -> m != null && m.getPoisonResistance() != null);
 	}
 
-	/** Remove the pre-Bucket Weirdgloop dataset left in every upgraded user's cache dir. */
+	/** Remove the caches earlier builds left in every upgraded user's cache dir. */
 	private static void deleteLegacyCache()
 	{
 		try
 		{
+			// The pre-Bucket Weirdgloop dataset.
 			Files.deleteIfExists(new File(CACHE_DIR, "monsters.json").toPath());
+			// Levels only, from before attack speed was gap-filled (#99). A fresh dataset gap-fills
+			// only when nothing is cached, so the new file has a new name rather than reusing this.
+			Files.deleteIfExists(new File(CACHE_DIR, "level-ranges.json").toPath());
 		}
 		catch (IOException e)
 		{
-			log.debug("Failed to remove the legacy monsters.json cache", e);
+			log.debug("Failed to remove a legacy cache", e);
 		}
 	}
 
@@ -256,13 +260,15 @@ public class MonsterDataService
 		}
 	}
 
-	// ---- level gap-fill ------------------------------------------------------
+	// ---- infobox gap-fill ------------------------------------------------------
 	//
 	// Bucket types the five combat levels as INTEGER, so a level the wiki writes as a range never
 	// reaches us: the wiki's own module writes it with tonumber(), a range yields nil, and the field
 	// is dropped from the row. Vardorvis is the only monster in the bestiary this actually costs
 	// (its Strength and Defence scale with remaining HP, e.g. "270-360"), which is why they rendered
 	// as a dash. There is no Bucket field to fix, so the values come from the page wikitext instead.
+	// Attack speed is INTEGER too, but a non-numeric one ("Varies", "N/A") arrives as 0 rather than
+	// absent, so 0 counts as a gap (#99).
 	//
 	// Rather than make stats fetch per monster — which would cost the whole layer its offline-first,
 	// synchronous render — we only ever look at rows Bucket left a hole in (~50 pages bestiary-wide,
@@ -284,7 +290,7 @@ public class MonsterDataService
 			return;
 		}
 		List<String> pages = rows.stream()
-			.filter(m -> m != null && m.getName() != null && hasData(m) && m.hasMissingLevel())
+			.filter(m -> m != null && m.getName() != null && hasData(m) && m.hasBucketGap())
 			.map(MonsterData::getName)
 			.distinct()
 			.collect(Collectors.toList());
@@ -313,7 +319,7 @@ public class MonsterDataService
 				this.levelRanges = found;
 				writeLevelRanges(found);
 				index(rows);
-				log.info("Recovered {} monster level(s) the Bucket API cannot carry", found.size());
+				log.info("Recovered values the Bucket API cannot carry for {} monster(s)", found.size());
 			});
 		}
 	}

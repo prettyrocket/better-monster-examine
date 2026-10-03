@@ -243,6 +243,21 @@ public class MonsterStatsTest
 		assertEquals("—", s.combatLevels().get(5).value());
 	}
 
+	/** Basilisk Knight: Bucket's 0 for a "Varies" speed must not render as "0 ticks" (#99). */
+	@Test
+	public void aNonNumericAttackSpeedRendersTheWikisWord()
+	{
+		MonsterData m = monster("{\"attack_speed\":0}");
+		m.setLevelRanges(Map.of("attack_speed", new InfoboxLevels.LevelText("varies", "Matches the player's.")));
+
+		assertEquals("Varies", stats(m).attackSpeed().value());
+		assertEquals("Matches the player's.", stats(m).attackSpeed().tooltip());
+		// Nothing recovered (an impling's N/A) is a dash; a real speed is untouched.
+		assertEquals("—", stats(monster("{\"attack_speed\":0}")).attackSpeed().value());
+		assertEquals("4 ticks (2.4 seconds)", stats(monster("{\"attack_speed\":4}")).attackSpeed().value());
+		assertNull(stats(monster("{\"attack_speed\":4}")).attackSpeed().tooltip());
+	}
+
 	@Test
 	public void defenceRollsUseTheMatchingLevel()
 	{
