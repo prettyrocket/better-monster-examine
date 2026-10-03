@@ -158,6 +158,13 @@ scraping — cut over to Bucket in #26.)
    doesn't attack) stays a dash. **Respawn time** is shown in the wiki infobox but never written to
    Bucket at all, so it has no source short of parsing every monster page.
 
+5. **`SuperiorService`** (singleton) — which superior slayer monster each monster spawns. No Bucket
+   carries the pairing, so it parses the table on the wiki's *Superior slayer monster* page (wikitext,
+   tracking `rowspan` — Cockatrice and Moonlight cockatrice share one Cockathrice cell), then resolves
+   the linked titles through the redirect API, because the table links some monsters by a redirect
+   ("Rock slug" → the dataset's Rockslug). The resolved map is cached as `superiors.json` and refreshed
+   weekly. The stats card's Slayer block shows it as a **Superior** row that opens the superior's stats.
+
 The view-model (`MonsterStats`, from #23) sits between the DTO and both renderers: it resolves
 which fields to show and their colour roles, so the panel and overlay stay in sync. **Aggressive**
 ("attacks on sight"), which the old wikitext layer showed, has **no Bucket source** and stays
@@ -377,7 +384,7 @@ state reads on the client thread (`clientThread.invoke`), Swing updates on the E
 
 JUnit 4 under `src/test/java`. Pure-logic tests exercise the static helpers and the view-model:
 `MonsterDataServiceTest` (name matching), `WikiSanitizerTest` (the Bucket field-cleaning shapes),
-`InfoboxLevelsTest` (recovering a level Bucket dropped; blanks stay a dash),
+`InfoboxLevelsTest` (recovering a level Bucket dropped; blanks stay a dash), `SuperiorServiceTest` (the superior-table parse),
 `MonsterStatsTest` (view-model semantics), `ExamineSummaryTest` (compact combat strings),
 `ExamineSummaryQueueTest` (native/injected ordering), `StatFormatTest`, `StatColorsTest`,
 `LookupHistoryTest`.

@@ -105,7 +105,7 @@ public class BetterMonsterExaminePanel extends PluginPanel
 	 */
 	private Consumer<MonsterData> selectionListener;
 
-	public BetterMonsterExaminePanel(MonsterIcons icons, MonsterDataService data, DropPageService drops, ItemIdService itemIds, DropsCard dropsCard, BetterMonsterExamineConfig config, ConfigManager configManager, Gson gson, IntSupplier playerCombatLevel, IntSupplier playerHpLevel, IntSupplier playerSlayerLevel, BufferedImage titleIcon)
+	public BetterMonsterExaminePanel(MonsterIcons icons, MonsterDataService data, SuperiorService superiors, DropPageService drops, ItemIdService itemIds, DropsCard dropsCard, BetterMonsterExamineConfig config, ConfigManager configManager, Gson gson, IntSupplier playerCombatLevel, IntSupplier playerHpLevel, IntSupplier playerSlayerLevel, BufferedImage titleIcon)
 	{
 		super(false);
 		this.data = data;
@@ -119,7 +119,15 @@ public class BetterMonsterExaminePanel extends PluginPanel
 			m -> history.isFavorite(m.getName(), m.getVersion()),
 			this::toggleFavorite,
 			this::selectVariant);
-		this.card = new MonsterCard(icons, config, playerHpLevel, playerSlayerLevel);
+		this.card = new MonsterCard(icons, config, playerHpLevel, playerSlayerLevel,
+			name ->
+			{
+				String superior = superiors.superiorOf(name);
+				return superior != null && !data.variantsForName(superior).isEmpty() ? superior : null;
+			},
+			name -> openMonster(name, null, false));
+		// The superior table loads beside the dataset; re-render so a card shown before it landed gains the link.
+		superiors.setUpdateListener(() -> SwingUtilities.invokeLater(this::refresh));
 
 		// Re-render the Drops tab when a page's drops — or the bulk item-id map that supplies its
 		// icons/prices — land in the background (background thread → EDT).
