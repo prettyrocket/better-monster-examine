@@ -2,16 +2,22 @@ package com.bettermonsterexamine;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Component;
+import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Graphics2D;
 import java.awt.GridLayout;
 import java.awt.Image;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 import java.util.function.IntSupplier;
+import java.util.function.UnaryOperator;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.ImageIcon;
@@ -44,14 +50,21 @@ class MonsterCard extends JPanel
 	private final BetterMonsterExamineConfig config;
 	private final IntSupplier playerHpLevel;
 	private final IntSupplier playerSlayerLevel;
+	/** The superior a monster can spawn, by name — null when it has none the dataset can open. */
+	private final UnaryOperator<String> superiorOf;
+	/** Opens another monster's stats by name, as the superior link does. */
+	private final Consumer<String> openMonster;
 
 	MonsterCard(MonsterIcons icons, BetterMonsterExamineConfig config,
-		IntSupplier playerHpLevel, IntSupplier playerSlayerLevel)
+		IntSupplier playerHpLevel, IntSupplier playerSlayerLevel,
+		UnaryOperator<String> superiorOf, Consumer<String> openMonster)
 	{
 		this.icons = icons;
 		this.config = config;
 		this.playerHpLevel = playerHpLevel;
 		this.playerSlayerLevel = playerSlayerLevel;
+		this.superiorOf = superiorOf;
+		this.openMonster = openMonster;
 		setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
 		setAlignmentX(LEFT_ALIGNMENT);
 	}
@@ -61,7 +74,7 @@ class MonsterCard extends JPanel
 	{
 		removeAll();
 		MonsterStats stats = new MonsterStats(m, config.statHighlighting(), playerHpLevel.getAsInt(), playerSlayerLevel.getAsInt());
-		buildWiki(stats);
+		buildWiki(stats, superiorOf.apply(m.getName()));
 		revalidate();
 		repaint();
 	}
@@ -88,7 +101,7 @@ class MonsterCard extends JPanel
 
 	// ---- Wiki: faithful to the OSRS Wiki monster infobox --------------------
 
-	private void buildWiki(MonsterStats stats)
+	private void buildWiki(MonsterStats stats, String superior)
 	{
 		// ATTRIBUTES — size/attributes/slayer/flat armour/XP bonus/poisonous.
 		JPanel props = block();
@@ -280,6 +293,11 @@ class MonsterCard extends JPanel
 				slayer.add(kv("Category", String.join(", ", categories), Color.WHITE));
 			}
 
+			if (superior != null)
+			{
+				slayer.add(superiorRow(superior));
+			}
+
 			List<String> masters = stats.slayerMasters();
 			if (!masters.isEmpty())
 			{
@@ -450,6 +468,44 @@ class MonsterCard extends JPanel
 			return icons.elementalIcon;
 		}
 		return icons.getElementalWeaknessIcon(StatFormat.cap(element));
+	}
+
+	/**
+	 * The superior this monster can spawn while on task, as a link to its own stats. Underlined on hover
+	 * only, so it reads as a value at rest and as a link under the pointer.
+	 */
+	private JPanel superiorRow(String superior)
+	{
+		JPanel r = kv("Superior", superior, ColorScheme.BRAND_ORANGE, "Open " + superior + "'s stats");
+		JLabel value = (JLabel) ((BorderLayout) r.getLayout()).getLayoutComponent(BorderLayout.EAST);
+		String plain = value.getText();
+		MouseAdapter link = new MouseAdapter()
+		{
+			@Override
+			public void mouseClicked(MouseEvent e)
+			{
+				openMonster.accept(superior);
+			}
+
+			@Override
+			public void mouseEntered(MouseEvent e)
+			{
+				String name = StatFormat.esc(superior);
+				value.setText(plain.replace(name, "<u>" + name + "</u>"));
+			}
+
+			@Override
+			public void mouseExited(MouseEvent e)
+			{
+				value.setText(plain);
+			}
+		};
+		for (Component c : new Component[]{r, r.getComponent(0), value})
+		{
+			c.addMouseListener(link);
+			c.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+		}
+		return r;
 	}
 
 	// --------------------------------------------------------------- layout helpers
