@@ -48,7 +48,8 @@ import net.runelite.http.api.item.ItemPrice;
  * left-aligned under the name below — grouped into the wiki's own sections in page order (Herbs, Gem/Rare drop
  * table, Catacombs/Wilderness tables, …). Where the wiki splits a monster's drops by location or combat
  * level, each of those groups gets a band above its sections, so tables that belong to one variant are
- * never read as the monster's drops as a whole. Each row's GE / High Alch go in its hover tooltip.
+ * never read as the monster's drops as a whole. The stack's GE value sits under the quantity;
+ * the per-item GE / High Alch comparison goes in the row's hover tooltip.
  *
  * <p>The drop list is parsed from the monster's wiki page ({@link DropPageService}), so it arrives
  * asynchronously — {@link #show} is re-called as the page (and the bulk item-id map) land. Item id
@@ -122,9 +123,12 @@ public class DropsCard extends JPanel
 	private static final class PriceCell
 	{
 		private final String itemName;
+		private final String quantityText;
 		private final int quantity;
 		private final boolean noted;
 		private final JLabel icon;
+		/** The GE value under the quantity; null when the player has turned drop values off. */
+		private final JLabel value;
 		private final JComponent row;
 		/**
 		 * The client item id, once {@link #fill} has resolved it — the handle the Not Enough Runes
@@ -133,12 +137,14 @@ public class DropsCard extends JPanel
 		 */
 		private Integer itemId;
 
-		private PriceCell(String itemName, int quantity, boolean noted, JLabel icon, JComponent row)
+		private PriceCell(String itemName, String quantityText, JLabel icon, JLabel value, JComponent row)
 		{
 			this.itemName = itemName;
-			this.quantity = quantity;
-			this.noted = noted;
+			this.quantityText = quantityText;
+			this.quantity = iconQuantity(quantityText);
+			this.noted = isNoted(quantityText);
 			this.icon = icon;
+			this.value = value;
 			this.row = row;
 		}
 	}
@@ -438,7 +444,8 @@ public class DropsCard extends JPanel
 		r.add(icon, BorderLayout.WEST);
 
 		// Two lines: item name (left) with quantity right-aligned on top, the drop odds left-aligned
-		// under the name below. GE / High Alch go in the row's hover tooltip, to keep each row uncluttered.
+		// under the name below, with the stack's GE value under the quantity. The per-item GE / High
+		// Alch comparison stays in the row's hover tooltip.
 		JPanel centre = new JPanel();
 		centre.setLayout(new BoxLayout(centre, BoxLayout.Y_AXIS));
 		centre.setBackground(ColorScheme.DARKER_GRAY_COLOR);
@@ -479,6 +486,18 @@ public class DropsCard extends JPanel
 		rarity.setForeground(rarityColor(row.getRarity()));
 		rarityLine.add(rarity);
 		rarityLine.add(Box.createHorizontalGlue());
+		// Filled once the client prices the item. It gives way to the rarity when a compound rate
+		// ("2 × 1/24576 ; 1/12480") leaves the line short, since the tooltip still has the price.
+		JLabel value = null;
+		if (config.showDropValues())
+		{
+			value = new JLabel();
+			value.setFont(FontManager.getRunescapeSmallFont());
+			value.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+			value.setMinimumSize(new Dimension(0, 0));
+			rarityLine.add(Box.createRigidArea(new Dimension(8, 0)));
+			rarityLine.add(value);
+		}
 		capHeight(rarityLine);
 		centre.add(Box.createRigidArea(new Dimension(0, 1)));
 		centre.add(rarityLine);
@@ -488,7 +507,7 @@ public class DropsCard extends JPanel
 
 		if (row.getItem() != null && !row.getItem().isEmpty())
 		{
-			PriceCell cell = new PriceCell(row.getItem(), iconQuantity(qty), isNoted(qty), icon, r);
+			PriceCell cell = new PriceCell(row.getItem(), qty, icon, value, r);
 			cells.add(cell);
 			makeClickable(r, row.getItem(), cell);
 		}
@@ -755,6 +774,7 @@ public class DropsCard extends JPanel
 				}
 				AsyncBufferedImage img = itemManager.getImage(iconId, c.quantity, stackable);
 				String tip = priceTooltip(c.itemName, ge, ha, alchRuneCost);
+				String value = DropFormat.value(ge, c.quantityText);
 				updates.add(() ->
 				{
 					if (img != null)
@@ -765,6 +785,10 @@ public class DropsCard extends JPanel
 					// to send and fell back to the wiki.
 					c.itemId = id;
 					setRowTooltip(c.row, tip);
+					if (c.value != null)
+					{
+						c.value.setText(value);
+					}
 				});
 			}
 			if (updates.isEmpty())

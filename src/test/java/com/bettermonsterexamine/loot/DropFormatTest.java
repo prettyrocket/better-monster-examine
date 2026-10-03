@@ -47,6 +47,29 @@ public class DropFormatTest
 	}
 
 	@Test
+	public void valueIsTheStackAtEveryQuantityShapeTheWikiUses()
+	{
+		assertEquals("250 gp", DropFormat.value(250, "1"));
+		assertEquals("12K gp", DropFormat.value(200, "60 (noted)"));
+		assertEquals("35-55 gp", DropFormat.value(1, "35-55"));
+		assertEquals("1200-3600 gp", DropFormat.value(1_200, "1-3 (noted)"));
+		assertEquals("100-200 gp", DropFormat.value(100, "1; 2"));
+		assertEquals("5.7M-8.5M gp", DropFormat.value(100_000, "57; 85 (noted)"));
+		// The footnote marker's digit isn't a count.
+		assertEquals("30K gp", DropFormat.value(30_000, "1 [ d 2 ]"));
+		assertEquals("9999 gp", DropFormat.value(9_999, "1"));
+	}
+
+	@Test
+	public void valueIsBlankWithoutAPriceOrACount()
+	{
+		assertEquals("", DropFormat.value(0, "1"));
+		assertEquals("", DropFormat.value(500, "N/A"));
+		assertEquals("", DropFormat.value(500, "Unknown"));
+		assertEquals("", DropFormat.value(500, ""));
+	}
+
+	@Test
 	public void tierOfMapsProbabilityToRarityBands()
 	{
 		// Always (100%) and unknown/unparseable rarities are common.
