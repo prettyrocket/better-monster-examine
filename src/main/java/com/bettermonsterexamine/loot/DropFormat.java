@@ -1,6 +1,8 @@
 package com.bettermonsterexamine.loot;
 
 import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Pure display helpers for a {@link DropRow} — the string shaping the drops panel needs, with no
@@ -9,6 +11,8 @@ import java.util.Locale;
  */
 final class DropFormat
 {
+	private static final Pattern INTEGER = Pattern.compile("\\d+");
+
 	private DropFormat()
 	{
 	}
@@ -147,6 +151,54 @@ final class DropFormat
 			return trimDecimal(n / 1_000_000.0) + "M";
 		}
 		return trimDecimal(n / 1_000_000_000.0) + "B";
+	}
+
+	/**
+	 * A drop's GE value at the quantity it drops in, for the row itself: {@code "4.5K gp"}, or a range
+	 * {@code "1.2K-3.4K gp"} when the quantity varies. Blank when the item has no GE price or the wiki
+	 * gives no countable quantity ({@code "N/A"}, {@code "Unknown"}).
+	 */
+	static String value(long unitPrice, String quantity)
+	{
+		long[] range = quantityRange(quantity);
+		if (unitPrice <= 0 || range == null)
+		{
+			return "";
+		}
+		String lo = compact(unitPrice * range[0]);
+		return (range[0] == range[1] ? lo : lo + "-" + compact(unitPrice * range[1])) + " gp";
+	}
+
+	/**
+	 * The smallest and largest count in a wiki quantity cell — {@code "35-55"}, {@code "1; 2"},
+	 * {@code "1-3 (noted)"} — ignoring footnotes ({@code "1 [ d 1 ]"}); null when it holds no number.
+	 */
+	static long[] quantityRange(String quantity)
+	{
+		if (quantity == null)
+		{
+			return null;
+		}
+		Matcher m = INTEGER.matcher(quantity.replaceAll("\\[[^\\]]*\\]", "").replace(",", ""));
+		long min = Long.MAX_VALUE;
+		long max = Long.MIN_VALUE;
+		while (m.find())
+		{
+			long n = Long.parseLong(m.group());
+			min = Math.min(min, n);
+			max = Math.max(max, n);
+		}
+		return min == Long.MAX_VALUE ? null : new long[]{min, max};
+	}
+
+	/** {@link #price}, with thousands as {@code K} too, so a value fits beside the rarity on one line. */
+	private static String compact(long n)
+	{
+		if (n >= 10_000 && n < 1_000_000)
+		{
+			return trimDecimal(n / 1_000.0) + "K";
+		}
+		return price(n);
 	}
 
 	/**

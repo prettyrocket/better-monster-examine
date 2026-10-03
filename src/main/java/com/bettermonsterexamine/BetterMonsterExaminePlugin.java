@@ -264,7 +264,8 @@ public class BetterMonsterExaminePlugin extends Plugin
 				removeNavBar();
 			}
 		}
-		else if (event.getKey().equals("statHighlighting") || event.getKey().equals("showDefenceRolls"))
+		else if (event.getKey().equals("statHighlighting") || event.getKey().equals("showDefenceRolls")
+			|| event.getKey().equals("showDropValues"))
 		{
 			// Re-render the open side-panel card so the change applies immediately. The overlay
 			// reads config live each frame, so it needs no nudge.
