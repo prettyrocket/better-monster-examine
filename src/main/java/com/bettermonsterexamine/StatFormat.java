@@ -52,10 +52,18 @@ final class StatFormat
 		return s == null || s.isEmpty() ? s : s.substring(0, 1).toUpperCase(Locale.ROOT) + s.substring(1);
 	}
 
-	/** "5 ticks (3.0 seconds)". */
+	/**
+	 * "5 ticks (3.0 seconds)", or the wiki's own word when its speed isn't a number (Basilisk
+	 * Knight's "Varies") — which Bucket stores as 0, so a 0 with nothing recovered is a dash.
+	 */
 	static String attackSpeed(MonsterData m)
 	{
 		int t = m.getAttackSpeed();
+		if (t <= 0)
+		{
+			InfoboxLevels.LevelText text = m.getLevelRange("attack_speed");
+			return text == null ? "—" : cap(text.getValue());
+		}
 		return t + (t == 1 ? " tick" : " ticks") + " (" + String.format("%.1f", t * 0.6) + " seconds)";
 	}
 

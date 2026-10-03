@@ -147,10 +147,16 @@ scraping — cut over to Bucket in #26.)
    "Bucket has no value", distinct from a real `0`. On load, `MonsterDataService` takes the rows with
    such a hole (~50 pages bestiary-wide), pulls their wikitext in **one batched `action=query`**,
    parses the infobox here, and re-indexes — so stats stay **offline-first and synchronously
-   rendered**, cached beside the dataset (`level-ranges.json`) and refreshed with it. The rest
+   rendered**, cached beside the dataset (`infobox-gaps.json`) and refreshed with it. The rest
    are genuinely blank on the wiki and must keep rendering a dash; only a non-integer value is
    recovered. The wiki's own `{{efn}}` footnote rides along as the panel tooltip — a Defence that
    counts *down* (215→145) otherwise reads as a bug.
+   **Attack speed** goes through the same path with a different symptom (#99): the module passes the
+   raw string to an INTEGER column, so `Varies` / `Random` / `N/A` arrive as **`0`** and `No` as
+   **`-1`** rather than absent. A speed `<= 0` therefore counts as a gap; the recovered word renders
+   as written (Basilisk Knight's "Varies"), and a placeholder (`N/A`/`None`/`No` — an impling that
+   doesn't attack) stays a dash. **Respawn time** is shown in the wiki infobox but never written to
+   Bucket at all, so it has no source short of parsing every monster page.
 
 The view-model (`MonsterStats`, from #23) sits between the DTO and both renderers: it resolves
 which fields to show and their colour roles, so the panel and overlay stay in sync. **Aggressive**

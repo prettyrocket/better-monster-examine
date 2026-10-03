@@ -261,13 +261,15 @@ public class MonsterData
 
 	/**
 	 * True when Bucket carries no value at all for one of the five combat levels — either the wiki
-	 * leaves it blank, or (Vardorvis) its value is a range Bucket's INTEGER column can't hold. Only
-	 * these few monsters are worth fetching a page for; see {@link InfoboxLevels}.
+	 * leaves it blank, or (Vardorvis) its value is a range Bucket's INTEGER column can't hold — or an
+	 * attack speed of 0 or below, which is how Bucket stores a non-numeric one ({@code Varies} and
+	 * {@code N/A} as 0, {@code No} as -1).
+	 * Only these few monsters are worth fetching a page for; see {@link InfoboxLevels}.
 	 */
-	boolean hasMissingLevel()
+	boolean hasBucketGap()
 	{
 		return attackLevel == null || strengthLevel == null || defenceLevel == null
-			|| magicLevel == null || rangedLevel == null;
+			|| magicLevel == null || rangedLevel == null || attackSpeed <= 0;
 	}
 
 	/** The wiki's value for a level Bucket dropped (e.g. {@code "270-360"}), or null if none. */
