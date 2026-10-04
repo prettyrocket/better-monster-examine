@@ -1,5 +1,6 @@
 package com.bettermonsterexamine.loot;
 
+import com.bettermonsterexamine.wiki.BucketQuery;
 import com.bettermonsterexamine.wiki.WikiApi;
 import com.google.gson.Gson;
 import com.google.gson.annotations.SerializedName;
@@ -42,8 +43,7 @@ public class ItemIdService
 	private static final File CACHE_DIR = new File(RuneLite.RUNELITE_DIR, "better-monster-examine");
 	private static final File CACHE_FILE = new File(CACHE_DIR, "item-ids.json");
 	private static final Duration MAX_AGE = Duration.ofDays(7);
-	/** Bucket hard-caps every query at 5000 rows; we paginate with {@code offset} while a batch fills it. */
-	private static final int ROW_LIMIT = 5000;
+	private static final BucketQuery QUERY = new BucketQuery("item_id", "page_name", "id");
 
 	private final Gson gson;
 	private final OkHttpClient http;
@@ -124,7 +124,7 @@ public class ItemIdService
 				HttpUrl url = HttpUrl.get(WikiApi.API_URL).newBuilder()
 					.addQueryParameter("action", "bucket")
 					.addQueryParameter("format", "json")
-					.addQueryParameter("query", buildQuery(offset))
+					.addQueryParameter("query", QUERY.page(offset))
 					.build();
 				Request req = new Request.Builder().url(url).header("User-Agent", WikiApi.USER_AGENT).build();
 				int batch;
@@ -144,11 +144,11 @@ public class ItemIdService
 					batch = parsed.bucket.size();
 					all.addAll(parsed.bucket);
 				}
-				if (batch < ROW_LIMIT)
+				if (BucketQuery.isLastPage(batch))
 				{
 					break;
 				}
-				offset += ROW_LIMIT;
+				offset += BucketQuery.PAGE_SIZE;
 			}
 
 			Map<String, Integer> map = index(new BucketResponse(all));
@@ -175,13 +175,6 @@ public class ItemIdService
 		{
 			listener.run();
 		}
-	}
-
-	/** Build the paginated bulk {@code select('page_name','id')} Bucket query over {@code item_id}. */
-	private static String buildQuery(int offset)
-	{
-		return "bucket('item_id').select('page_name','id')"
-			+ ".offset(" + offset + ").limit(" + ROW_LIMIT + ").run()";
 	}
 
 	/**
