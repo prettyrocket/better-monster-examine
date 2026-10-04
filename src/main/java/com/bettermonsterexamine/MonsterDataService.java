@@ -1,5 +1,6 @@
 package com.bettermonsterexamine;
 
+import com.bettermonsterexamine.wiki.WikiApi;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import java.io.File;
@@ -46,8 +47,6 @@ import okhttp3.Response;
 @Singleton
 public class MonsterDataService
 {
-	private static final String API_URL = "https://oldschool.runescape.wiki/api.php";
-	private static final String USER_AGENT = "better-monster-examine (RuneLite plugin)";
 	private static final File CACHE_DIR = new File(RuneLite.RUNELITE_DIR, "better-monster-examine");
 	private static final File CACHE_FILE = new File(CACHE_DIR, "bucket-monsters.json");
 	private static final File LEVELS_CACHE_FILE = new File(CACHE_DIR, "infobox-gaps.json");
@@ -186,12 +185,12 @@ public class MonsterDataService
 
 	private void fetch()
 	{
-		HttpUrl url = HttpUrl.get(API_URL).newBuilder()
+		HttpUrl url = HttpUrl.get(WikiApi.API_URL).newBuilder()
 			.addQueryParameter("action", "bucket")
 			.addQueryParameter("format", "json")
 			.addQueryParameter("query", buildQuery())
 			.build();
-		Request req = new Request.Builder().url(url).header("User-Agent", USER_AGENT).build();
+		Request req = new Request.Builder().url(url).header("User-Agent", WikiApi.USER_AGENT).build();
 		http.newCall(req).enqueue(new Callback()
 		{
 			@Override
@@ -328,7 +327,7 @@ public class MonsterDataService
 	private void fetchWikitext(List<String> titles, Map<String, Map<String, InfoboxLevels.LevelText>> found,
 		Runnable done)
 	{
-		HttpUrl url = HttpUrl.get(API_URL).newBuilder()
+		HttpUrl url = HttpUrl.get(WikiApi.API_URL).newBuilder()
 			.addQueryParameter("action", "query")
 			.addQueryParameter("format", "json")
 			.addQueryParameter("formatversion", "2")
@@ -338,7 +337,7 @@ public class MonsterDataService
 			.addQueryParameter("redirects", "1")
 			.addQueryParameter("titles", String.join("|", titles))
 			.build();
-		Request req = new Request.Builder().url(url).header("User-Agent", USER_AGENT).build();
+		Request req = new Request.Builder().url(url).header("User-Agent", WikiApi.USER_AGENT).build();
 		http.newCall(req).enqueue(new Callback()
 		{
 			@Override
