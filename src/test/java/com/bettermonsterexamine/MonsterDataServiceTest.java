@@ -133,6 +133,67 @@ public class MonsterDataServiceTest
 	}
 
 	@Test
+	public void aNameWithoutItsOwnArticleOpensTheMonstersPage()
+	{
+		// "Cave goblin" is a disambiguation page; every row comes from "Cave goblin (monster)".
+		MonsterData m = monster("{\"name\":\"Cave goblin\",\"page_name\":\"Cave goblin (monster)\","
+			+ "\"combat_level\":3,\"hitpoints\":5}");
+		List<MonsterData> group = Collections.singletonList(m);
+		MonsterDataService.assignVersions(group);
+
+		assertEquals("Cave goblin (monster)", MonsterDataService.wikiPage(group, group));
+	}
+
+	@Test
+	public void aNameWithItsOwnArticleKeepsItWhenAVariantLivesElsewhere()
+	{
+		// Black knight's Port Sarim jail form has its own page, but the name still means the article.
+		MonsterData article = monster("{\"name\":\"Black knight\",\"page_name\":\"Black Knight\","
+			+ "\"combat_level\":33,\"hitpoints\":42}");
+		MonsterData jail = monster("{\"name\":\"Black knight\",\"page_name\":\"Black knight (Port Sarim jail)\","
+			+ "\"combat_level\":33,\"hitpoints\":42,\"default_version\":true}");
+		List<MonsterData> group = Arrays.asList(jail, article);
+		MonsterDataService.assignVersions(group);
+
+		assertEquals("Black Knight", MonsterDataService.wikiPage(group, group));
+	}
+
+	@Test
+	public void aCollapsedOwnArticleRowStillCounts()
+	{
+		// The own-article row may not survive relevantVariants; the raw rows decide, not the survivors.
+		MonsterData article = monster("{\"name\":\"Golem\",\"page_name\":\"Golem\",\"combat_level\":1,\"hitpoints\":1}");
+		MonsterData quest = monster("{\"name\":\"Golem\",\"page_name\":\"Golem (quest)\","
+			+ "\"combat_level\":13,\"hitpoints\":50}");
+		List<MonsterData> survivors = Collections.singletonList(quest);
+		MonsterDataService.assignVersions(survivors);
+
+		assertEquals("Golem", MonsterDataService.wikiPage(Arrays.asList(article, quest), survivors));
+	}
+
+	@Test
+	public void aNameSpanningOnlyForeignPagesOpensTheDefaultFormsPage()
+	{
+		MonsterData ardougne = monster("{\"name\":\"Archer\",\"page_name\":\"Archer (Ardougne)\","
+			+ "\"combat_level\":42,\"hitpoints\":50}");
+		MonsterData burthorpe = monster("{\"name\":\"Archer\",\"page_name\":\"Archer (Burthorpe)\","
+			+ "\"combat_level\":30,\"hitpoints\":40,\"default_version\":true}");
+		List<MonsterData> group = Arrays.asList(ardougne, burthorpe);
+		MonsterDataService.assignVersions(group);
+
+		assertEquals("Archer (Burthorpe)", MonsterDataService.wikiPage(group, group));
+	}
+
+	@Test
+	public void wikiPageFallsBackToTheNameBeforeIndexing()
+	{
+		MonsterData m = monster("{\"name\":\"Cave goblin\",\"page_name\":\"Cave goblin (monster)\"}");
+		assertEquals("Cave goblin", m.getWikiPage());
+		m.setWikiPage("Cave goblin (monster)");
+		assertEquals("Cave goblin (monster)", m.getWikiPage());
+	}
+
+	@Test
 	public void severalRowsFromTheOwnArticleStayDistinct()
 	{
 		// "" bypasses the uniqueness guard, so the own-page rows must fall back to their level.

@@ -16,6 +16,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -287,26 +288,31 @@ public class MonsterDataService
 		{
 			return;
 		}
-		List<String> pages = rows.stream()
-			.filter(m -> m != null && m.getName() != null && hasData(m) && m.hasBucketGap())
-			.map(MonsterData::getName)
-			.distinct()
-			.collect(Collectors.toList());
-		if (pages.isEmpty())
+		// Fetch each gap row's wiki page, not its name: they differ for 1 in 10 names, and a
+		// page can answer for several names. Levels are still keyed back by name + version anchor.
+		Map<String, Set<String>> namesByPage = new LinkedHashMap<>();
+		for (MonsterData m : rows)
+		{
+			if (m != null && m.getName() != null && hasData(m) && m.hasBucketGap())
+			{
+				namesByPage.computeIfAbsent(m.getWikiPage(), k -> new LinkedHashSet<>()).add(m.getName());
+			}
+		}
+		if (namesByPage.isEmpty())
 		{
 			return;
 		}
 
-		log.debug("Gap-filling levels from {} wiki page(s)", pages.size());
-		fetchBatches(rows, pages, 0, new ConcurrentHashMap<>());
+		log.debug("Gap-filling levels from {} wiki page(s)", namesByPage.size());
+		fetchBatches(rows, namesByPage, new ArrayList<>(namesByPage.keySet()), 0, new ConcurrentHashMap<>());
 	}
 
 	/**
 	 * Fetch the batch starting at {@code from}, then the next once it reports — one request at a time,
 	 * as the MediaWiki API etiquette asks. After the last batch, publish and re-index once.
 	 */
-	private void fetchBatches(List<MonsterData> rows, List<String> pages, int from,
-		Map<String, Map<String, InfoboxLevels.LevelText>> found)
+	private void fetchBatches(List<MonsterData> rows, Map<String, Set<String>> namesByPage, List<String> pages,
+		int from, Map<String, Map<String, InfoboxLevels.LevelText>> found)
 	{
 		if (from >= pages.size())
 		{
@@ -321,12 +327,13 @@ public class MonsterDataService
 			return;
 		}
 		List<String> batch = pages.subList(from, Math.min(from + TITLES_PER_QUERY, pages.size()));
-		fetchWikitext(batch, found, () -> fetchBatches(rows, pages, from + TITLES_PER_QUERY, found));
+		fetchWikitext(batch, namesByPage, found,
+			() -> fetchBatches(rows, namesByPage, pages, from + TITLES_PER_QUERY, found));
 	}
 
 	/** One batched {@code action=query} for up to 50 pages' wikitext; parses each into {@code found}. */
-	private void fetchWikitext(List<String> titles, Map<String, Map<String, InfoboxLevels.LevelText>> found,
-		Runnable done)
+	private void fetchWikitext(List<String> titles, Map<String, Set<String>> namesByPage,
+		Map<String, Map<String, InfoboxLevels.LevelText>> found, Runnable done)
 	{
 		HttpUrl url = HttpUrl.get(WikiApi.API_URL).newBuilder()
 			.addQueryParameter("action", "query")
@@ -356,7 +363,8 @@ public class MonsterDataService
 				{
 					if (res.isSuccessful() && res.body() != null)
 					{
-						readWikitext(gson.fromJson(res.body().string(), QueryResponse.class), titles, found);
+						readWikitext(gson.fromJson(res.body().string(), QueryResponse.class), titles, namesByPage,
+							found);
 					}
 				}
 				catch (Exception e)
@@ -369,11 +377,12 @@ public class MonsterDataService
 	}
 
 	/**
-	 * Parse each returned page's infobox and key its levels back to the Bucket rows they belong to.
-	 * The monster name we asked for isn't always the title we get back (MediaWiki normalises case and
-	 * follows redirects), so the response's own alias lists map our name to the page that answered it.
+	 * Parse each returned page's infobox and key its levels back to the Bucket rows they belong to,
+	 * by every name that page answers for. The title we asked for isn't always the one we get back
+	 * (MediaWiki normalises case and follows redirects), so the response's own alias lists map our
+	 * title to the page that answered it.
 	 */
-	private static void readWikitext(QueryResponse res, List<String> titles,
+	private static void readWikitext(QueryResponse res, List<String> titles, Map<String, Set<String>> namesByPage,
 		Map<String, Map<String, InfoboxLevels.LevelText>> found)
 	{
 		if (res == null || res.query == null || res.query.pages == null)
@@ -395,10 +404,10 @@ public class MonsterDataService
 			}
 		}
 
-		for (String name : titles)
+		for (String asked : titles)
 		{
-			String title = name.toLowerCase(Locale.ROOT);
-			// Follow name -> normalised -> redirect target (bounded, so a redirect loop can't hang).
+			String title = asked.toLowerCase(Locale.ROOT);
+			// Follow title -> normalised -> redirect target (bounded, so a redirect loop can't hang).
 			for (int hop = 0; hop < 4 && alias.containsKey(title); hop++)
 			{
 				title = alias.get(title);
@@ -408,9 +417,13 @@ public class MonsterDataService
 			{
 				continue;
 			}
-			for (Map.Entry<String, Map<String, InfoboxLevels.LevelText>> e : InfoboxLevels.parse(content).entrySet())
+			Map<String, Map<String, InfoboxLevels.LevelText>> levels = InfoboxLevels.parse(content);
+			for (String name : namesByPage.getOrDefault(asked, Collections.emptySet()))
 			{
-				found.put(levelKey(name, e.getKey()), e.getValue());
+				for (Map.Entry<String, Map<String, InfoboxLevels.LevelText>> e : levels.entrySet())
+				{
+					found.put(levelKey(name, e.getKey()), e.getValue());
+				}
 			}
 		}
 	}
@@ -540,10 +553,16 @@ public class MonsterDataService
 		}
 
 		// Reduce each name to the variants a player can actually act on, then label what's left.
+		// Every row, collapsed ones included, learns the name's wiki page: the gap-fill reads the
+		// raw rows, and the Drops tab and Wiki link read the survivors.
 		for (Map.Entry<String, List<MonsterData>> e : name.entrySet())
 		{
-			e.setValue(relevantVariants(e.getValue()));
-			assignVersions(e.getValue());
+			List<MonsterData> rows = e.getValue();
+			List<MonsterData> variants = relevantVariants(rows);
+			assignVersions(variants);
+			String page = wikiPage(rows, variants);
+			rows.forEach(m -> m.setWikiPage(page));
+			e.setValue(variants);
 		}
 
 		// Index by spawn id (each row may carry several). When ids collide across rows (e.g. Duke
@@ -828,6 +847,33 @@ public class MonsterDataService
 			}
 		}
 		return variants.isEmpty() ? null : variants.get(0);
+	}
+
+	/**
+	 * The wiki page a name stands for. A name is a page title more often than not, but an
+	 * infobox can set a name that only exists as a disambiguation page ("Cave goblin") or as another
+	 * article entirely ("Manta ray" is the fish). So: the monster's own article when any of its
+	 * {@code rows} comes from one, else the page of the default form among its {@code variants}.
+	 *
+	 * <p>Deliberately per name, not per variant: a name with its own article keeps it even when a
+	 * variant lives elsewhere (Black knight's Port Sarim jail form), so the Drops tab stays
+	 * independent of the variant dropdown it hides. Pure over its arguments.
+	 */
+	static String wikiPage(List<MonsterData> rows, List<MonsterData> variants)
+	{
+		for (MonsterData m : rows)
+		{
+			if (m.isOwnPage())
+			{
+				return m.getPageName();
+			}
+		}
+		MonsterData fallback = defaultVariant(variants);
+		if (fallback != null && fallback.getPageName() != null)
+		{
+			return fallback.getPageName();
+		}
+		return rows.isEmpty() ? null : rows.get(0).getName();
 	}
 
 	/** The version string of the variant whose combat level matches {@code combatLevel}, or null. */

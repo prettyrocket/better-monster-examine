@@ -77,6 +77,11 @@ public class MonsterData
 	@Setter
 	private Map<String, InfoboxLevels.LevelText> levelRanges = Collections.emptyMap();
 
+	/** The wiki page this monster's name stands for; filled by the service. See {@link #getWikiPage}. */
+	@Getter(AccessLevel.NONE)
+	@Setter
+	private String wikiPage;
+
 	@SerializedName("attack_bonus")
 	private int attackBonus;
 	@SerializedName("strength_bonus")
@@ -321,6 +326,16 @@ public class MonsterData
 	boolean isOwnPage()
 	{
 		return pageName != null && name != null && pageName.equalsIgnoreCase(name);
+	}
+
+	/**
+	 * The wiki page to fetch or link for this monster's name, which is not always the name itself:
+	 * "Cave goblin" is a disambiguation page and the monster lives at "Cave goblin (monster)". Falls
+	 * back to the name until the service has indexed this row.
+	 */
+	public String getWikiPage()
+	{
+		return wikiPage != null ? wikiPage : name;
 	}
 
 	/**
