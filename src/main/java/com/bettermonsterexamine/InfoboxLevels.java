@@ -1,10 +1,8 @@
 package com.bettermonsterexamine;
 
-import java.util.ArrayList;
+import com.bettermonsterexamine.wiki.WikitextTemplates;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -90,14 +88,14 @@ final class InfoboxLevels
 
 		// Footnotes are defined once and referenced by name from anywhere on the page — Vardorvis
 		// defines the "scales with HP" note on its max hit and re-references it from str/def.
-		Map<String, String> footnotes = footnotes(wikitext);
+		Map<String, String> footnotes = WikitextTemplates.footnotes(wikitext);
 
 		// A page can host more than one Infobox Monster; merge them all.
 		Matcher start = INFOBOX.matcher(wikitext);
 		int from = 0;
 		while (start.find(from))
 		{
-			String block = template(wikitext, start.start());
+			String block = WikitextTemplates.template(wikitext, start.start());
 			if (block == null)
 			{
 				from = start.end();
@@ -113,7 +111,7 @@ final class InfoboxLevels
 	private static void readInfobox(String block, Map<String, String> footnotes,
 		Map<String, Map<String, LevelText>> out)
 	{
-		Map<String, String> params = params(block);
+		Map<String, String> params = WikitextTemplates.params(block);
 
 		// version1 = Post-quest, version2 = Awakened, … — the anchors Bucket keys its rows by. A
 		// suffix-less "version" (or no version at all) means the page has a single, unnamed form.
@@ -171,17 +169,14 @@ final class InfoboxLevels
 		{
 			if (raw.startsWith("{{", i))
 			{
-				String tpl = template(raw, i);
+				String tpl = WikitextTemplates.template(raw, i);
 				if (tpl != null)
 				{
-					List<String> parts = split(tpl.substring(2, tpl.length() - 2));
-					if (!parts.isEmpty() && parts.get(0).trim().equalsIgnoreCase("efn"))
+					WikitextTemplates.Efn efn = WikitextTemplates.Efn.of(WikitextTemplates.parts(tpl));
+					String resolved = efn == null ? null : efn.resolve(footnotes);
+					if (resolved != null && note == null)
 					{
-						String resolved = footnote(parts, footnotes);
-						if (resolved != null && note == null)
-						{
-							note = resolved;
-						}
+						note = WikiSanitizer.text(resolved);
 					}
 					i += tpl.length();
 					continue;
@@ -211,142 +206,5 @@ final class InfoboxLevels
 	{
 		String out = BR.matcher(raw).replaceAll("");
 		return WikiSanitizer.text(out).replace('—', '-');
-	}
-
-	/**
-	 * The text an {@code {{efn}}} carries, or — when it's a bare {@code {{efn|name=def}}} reference —
-	 * the text of the definition it points at. Null when it resolves to neither.
-	 */
-	private static String footnote(List<String> parts, Map<String, String> footnotes)
-	{
-		Efn efn = new Efn(parts);
-		if (efn.text != null)
-		{
-			return efn.text;
-		}
-		return efn.name == null ? null : footnotes.get(efn.name);
-	}
-
-	/** Every named {@code {{efn|name=x|text}}} definition on the page, keyed by lower-case name. */
-	private static Map<String, String> footnotes(String wikitext)
-	{
-		Map<String, String> out = new HashMap<>();
-		for (int i = wikitext.indexOf("{{"); i >= 0; i = wikitext.indexOf("{{", i + 2))
-		{
-			String tpl = template(wikitext, i);
-			if (tpl == null)
-			{
-				continue;
-			}
-			List<String> parts = split(tpl.substring(2, tpl.length() - 2));
-			if (parts.isEmpty() || !parts.get(0).trim().equalsIgnoreCase("efn"))
-			{
-				continue;
-			}
-			Efn efn = new Efn(parts);
-			if (efn.name != null && efn.text != null)
-			{
-				out.put(efn.name, efn.text);
-			}
-		}
-		return out;
-	}
-
-	/** An {@code {{efn}}}'s two parts of interest: its {@code name=}, and its positional text. */
-	private static final class Efn
-	{
-		private String name;
-		private String text;
-
-		Efn(List<String> parts)
-		{
-			for (String part : parts.subList(1, parts.size()))
-			{
-				String p = part.trim();
-				if (p.toLowerCase(Locale.ROOT).startsWith("name="))
-				{
-					name = p.substring("name=".length()).trim().toLowerCase(Locale.ROOT);
-				}
-				else if (!p.isEmpty() && p.indexOf('=') < 0)
-				{
-					text = WikiSanitizer.text(p);
-				}
-			}
-		}
-	}
-
-	/** A template's top-level {@code |name = value} parameters, keyed by lower-case name. */
-	private static Map<String, String> params(String block)
-	{
-		Map<String, String> out = new LinkedHashMap<>();
-		List<String> parts = split(block.substring(2, block.length() - 2));
-		for (String part : parts.subList(Math.min(1, parts.size()), parts.size()))
-		{
-			int eq = part.indexOf('=');
-			if (eq < 0)
-			{
-				continue;
-			}
-			out.put(part.substring(0, eq).trim().toLowerCase(Locale.ROOT), part.substring(eq + 1));
-		}
-		return out;
-	}
-
-	/**
-	 * Split a template body on its <b>top-level</b> {@code |} separators — a {@code |} nested inside
-	 * a wikilink or another template (the {@code {{efn|name=def}}} hanging off a level) belongs to
-	 * that nested thing, not to the infobox.
-	 */
-	private static List<String> split(String body)
-	{
-		List<String> out = new ArrayList<>();
-		int depth = 0;
-		int from = 0;
-		for (int i = 0; i < body.length(); i++)
-		{
-			if (body.startsWith("{{", i) || body.startsWith("[[", i))
-			{
-				depth++;
-				i++;
-			}
-			else if (body.startsWith("}}", i) || body.startsWith("]]", i))
-			{
-				depth--;
-				i++;
-			}
-			else if (depth == 0 && body.charAt(i) == '|')
-			{
-				out.add(body.substring(from, i));
-				from = i + 1;
-			}
-		}
-		out.add(body.substring(from));
-		return out;
-	}
-
-	/**
-	 * The whole {@code {{…}}} template starting at {@code from}, brace-matched so nested templates
-	 * don't end it early. Null when it never closes.
-	 */
-	private static String template(String s, int from)
-	{
-		int depth = 0;
-		for (int i = from; i < s.length() - 1; i++)
-		{
-			if (s.startsWith("{{", i))
-			{
-				depth++;
-				i++;
-			}
-			else if (s.startsWith("}}", i))
-			{
-				if (--depth == 0)
-				{
-					return s.substring(from, i + 2);
-				}
-				i++;
-			}
-		}
-		return null;
 	}
 }
