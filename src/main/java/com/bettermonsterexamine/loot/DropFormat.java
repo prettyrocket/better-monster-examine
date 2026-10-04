@@ -170,6 +170,16 @@ final class DropFormat
 	}
 
 	/**
+	 * The stack value to colour a drop by: the GE value at the <b>midpoint</b> of its quantity range,
+	 * so a "1-3" drop is judged by what it's expected to be worth. 0 when there's no price or count.
+	 */
+	static long tierValue(long unitPrice, String quantity)
+	{
+		long[] range = quantityRange(quantity);
+		return unitPrice <= 0 || range == null ? 0 : unitPrice * (range[0] + range[1]) / 2;
+	}
+
+	/**
 	 * The smallest and largest count in a wiki quantity cell — {@code "35-55"}, {@code "1; 2"},
 	 * {@code "1-3 (noted)"} — ignoring footnotes ({@code "1 [ d 1 ]"}); null when it holds no number.
 	 */
