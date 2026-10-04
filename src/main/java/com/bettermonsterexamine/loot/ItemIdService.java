@@ -2,15 +2,13 @@ package com.bettermonsterexamine.loot;
 
 import com.bettermonsterexamine.wiki.BucketQuery;
 import com.bettermonsterexamine.wiki.WikiApi;
+import com.bettermonsterexamine.wiki.WikiCache;
+import com.bettermonsterexamine.wiki.WikiClient;
 import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 import com.google.gson.annotations.SerializedName;
 import java.io.File;
-import java.io.IOException;
-import java.io.Reader;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -20,10 +18,7 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.RuneLite;
-import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.Response;
 
 /**
  * Bridges wiki item names to RuneLite client item ids via the OSRS Wiki <b>Bucket</b> {@code item_id}
@@ -40,13 +35,13 @@ import okhttp3.Response;
 @Singleton
 public class ItemIdService
 {
-	private static final File CACHE_DIR = new File(RuneLite.RUNELITE_DIR, "better-monster-examine");
-	private static final File CACHE_FILE = new File(CACHE_DIR, "item-ids.json");
 	private static final Duration MAX_AGE = Duration.ofDays(7);
 	private static final BucketQuery QUERY = new BucketQuery("item_id", "page_name", "id");
 
 	private final Gson gson;
-	private final OkHttpClient http;
+	private final WikiClient wiki;
+	private final WikiCache cache = new WikiCache(
+		new File(new File(RuneLite.RUNELITE_DIR, "better-monster-examine"), "item-ids.json"), MAX_AGE);
 	private final ScheduledExecutorService executor;
 
 	/** wiki item page name -> client item id; published atomically once the bulk load lands. */
@@ -57,7 +52,7 @@ public class ItemIdService
 	ItemIdService(Gson gson, OkHttpClient http, ScheduledExecutorService executor)
 	{
 		this.gson = gson;
-		this.http = http;
+		this.wiki = WikiApi.client(http, gson);
 		this.executor = executor;
 		executor.execute(this::init);
 	}
@@ -83,26 +78,23 @@ public class ItemIdService
 	private void init()
 	{
 		boolean haveCache = false;
-		if (CACHE_FILE.isFile())
+		try
 		{
-			try (Reader r = Files.newBufferedReader(CACHE_FILE.toPath(), StandardCharsets.UTF_8))
+			String text = cache.read();
+			BucketResponse cached = text == null ? null : gson.fromJson(text, BucketResponse.class);
+			if (cached != null && cached.bucket != null && !cached.bucket.isEmpty())
 			{
-				BucketResponse cached = gson.fromJson(r, BucketResponse.class);
-				if (cached != null && cached.bucket != null && !cached.bucket.isEmpty())
-				{
-					publish(index(cached));
-					haveCache = true;
-					log.info("Loaded item-id map from cache ({} entries)", byName.size());
-				}
-			}
-			catch (Exception e)
-			{
-				log.debug("Failed to read cached item-id map", e);
+				publish(index(cached));
+				haveCache = true;
+				log.info("Loaded item-id map from cache ({} entries)", byName.size());
 			}
 		}
+		catch (Exception e)
+		{
+			log.debug("Failed to read cached item-id map", e);
+		}
 
-		boolean fresh = haveCache && (System.currentTimeMillis() - CACHE_FILE.lastModified()) < MAX_AGE.toMillis();
-		if (!fresh)
+		if (!haveCache || !cache.isFresh())
 		{
 			log.debug("{} Fetching item-id map.", haveCache ? "Cache stale." : "Cache miss.");
 			fetch();
@@ -117,48 +109,17 @@ public class ItemIdService
 	{
 		try
 		{
-			List<Row> all = new ArrayList<>();
-			int offset = 0;
-			while (true)
-			{
-				HttpUrl url = HttpUrl.get(WikiApi.API_URL).newBuilder()
-					.addQueryParameter("action", "bucket")
-					.addQueryParameter("format", "json")
-					.addQueryParameter("query", QUERY.page(offset))
-					.build();
-				Request req = new Request.Builder().url(url).header("User-Agent", WikiApi.USER_AGENT).build();
-				int batch;
-				try (Response res = http.newCall(req).execute())
-				{
-					if (!res.isSuccessful() || res.body() == null)
-					{
-						log.debug("Item-id fetch returned {}", res.code());
-						return;
-					}
-					BucketResponse parsed = gson.fromJson(res.body().string(), BucketResponse.class);
-					if (parsed == null || parsed.bucket == null)
-					{
-						log.debug("Item-id response carried no bucket");
-						return;
-					}
-					batch = parsed.bucket.size();
-					all.addAll(parsed.bucket);
-				}
-				if (BucketQuery.isLastPage(batch))
-				{
-					break;
-				}
-				offset += BucketQuery.PAGE_SIZE;
-			}
-
-			Map<String, Integer> map = index(new BucketResponse(all));
+			JsonObject merged = new JsonObject();
+			merged.add("bucket", QUERY.fetchAll(wiki));
+			String json = gson.toJson(merged);
+			Map<String, Integer> map = index(gson.fromJson(json, BucketResponse.class));
 			if (map.isEmpty())
 			{
 				return;
 			}
 			// Parse (and publish) before caching so a corrupt download never poisons the cache.
 			publish(map);
-			writeCache(gson.toJson(new BucketResponse(all)));
+			cache.write(json);
 			log.info("Fetched and cached item-id map ({} entries)", map.size());
 		}
 		catch (Exception e)
@@ -218,19 +179,6 @@ public class ItemIdService
 		catch (NumberFormatException e)
 		{
 			return null;
-		}
-	}
-
-	private static void writeCache(String json)
-	{
-		try
-		{
-			Files.createDirectories(CACHE_DIR.toPath());
-			Files.write(CACHE_FILE.toPath(), json.getBytes(StandardCharsets.UTF_8));
-		}
-		catch (IOException e)
-		{
-			log.debug("Failed to cache item-id map", e);
 		}
 	}
 
