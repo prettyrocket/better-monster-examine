@@ -1,6 +1,7 @@
 package com.bettermonsterexamine.wiki;
 
 import com.google.gson.Gson;
+import java.time.Duration;
 import okhttp3.OkHttpClient;
 
 /**
@@ -16,10 +17,17 @@ public final class WikiApi
 	public static final String USER_AGENT =
 		"better-monster-examine (RuneLite plugin; https://github.com/prettyrocket/better-monster-examine)";
 
+	/**
+	 * How long the wiki's CDN may serve one answer to every user. An hour is invisible next
+	 * to our own 7-day caches, but it turns a burst of identical requests (a popular monster, or the
+	 * bestiary after everyone's weekly refresh) into one hit on the wiki's servers.
+	 */
+	private static final Duration SHARED_CACHE_AGE = Duration.ofHours(1);
+
 	/** A client for the OSRS Wiki that identifies as this plugin. */
 	public static WikiClient client(OkHttpClient http, Gson gson)
 	{
-		return new WikiClient(http, gson, API_URL, USER_AGENT);
+		return new WikiClient(http, gson, API_URL, USER_AGENT, SHARED_CACHE_AGE);
 	}
 
 	private WikiApi()
