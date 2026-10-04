@@ -91,9 +91,10 @@ scraping — cut over to Bucket in #26.)
 
 ### Data flow
 
-1. **`MonsterDataService`** (singleton) — the dataset. Runs one uncapped query against the wiki's
-   official **Bucket API** (`api.php?action=bucket`, the `infobox_monster` bucket; ~1.8 MB for the
-   whole bestiary), caches it under `.runelite/better-monster-examine/bucket-monsters.json`, and
+1. **`MonsterDataService`** (singleton) — the dataset. Pulls the whole `infobox_monster` bucket from
+   the wiki's official **Bucket API** (`api.php?action=bucket`; ~3,260 rows, ~3.1 MB decoded but
+   ~250 KB gzipped), a `wiki.BucketQuery` page at a time — Bucket clamps a query to 5000 rows
+   **silently**, so only a full page means there's more. Caches it under `.runelite/better-monster-examine/bucket-monsters.json`, and
    refreshes weekly (`MAX_AGE = 7 days`). Builds two indexes published atomically: **by NPC id**
    (each Bucket row carries a repeated `id` array) and **by lower-case base name → variant list**.
    A single name (e.g. Vorkath) can have several `MonsterData` variants; each is assigned a unique
