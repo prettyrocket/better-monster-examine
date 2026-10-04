@@ -5,7 +5,8 @@
  * <ul>
  * <li>{@link com.bettermonsterexamine.wiki.WikiClient}: blocking GETs as JSON, given the API URL
  * and a User-Agent with contact details.</li>
- * <li>{@link com.bettermonsterexamine.wiki.WikiCache}: one cached file with a maximum age.</li>
+ * <li>{@link com.bettermonsterexamine.wiki.WikiCache}: one cached file with a maximum age, which
+ * can remember the page revision it came from and skip re-downloading an unedited page.</li>
  * <li>{@link com.bettermonsterexamine.wiki.BucketQuery}: a Bucket {@code select}, paged past the
  * silent 5000-row cap.</li>
  * <li>{@link com.bettermonsterexamine.wiki.TitleResolver}: 50-title batches, and which page

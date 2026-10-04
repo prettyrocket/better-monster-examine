@@ -6,6 +6,7 @@ import com.bettermonsterexamine.wiki.WikiCache;
 import com.bettermonsterexamine.wiki.WikiClient;
 import com.bettermonsterexamine.wiki.WikitextTemplates;
 import com.google.gson.Gson;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.reflect.TypeToken;
 import java.io.File;
@@ -96,7 +97,7 @@ public class SuperiorService
 		{
 			log.debug("Failed to read cached superior table", e);
 		}
-		if (haveCache && cache.isFresh())
+		if (haveCache && (cache.isFresh() || cache.revalidate(wiki, PAGE, WikiApi.FULL_REFETCH)))
 		{
 			return;
 		}
@@ -105,7 +106,7 @@ public class SuperiorService
 		try
 		{
 			JsonObject page = wiki.fetchJson(wiki.action("parse")
-				.addQueryParameter("prop", "wikitext")
+				.addQueryParameter("prop", "wikitext|revid")
 				.addQueryParameter("redirects", "1")
 				.addQueryParameter("page", PAGE)
 				.build());
@@ -119,7 +120,8 @@ public class SuperiorService
 			pairs.putAll(redirectTargets(pairs));
 			// Publish before caching so a broken page never poisons the cache.
 			publish(pairs);
-			cache.write(gson.toJson(pairs));
+			JsonElement revid = page.getAsJsonObject("parse").get("revid");
+			cache.write(gson.toJson(pairs), revid == null ? 0 : revid.getAsLong());
 		}
 		catch (Exception e)
 		{

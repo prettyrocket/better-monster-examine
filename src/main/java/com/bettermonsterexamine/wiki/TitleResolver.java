@@ -2,6 +2,7 @@ package com.bettermonsterexamine.wiki;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -76,6 +77,48 @@ public final class TitleResolver
 			title = next;
 		}
 		return title;
+	}
+
+	/**
+	 * Each page's current revision id, keyed by the title asked, after normalisation and redirects;
+	 * a missing page is left out. Costs about 1.5 KB per 50 titles.
+	 */
+	public static Map<String, Long> lastRevisions(WikiClient wiki, List<String> titles) throws IOException
+	{
+		Map<String, Long> out = new HashMap<>();
+		for (List<String> batch : batches(titles))
+		{
+			JsonObject query = wiki.fetchJson(wiki.action("query")
+				.addQueryParameter("formatversion", "2")
+				.addQueryParameter("prop", "info")
+				.addQueryParameter("redirects", "1")
+				.addQueryParameter("titles", String.join("|", batch))
+				.build()).getAsJsonObject("query");
+			if (query == null || !query.has("pages"))
+			{
+				continue;
+			}
+			TitleResolver resolver = new TitleResolver();
+			resolver.addAll(query);
+			Map<String, Long> byPage = new HashMap<>();
+			for (JsonElement el : query.getAsJsonArray("pages"))
+			{
+				JsonObject page = el.getAsJsonObject();
+				if (page.has("title") && page.has("lastrevid") && !page.has("missing"))
+				{
+					byPage.put(page.get("title").getAsString().toLowerCase(Locale.ROOT), page.get("lastrevid").getAsLong());
+				}
+			}
+			for (String asked : batch)
+			{
+				Long rev = byPage.get(resolver.resolve(asked).toLowerCase(Locale.ROOT));
+				if (rev != null)
+				{
+					out.put(asked, rev);
+				}
+			}
+		}
+		return out;
 	}
 
 	/** Split titles into lists of at most {@link #TITLES_PER_QUERY}, in order. */
