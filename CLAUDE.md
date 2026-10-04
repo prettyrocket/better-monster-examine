@@ -107,6 +107,11 @@ scraping — cut over to Bucket in #26.)
    rather than a bare `#N`, and `defaultVariant` sets foreign rows aside so a bare name means the
    monster's **own article** (#60). Groups from a single page are untouched. `assignVersions` and
    `defaultVariant` are pure statics, unit-tested like `matchNames`.
+   For the same reason a name is not a **page title**: "Cave goblin" is a disambiguation page and
+   the monster lives at "Cave goblin (monster)". `wikiPage` resolves each name once at index time
+   (its own article if any row comes from one, else the default form's page) and every row carries
+   it as `MonsterData.getWikiPage()`, which the Drops tab, the Wiki link and the gap-fill use.
+   Never build a wiki URL or page request from `getName()`.
    Before labelling, **`relevantVariants`** reduces each name to the variants a player can act on:
    the wiki carries a row per **sprite**, so ~25% of the bestiary differs in nothing rendered
    (Guard 124→26, Crystal impling 17→1, Hill Giant 14→2). Those collapse by `MonsterData.statKey()`
