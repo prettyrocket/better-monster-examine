@@ -1,6 +1,7 @@
 package com.bettermonsterexamine;
 
 import com.bettermonsterexamine.wiki.BucketQuery;
+import com.bettermonsterexamine.wiki.TitleResolver;
 import com.bettermonsterexamine.wiki.WikiApi;
 import com.bettermonsterexamine.wiki.WikiCache;
 import com.bettermonsterexamine.wiki.WikiClient;
@@ -13,6 +14,7 @@ import java.lang.reflect.Type;
 import java.nio.file.Files;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -44,8 +46,6 @@ public class MonsterDataService
 {
 	private static final File CACHE_DIR = new File(RuneLite.RUNELITE_DIR, "better-monster-examine");
 	private static final Duration MAX_AGE = Duration.ofDays(7);
-	/** MediaWiki caps a multi-title query at 50 pages. */
-	private static final int TITLES_PER_QUERY = 50;
 	private static final Type LEVEL_RANGES_TYPE =
 		new TypeToken<Map<String, Map<String, InfoboxLevels.LevelText>>>()
 		{
@@ -276,9 +276,8 @@ public class MonsterDataService
 		Map<String, Map<String, InfoboxLevels.LevelText>> found = new HashMap<>();
 		// Blocking, one batch at a time, as MediaWiki's API etiquette asks. This runs on the
 		// executor, from init or after a dataset fetch, never on the client thread or the EDT.
-		for (int i = 0; i < pages.size(); i += TITLES_PER_QUERY)
+		for (List<String> batch : TitleResolver.batches(pages))
 		{
-			List<String> batch = pages.subList(i, Math.min(i + TITLES_PER_QUERY, pages.size()));
 			try
 			{
 				String json = wiki.fetch(wiki.action("query")
@@ -321,9 +320,14 @@ public class MonsterDataService
 			return;
 		}
 
-		Map<String, String> alias = new HashMap<>();
-		addAliases(alias, res.query.normalized);
-		addAliases(alias, res.query.redirects);
+		TitleResolver resolver = new TitleResolver();
+		for (List<QueryResponse.Alias> hops : Arrays.asList(res.query.normalized, res.query.redirects))
+		{
+			if (hops != null)
+			{
+				hops.forEach(a -> resolver.add(a.from, a.to));
+			}
+		}
 
 		Map<String, String> wikitext = new HashMap<>();
 		for (QueryResponse.Page page : res.query.pages)
@@ -337,13 +341,7 @@ public class MonsterDataService
 
 		for (String asked : titles)
 		{
-			String title = asked.toLowerCase(Locale.ROOT);
-			// Follow title -> normalised -> redirect target (bounded, so a redirect loop can't hang).
-			for (int hop = 0; hop < 4 && alias.containsKey(title); hop++)
-			{
-				title = alias.get(title);
-			}
-			String content = wikitext.get(title);
+			String content = wikitext.get(resolver.resolve(asked).toLowerCase(Locale.ROOT));
 			if (content == null)
 			{
 				continue;
@@ -351,21 +349,6 @@ public class MonsterDataService
 			for (Map.Entry<String, Map<String, InfoboxLevels.LevelText>> e : InfoboxLevels.parse(content).entrySet())
 			{
 				found.put(levelKey(asked, e.getKey()), e.getValue());
-			}
-		}
-	}
-
-	private static void addAliases(Map<String, String> into, List<QueryResponse.Alias> aliases)
-	{
-		if (aliases == null)
-		{
-			return;
-		}
-		for (QueryResponse.Alias a : aliases)
-		{
-			if (a.from != null && a.to != null)
-			{
-				into.put(a.from.toLowerCase(Locale.ROOT), a.to.toLowerCase(Locale.ROOT));
 			}
 		}
 	}
