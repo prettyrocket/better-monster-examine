@@ -78,7 +78,7 @@ public class MonsterDataServiceTest
 		assertTrue(MonsterDataService.matchNames(NAMES, "dragon", 40).isEmpty());
 	}
 
-	// ---- variant labelling / default pick across pages (#60) ------------------
+	// ---- variant labelling / default pick across pages ------------------
 	//
 	// Shellbane gryphon: the boss article and its quest fight both emit rows named "Shellbane
 	// gryphon" with a blank anchor and the same combat level, so neither the anchor nor the level
@@ -271,7 +271,7 @@ public class MonsterDataServiceTest
 		assertEquals("Falador (lvl 22)", b.getVersion());
 	}
 
-	// ---- relevant variants: appearance duplicates and dead content (#62 / #63) -----
+	// ---- relevant variants: appearance duplicates and dead content -------------
 
 	private static String giant(String anchor, String page, String id)
 	{

@@ -169,7 +169,7 @@ public class MonsterData
 	@SerializedName("venom_resistance")
 	private String venomResistance;
 
-	// --- Captured for completeness (not yet rendered — see #31) ---
+	// --- Captured for completeness (not yet rendered) ---
 	@SerializedName("slayer_level")
 	private int slayerLevel;
 	@SerializedName("slayer_experience")
@@ -346,7 +346,7 @@ public class MonsterData
 	 * parenthetical, because most parentheses mean a live location: {@code Goblin (Vault of War)} and
 	 * {@code Goblin (God Wars Dungeon)} are distinct, fightable monsters. {@code Realm of Memories} is
 	 * <b>not</b> counted either — despite reading like a flashback it is live quest content, and those
-	 * 19 rows carry real hitpoints and real spawn ids, so a player can fight and right-click them (#63).
+	 * 19 rows carry real hitpoints and real spawn ids, so a player can fight and right-click them.
 	 */
 	boolean isNonLive()
 	{
@@ -362,7 +362,7 @@ public class MonsterData
 	 * A fingerprint of everything the plugin actually renders, so variants differing only in
 	 * appearance collapse together. The wiki carries a row per sprite — thirteen Hill Giants at level
 	 * 28 with identical stats, 124 Guards — and picking between them changes nothing a player can act
-	 * on (#62). Deliberately excludes the display label, ids and source page: those are what differ
+	 * on. Deliberately excludes the display label, ids and source page: those are what differ
 	 * between rows that are otherwise the same monster.
 	 */
 	String statKey()

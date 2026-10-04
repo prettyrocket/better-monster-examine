@@ -243,7 +243,7 @@ public class MonsterStatsTest
 		assertEquals("—", s.combatLevels().get(5).value());
 	}
 
-	/** Basilisk Knight: Bucket's 0 for a "Varies" speed must not render as "0 ticks" (#99). */
+	/** Basilisk Knight: Bucket's 0 for a "Varies" speed must not render as "0 ticks". */
 	@Test
 	public void aNonNumericAttackSpeedRendersTheWikisWord()
 	{

@@ -14,9 +14,8 @@ import org.junit.Test;
 
 /**
  * Locks the shapes the Bucket API leaves in its strings, using the real strings observed for the
- * issue-#24 monsters (Tormented Demon, Vardorvis, Stranger), the {@code {{sic}}} and multi-examine
- * rows, plus
- * clean cases (Vorkath, Blue Moon).
+ * monsters whose markup leaked into the panel (Tormented Demon, Vardorvis, Stranger), the
+ * {@code {{sic}}} and multi-examine rows, plus clean cases (Vorkath, Blue Moon).
  */
 public class WikiSanitizerTest
 {
@@ -30,7 +29,7 @@ public class WikiSanitizerTest
 	@Test
 	public void plainlistDivUnwrapsToBulletValues()
 	{
-		// Tormented Demon (#24): one array element wraps a <div class="plainlist"> + * bullets.
+		// Tormented Demon: one array element wraps a <div class="plainlist"> + * bullets.
 		List<String> raw = Collections.singletonList(
 			"<div class=\"plainlist \" >\n*31 (auto)\n*45 (special)\n</div>");
 
@@ -40,7 +39,7 @@ public class WikiSanitizerTest
 	@Test
 	public void stripMarkersDroppedKeepingTheValue()
 	{
-		// Vardorvis (#24): a <ref> footnote strip-marker trails the first value; second is clean.
+		// Vardorvis: a <ref> footnote strip-marker trails the first value; second is clean.
 		List<String> raw = Arrays.asList(
 			"30-37 (Melee)" + marker("UNIQ--ref-00000049-QINU"),
 			"?? (axes)");
@@ -84,7 +83,7 @@ public class WikiSanitizerTest
 	@Test
 	public void textDropsStripMarkerFromTextField()
 	{
-		// Stranger (#24): the max-hit description carries a trailing <ref> strip-marker.
+		// Stranger: the max-hit description carries a trailing <ref> strip-marker.
 		assertEquals("115% of targeted player's max hit",
 			WikiSanitizer.text("115% of targeted player's max hit" + marker("UNIQ--ref-0000001A-QINU")));
 	}
