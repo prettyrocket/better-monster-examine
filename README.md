@@ -63,4 +63,9 @@ version: JDK 11, `./gradlew build`, and **indent with tabs**).
 This plugin began as a fork of [Koitere/monster-stats][orig]. 
 The data layer and UI have since been substantially rewritten.
 
+Monster stats, drop tables and item data come from the
+[Old School RuneScape Wiki](https://oldschool.runescape.wiki/), used under
+[CC BY-NC-SA 3.0](https://creativecommons.org/licenses/by-nc-sa/3.0/). The **Wiki** button on
+each monster opens its page there.
+
 [orig]: https://github.com/Koitere/monster-stats
