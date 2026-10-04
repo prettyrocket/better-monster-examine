@@ -1,15 +1,14 @@
 package com.bettermonsterexamine;
 
 import com.bettermonsterexamine.wiki.WikiApi;
+import com.bettermonsterexamine.wiki.WikiCache;
+import com.bettermonsterexamine.wiki.WikiClient;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.reflect.TypeToken;
 import java.io.File;
-import java.io.IOException;
 import java.lang.reflect.Type;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -25,10 +24,7 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.RuneLite;
-import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.Response;
 
 /**
  * Which superior slayer monster each Slayer monster can spawn. No Bucket carries the pairing — the
@@ -42,9 +38,6 @@ import okhttp3.Response;
 public class SuperiorService
 {
 	private static final String PAGE = "Superior slayer monster";
-	private static final File CACHE_FILE =
-		new File(new File(RuneLite.RUNELITE_DIR, "better-monster-examine"), "superiors.json");
-	private static final Duration MAX_AGE = Duration.ofDays(7);
 	/** MediaWiki caps a multi-title query at 50 pages. */
 	private static final int TITLES_PER_QUERY = 50;
 	private static final Type PAIRS_TYPE = new TypeToken<Map<String, String>>()
@@ -59,7 +52,9 @@ public class SuperiorService
 	private static final Pattern LINK = Pattern.compile("\\[\\[([^\\]|]+)");
 
 	private final Gson gson;
-	private final OkHttpClient http;
+	private final WikiClient wiki;
+	private final WikiCache cache = new WikiCache(
+		new File(new File(RuneLite.RUNELITE_DIR, "better-monster-examine"), "superiors.json"), Duration.ofDays(7));
 
 	/** Lower-case normal monster name (page title and link label both) → the superior's page title. */
 	private volatile Map<String, String> superiors = Collections.emptyMap();
@@ -69,7 +64,7 @@ public class SuperiorService
 	SuperiorService(Gson gson, OkHttpClient http, ScheduledExecutorService executor)
 	{
 		this.gson = gson;
-		this.http = http;
+		this.wiki = WikiApi.client(http, gson);
 		executor.execute(this::init);
 	}
 
@@ -88,24 +83,21 @@ public class SuperiorService
 	private void init()
 	{
 		boolean haveCache = false;
-		if (CACHE_FILE.isFile())
+		try
 		{
-			try
+			String text = cache.read();
+			Map<String, String> cached = text == null ? null : gson.fromJson(text, PAIRS_TYPE);
+			haveCache = cached != null && !cached.isEmpty();
+			if (haveCache)
 			{
-				Map<String, String> cached = gson.fromJson(
-					new String(Files.readAllBytes(CACHE_FILE.toPath()), StandardCharsets.UTF_8), PAIRS_TYPE);
-				haveCache = cached != null && !cached.isEmpty();
-				if (haveCache)
-				{
-					publish(cached);
-				}
-			}
-			catch (Exception e)
-			{
-				log.debug("Failed to read cached superior table", e);
+				publish(cached);
 			}
 		}
-		if (haveCache && System.currentTimeMillis() - CACHE_FILE.lastModified() < MAX_AGE.toMillis())
+		catch (Exception e)
+		{
+			log.debug("Failed to read cached superior table", e);
+		}
+		if (haveCache && cache.isFresh())
 		{
 			return;
 		}
@@ -113,9 +105,7 @@ public class SuperiorService
 		// Blocking calls are fine here: this is the executor, never the client thread or the EDT.
 		try
 		{
-			JsonObject page = get(HttpUrl.get(WikiApi.API_URL).newBuilder()
-				.addQueryParameter("action", "parse")
-				.addQueryParameter("format", "json")
+			JsonObject page = wiki.fetchJson(wiki.action("parse")
 				.addQueryParameter("prop", "wikitext")
 				.addQueryParameter("redirects", "1")
 				.addQueryParameter("page", PAGE)
@@ -130,8 +120,7 @@ public class SuperiorService
 			pairs.putAll(redirectTargets(pairs));
 			// Publish before caching so a broken page never poisons the cache.
 			publish(pairs);
-			Files.createDirectories(CACHE_FILE.getParentFile().toPath());
-			Files.write(CACHE_FILE.toPath(), gson.toJson(pairs).getBytes(StandardCharsets.UTF_8));
+			cache.write(gson.toJson(pairs));
 		}
 		catch (Exception e)
 		{
@@ -152,9 +141,7 @@ public class SuperiorService
 		{
 			try
 			{
-				JsonObject query = get(HttpUrl.get(WikiApi.API_URL).newBuilder()
-					.addQueryParameter("action", "query")
-					.addQueryParameter("format", "json")
+				JsonObject query = wiki.fetchJson(wiki.action("query")
 					.addQueryParameter("redirects", "1")
 					.addQueryParameter("titles",
 						String.join("|", titles.subList(i, Math.min(i + TITLES_PER_QUERY, titles.size()))))
@@ -185,19 +172,6 @@ public class SuperiorService
 			}
 		}
 		return out;
-	}
-
-	private JsonObject get(HttpUrl url) throws IOException
-	{
-		Request req = new Request.Builder().url(url).header("User-Agent", WikiApi.USER_AGENT).build();
-		try (Response res = http.newCall(req).execute())
-		{
-			if (!res.isSuccessful() || res.body() == null)
-			{
-				throw new IOException("HTTP " + res.code());
-			}
-			return gson.fromJson(res.body().string(), JsonObject.class);
-		}
 	}
 
 	/** Publish normal → superior, keyed case-insensitively, and tell the panel. */

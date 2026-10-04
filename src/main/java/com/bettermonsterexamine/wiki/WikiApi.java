@@ -1,5 +1,8 @@
 package com.bettermonsterexamine.wiki;
 
+import com.google.gson.Gson;
+import okhttp3.OkHttpClient;
+
 /**
  * The OSRS Wiki endpoint every request goes to, and how we identify ourselves to it.
  *
@@ -12,6 +15,12 @@ public final class WikiApi
 	public static final String API_URL = "https://oldschool.runescape.wiki/api.php";
 	public static final String USER_AGENT =
 		"better-monster-examine (RuneLite plugin; https://github.com/prettyrocket/better-monster-examine)";
+
+	/** A client for the OSRS Wiki that identifies as this plugin. */
+	public static WikiClient client(OkHttpClient http, Gson gson)
+	{
+		return new WikiClient(http, gson, API_URL, USER_AGENT);
+	}
 
 	private WikiApi()
 	{
