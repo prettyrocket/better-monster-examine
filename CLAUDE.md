@@ -110,7 +110,9 @@ scraping — cut over to Bucket in #26.)
    For the same reason a name is not a **page title**: "Cave goblin" is a disambiguation page and
    the monster lives at "Cave goblin (monster)". `wikiPage` resolves each name once at index time
    (its own article if any row comes from one, else the default form's page) and every row carries
-   it as `MonsterData.getWikiPage()`, which the Drops tab, the Wiki link and the gap-fill use.
+   it as `MonsterData.getWikiPage()`, which the Drops tab and the Wiki link use. The gap-fill
+   is per **row** instead: it reads each row's own `page_name`, since the levels belong to that
+   row's infobox (Venenatis (PvM Arena)'s "Varies" speed lives on its own page).
    Never build a wiki URL or page request from `getName()`.
    Before labelling, **`relevantVariants`** reduces each name to the variants a player can act on:
    the wiki carries a row per **sprite**, so ~25% of the bestiary differs in nothing rendered
