@@ -22,7 +22,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -299,28 +298,30 @@ public class MonsterDataService
 		}
 
 		log.debug("Gap-filling levels from {} wiki page(s)", pages.size());
-		Map<String, Map<String, InfoboxLevels.LevelText>> found = new ConcurrentHashMap<>();
-		AtomicInteger pending = new AtomicInteger((pages.size() + TITLES_PER_QUERY - 1) / TITLES_PER_QUERY);
-		for (int i = 0; i < pages.size(); i += TITLES_PER_QUERY)
+		fetchBatches(rows, pages, 0, new ConcurrentHashMap<>());
+	}
+
+	/**
+	 * Fetch the batch starting at {@code from}, then the next once it reports — one request at a time,
+	 * as the MediaWiki API etiquette asks. After the last batch, publish and re-index once.
+	 */
+	private void fetchBatches(List<MonsterData> rows, List<String> pages, int from,
+		Map<String, Map<String, InfoboxLevels.LevelText>> found)
+	{
+		if (from >= pages.size())
 		{
-			List<String> batch = pages.subList(i, Math.min(i + TITLES_PER_QUERY, pages.size()));
-			fetchWikitext(batch, found, () ->
+			if (found.isEmpty())
 			{
-				// Publish once every batch has reported, so the dataset is re-indexed only once.
-				if (pending.decrementAndGet() > 0)
-				{
-					return;
-				}
-				if (found.isEmpty())
-				{
-					return;
-				}
-				this.levelRanges = found;
-				writeLevelRanges(found);
-				index(rows);
-				log.info("Recovered values the Bucket API cannot carry for {} monster(s)", found.size());
-			});
+				return;
+			}
+			this.levelRanges = found;
+			writeLevelRanges(found);
+			index(rows);
+			log.info("Recovered values the Bucket API cannot carry for {} monster(s)", found.size());
+			return;
 		}
+		List<String> batch = pages.subList(from, Math.min(from + TITLES_PER_QUERY, pages.size()));
+		fetchWikitext(batch, found, () -> fetchBatches(rows, pages, from + TITLES_PER_QUERY, found));
 	}
 
 	/** One batched {@code action=query} for up to 50 pages' wikitext; parses each into {@code found}. */
