@@ -1,5 +1,9 @@
 package com.bettermonsterexamine.wiki;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -39,6 +43,30 @@ public final class BucketQuery
 		}
 		return q.append(").offset(").append(offset).append(").limit(").append(PAGE_SIZE).append(").run()")
 			.toString();
+	}
+
+	/**
+	 * Every row, fetched a page at a time and merged as Bucket returned them. Blocks; fails as a
+	 * whole, so a caller never mistakes a partial result for the full bucket.
+	 */
+	public JsonArray fetchAll(WikiClient wiki) throws IOException
+	{
+		JsonArray rows = new JsonArray();
+		for (int offset = 0; ; offset += PAGE_SIZE)
+		{
+			JsonObject body = wiki.fetchJson(wiki.action("bucket").addQueryParameter("query", page(offset)).build());
+			JsonElement page = body.get("bucket");
+			if (page == null || !page.isJsonArray())
+			{
+				JsonElement error = body.get("error");
+				throw new IOException("Bucket query on " + bucket + " failed: " + (error == null ? "no rows" : error));
+			}
+			rows.addAll(page.getAsJsonArray());
+			if (isLastPage(page.getAsJsonArray().size()))
+			{
+				return rows;
+			}
+		}
 	}
 
 	/** True when a page of {@code rows} is the last: only a full page can have more behind it. */
