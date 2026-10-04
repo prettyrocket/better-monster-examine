@@ -16,7 +16,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -84,7 +83,7 @@ public class MonsterDataService
 	private volatile Map<Integer, MonsterData> byId = Collections.emptyMap();
 	// lower-case base name -> variants, insertion-ordered
 	private volatile Map<String, List<MonsterData>> byName = Collections.emptyMap();
-	// "name|version anchor" (lower-case) -> the levels Bucket dropped for that variant; see gapFill.
+	// "page|version anchor" (lower-case) -> the levels Bucket dropped for that variant; see gapFill.
 	private volatile Map<String, Map<String, InfoboxLevels.LevelText>> levelRanges = Collections.emptyMap();
 
 	@Inject
@@ -274,11 +273,21 @@ public class MonsterDataService
 	// the rest of which are genuinely blank on the wiki and rightly stay a dash) and pull those in
 	// batched queries, cached and refreshed alongside the dataset itself.
 
-	/** The Bucket row key a parsed page's levels are matched back to: name + version anchor. */
-	private static String levelKey(String name, String versionAnchor)
+	/** The key a parsed page's levels are matched back to Bucket rows by: page + version anchor. */
+	private static String levelKey(String page, String versionAnchor)
 	{
 		String anchor = versionAnchor == null ? "" : versionAnchor.trim();
-		return name.toLowerCase(Locale.ROOT) + "|" + anchor.toLowerCase(Locale.ROOT);
+		return page.toLowerCase(Locale.ROOT) + "|" + anchor.toLowerCase(Locale.ROOT);
+	}
+
+	/**
+	 * The page a row's infobox lives on. Per row, not per name: the levels belong to the infobox the
+	 * row came from, so Venenatis (PvM Arena)'s "Varies" attack speed is on its own page, not on
+	 * Venenatis's. Keying by page also keeps two pages' blank-anchor rows apart.
+	 */
+	private static String infoboxPage(MonsterData m)
+	{
+		return m.getPageName() != null ? m.getPageName() : m.getName();
 	}
 
 	/** Fetch + parse the pages whose Bucket rows are missing a level, then re-index with the results. */
@@ -288,31 +297,26 @@ public class MonsterDataService
 		{
 			return;
 		}
-		// Fetch each gap row's wiki page, not its name: they differ for 1 in 10 names, and a
-		// page can answer for several names. Levels are still keyed back by name + version anchor.
-		Map<String, Set<String>> namesByPage = new LinkedHashMap<>();
-		for (MonsterData m : rows)
-		{
-			if (m != null && m.getName() != null && hasData(m) && m.hasBucketGap())
-			{
-				namesByPage.computeIfAbsent(m.getWikiPage(), k -> new LinkedHashSet<>()).add(m.getName());
-			}
-		}
-		if (namesByPage.isEmpty())
+		List<String> pages = rows.stream()
+			.filter(m -> m != null && m.getName() != null && hasData(m) && m.hasBucketGap())
+			.map(MonsterDataService::infoboxPage)
+			.distinct()
+			.collect(Collectors.toList());
+		if (pages.isEmpty())
 		{
 			return;
 		}
 
-		log.debug("Gap-filling levels from {} wiki page(s)", namesByPage.size());
-		fetchBatches(rows, namesByPage, new ArrayList<>(namesByPage.keySet()), 0, new ConcurrentHashMap<>());
+		log.debug("Gap-filling levels from {} wiki page(s)", pages.size());
+		fetchBatches(rows, pages, 0, new ConcurrentHashMap<>());
 	}
 
 	/**
 	 * Fetch the batch starting at {@code from}, then the next once it reports — one request at a time,
 	 * as the MediaWiki API etiquette asks. After the last batch, publish and re-index once.
 	 */
-	private void fetchBatches(List<MonsterData> rows, Map<String, Set<String>> namesByPage, List<String> pages,
-		int from, Map<String, Map<String, InfoboxLevels.LevelText>> found)
+	private void fetchBatches(List<MonsterData> rows, List<String> pages, int from,
+		Map<String, Map<String, InfoboxLevels.LevelText>> found)
 	{
 		if (from >= pages.size())
 		{
@@ -327,13 +331,12 @@ public class MonsterDataService
 			return;
 		}
 		List<String> batch = pages.subList(from, Math.min(from + TITLES_PER_QUERY, pages.size()));
-		fetchWikitext(batch, namesByPage, found,
-			() -> fetchBatches(rows, namesByPage, pages, from + TITLES_PER_QUERY, found));
+		fetchWikitext(batch, found, () -> fetchBatches(rows, pages, from + TITLES_PER_QUERY, found));
 	}
 
 	/** One batched {@code action=query} for up to 50 pages' wikitext; parses each into {@code found}. */
-	private void fetchWikitext(List<String> titles, Map<String, Set<String>> namesByPage,
-		Map<String, Map<String, InfoboxLevels.LevelText>> found, Runnable done)
+	private void fetchWikitext(List<String> titles, Map<String, Map<String, InfoboxLevels.LevelText>> found,
+		Runnable done)
 	{
 		HttpUrl url = HttpUrl.get(WikiApi.API_URL).newBuilder()
 			.addQueryParameter("action", "query")
@@ -363,8 +366,7 @@ public class MonsterDataService
 				{
 					if (res.isSuccessful() && res.body() != null)
 					{
-						readWikitext(gson.fromJson(res.body().string(), QueryResponse.class), titles, namesByPage,
-							found);
+						readWikitext(gson.fromJson(res.body().string(), QueryResponse.class), titles, found);
 					}
 				}
 				catch (Exception e)
@@ -377,12 +379,11 @@ public class MonsterDataService
 	}
 
 	/**
-	 * Parse each returned page's infobox and key its levels back to the Bucket rows they belong to,
-	 * by every name that page answers for. The title we asked for isn't always the one we get back
-	 * (MediaWiki normalises case and follows redirects), so the response's own alias lists map our
-	 * title to the page that answered it.
+	 * Parse each returned page's infobox and key its levels by the page we asked for. The title we
+	 * get back isn't always the one we asked for (MediaWiki normalises case and follows redirects),
+	 * so the response's own alias lists map our title to the page that answered it.
 	 */
-	private static void readWikitext(QueryResponse res, List<String> titles, Map<String, Set<String>> namesByPage,
+	private static void readWikitext(QueryResponse res, List<String> titles,
 		Map<String, Map<String, InfoboxLevels.LevelText>> found)
 	{
 		if (res == null || res.query == null || res.query.pages == null)
@@ -417,13 +418,9 @@ public class MonsterDataService
 			{
 				continue;
 			}
-			Map<String, Map<String, InfoboxLevels.LevelText>> levels = InfoboxLevels.parse(content);
-			for (String name : namesByPage.getOrDefault(asked, Collections.emptySet()))
+			for (Map.Entry<String, Map<String, InfoboxLevels.LevelText>> e : InfoboxLevels.parse(content).entrySet())
 			{
-				for (Map.Entry<String, Map<String, InfoboxLevels.LevelText>> e : levels.entrySet())
-				{
-					found.put(levelKey(name, e.getKey()), e.getValue());
-				}
+				found.put(levelKey(asked, e.getKey()), e.getValue());
 			}
 		}
 	}
@@ -547,14 +544,14 @@ public class MonsterDataService
 				continue;
 			}
 			// Hand back the levels Bucket dropped for this variant, if we recovered any.
-			Map<String, InfoboxLevels.LevelText> dropped = ranges.get(levelKey(m.getName(), m.getVersionAnchor()));
+			Map<String, InfoboxLevels.LevelText> dropped = ranges.get(levelKey(infoboxPage(m), m.getVersionAnchor()));
 			m.setLevelRanges(dropped != null ? dropped : Collections.emptyMap());
 			name.computeIfAbsent(m.getName().toLowerCase(Locale.ROOT), k -> new ArrayList<>()).add(m);
 		}
 
 		// Reduce each name to the variants a player can actually act on, then label what's left.
-		// Every row, collapsed ones included, learns the name's wiki page: the gap-fill reads the
-		// raw rows, and the Drops tab and Wiki link read the survivors.
+		// Each name's wiki page is decided over all its rows (an own-article row may be collapsed
+		// away) and handed to every row, for the Drops tab and the Wiki link.
 		for (Map.Entry<String, List<MonsterData>> e : name.entrySet())
 		{
 			List<MonsterData> rows = e.getValue();
