@@ -1,5 +1,6 @@
 package com.bettermonsterexamine;
 
+import com.bettermonsterexamine.wiki.WikiApi;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -40,8 +41,6 @@ import okhttp3.Response;
 @Singleton
 public class SuperiorService
 {
-	private static final String API_URL = "https://oldschool.runescape.wiki/api.php";
-	private static final String USER_AGENT = "better-monster-examine (RuneLite plugin)";
 	private static final String PAGE = "Superior slayer monster";
 	private static final File CACHE_FILE =
 		new File(new File(RuneLite.RUNELITE_DIR, "better-monster-examine"), "superiors.json");
@@ -114,7 +113,7 @@ public class SuperiorService
 		// Blocking calls are fine here: this is the executor, never the client thread or the EDT.
 		try
 		{
-			JsonObject page = get(HttpUrl.get(API_URL).newBuilder()
+			JsonObject page = get(HttpUrl.get(WikiApi.API_URL).newBuilder()
 				.addQueryParameter("action", "parse")
 				.addQueryParameter("format", "json")
 				.addQueryParameter("prop", "wikitext")
@@ -153,7 +152,7 @@ public class SuperiorService
 		{
 			try
 			{
-				JsonObject query = get(HttpUrl.get(API_URL).newBuilder()
+				JsonObject query = get(HttpUrl.get(WikiApi.API_URL).newBuilder()
 					.addQueryParameter("action", "query")
 					.addQueryParameter("format", "json")
 					.addQueryParameter("redirects", "1")
@@ -190,7 +189,7 @@ public class SuperiorService
 
 	private JsonObject get(HttpUrl url) throws IOException
 	{
-		Request req = new Request.Builder().url(url).header("User-Agent", USER_AGENT).build();
+		Request req = new Request.Builder().url(url).header("User-Agent", WikiApi.USER_AGENT).build();
 		try (Response res = http.newCall(req).execute())
 		{
 			if (!res.isSuccessful() || res.body() == null)

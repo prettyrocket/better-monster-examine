@@ -1,5 +1,6 @@
 package com.bettermonsterexamine.loot;
 
+import com.bettermonsterexamine.wiki.WikiApi;
 import com.google.gson.Gson;
 import com.google.gson.annotations.SerializedName;
 import java.io.File;
@@ -48,8 +49,6 @@ import okhttp3.Response;
 @Singleton
 public class DropPageService
 {
-	private static final String API_URL = "https://oldschool.runescape.wiki/api.php";
-	private static final String USER_AGENT = "better-monster-examine (RuneLite plugin)";
 	private static final File CACHE_DIR = new File(RuneLite.RUNELITE_DIR, "better-monster-examine/droppages");
 	private static final Duration MAX_AGE = Duration.ofDays(7);
 
@@ -173,7 +172,7 @@ public class DropPageService
 	{
 		try
 		{
-			HttpUrl url = HttpUrl.get(API_URL).newBuilder()
+			HttpUrl url = HttpUrl.get(WikiApi.API_URL).newBuilder()
 				.addQueryParameter("action", "parse")
 				.addQueryParameter("page", pageName)
 				.addQueryParameter("prop", "text")
@@ -182,7 +181,7 @@ public class DropPageService
 				// "Hill Giant"), and without this we'd parse the redirect stub and show no drops.
 				.addQueryParameter("redirects", "1")
 				.build();
-			Request req = new Request.Builder().url(url).header("User-Agent", USER_AGENT).build();
+			Request req = new Request.Builder().url(url).header("User-Agent", WikiApi.USER_AGENT).build();
 			try (Response res = http.newCall(req).execute())
 			{
 				if (!res.isSuccessful() || res.body() == null)
