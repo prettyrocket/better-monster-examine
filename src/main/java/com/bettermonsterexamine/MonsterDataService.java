@@ -131,7 +131,7 @@ public class MonsterDataService
 		// copy. A stale cache still serves until the refresh lands, so we stay usable offline.
 		// A cache written before a field was added to FIELDS is stale whatever its age: it parses
 		// fine but silently lacks the data the current build reasons over, so the feature that
-		// needed the field looks broken until MAX_AGE elapses (#60).
+		// needed the field looks broken until MAX_AGE elapses.
 		boolean fresh = haveCache && cache.isFresh() && hasCurrentFields(rows);
 		if (fresh)
 		{
@@ -167,7 +167,7 @@ public class MonsterDataService
 		{
 			// The pre-Bucket Weirdgloop dataset.
 			Files.deleteIfExists(new File(CACHE_DIR, "monsters.json").toPath());
-			// Levels only, from before attack speed was gap-filled (#99). A fresh dataset gap-fills
+			// Levels only, from before attack speed was gap-filled. A fresh dataset gap-fills
 			// only when nothing is cached, so the new file has a new name rather than reusing this.
 			Files.deleteIfExists(new File(CACHE_DIR, "level-ranges.json").toPath());
 		}
@@ -231,7 +231,7 @@ public class MonsterDataService
 	// (its Strength and Defence scale with remaining HP, e.g. "270-360"), which is why they rendered
 	// as a dash. There is no Bucket field to fix, so the values come from the page wikitext instead.
 	// Attack speed is INTEGER too, but a non-numeric one ("Varies", "N/A") arrives as 0 rather than
-	// absent, so 0 counts as a gap (#99).
+	// absent, so 0 counts as a gap.
 	//
 	// Rather than make stats fetch per monster — which would cost the whole layer its offline-first,
 	// synchronous render — we only ever look at rows Bucket left a hole in (~50 pages bestiary-wide,
@@ -497,8 +497,8 @@ public class MonsterDataService
 	 *
 	 * <p>The wiki carries a row per <b>sprite</b>, so a quarter of the bestiary is variants that differ
 	 * in nothing the plugin renders: thirteen Hill Giants at level 28, 124 Guards, seventeen Crystal
-	 * implings. Those collapse onto one entry by {@link MonsterData#statKey()} (#62). It also keeps
-	 * {@code (historical)} pages for forms removed from the game, which are dropped (#63) — but only
+	 * implings. Those collapse onto one entry by {@link MonsterData#statKey()}. It also keeps
+	 * {@code (historical)} pages for forms removed from the game, which are dropped — but only
 	 * when a live sibling remains, since a name whose every row is historical (Barbarian woman) would
 	 * otherwise disappear from search entirely, which is worse than showing an outdated form.
 	 *
@@ -555,7 +555,7 @@ public class MonsterDataService
 	 * rows share a blank anchor and often the same combat level, so the level alone can't separate
 	 * them — the row from the monster's own article keeps the plain form and the others are labelled
 	 * from their page ("Troubled Tortugans"), which is how the wiki itself tells them apart. Without
-	 * this they collided into "Level 235" / "Level 235 #2" — labels found nowhere on the wiki (#60).
+	 * this they collided into "Level 235" / "Level 235 #2" — labels found nowhere on the wiki.
 	 */
 	static void assignVersions(List<MonsterData> group)
 	{
@@ -597,7 +597,7 @@ public class MonsterDataService
 			{
 				// Anchors collide across pages too, and there the combat level is no help: the wiki
 				// names these "Level 13", so appending the level restated it and the rows fell through
-				// to "Level 13 #2"/"#3". The page is what actually distinguishes them (#60).
+				// to "Level 13 #2"/"#3". The page is what actually distinguishes them.
 				label = base + " (" + m.pageQualifier() + ")";
 			}
 			else if (spansPages && m.isOwnPage())
@@ -693,7 +693,7 @@ public class MonsterDataService
 	 *
 	 * <p>When the group spans pages, rows from pages that merely reuse the name (a quest fight) are
 	 * set aside first: a bare name means the monster's own article, and a foreign row could otherwise
-	 * win on combat level (#60). A group entirely from one page is unaffected.
+	 * win on combat level. A group entirely from one page is unaffected.
 	 */
 	static MonsterData defaultVariant(List<MonsterData> variants)
 	{
@@ -799,7 +799,7 @@ public class MonsterDataService
 		}
 		// Several variants can share a level with genuinely different stats — Alchemical Hydra's four
 		// phases at 426, Abyssal Sire, Araxxor — so returning the first match showed whichever row
-		// Bucket happened to order first. Reuse the default-variant ranking instead (#62).
+		// Bucket happened to order first. Reuse the default-variant ranking instead.
 		MonsterData best = defaultVariant(atLevel);
 		return best != null ? best : atLevel.get(0);
 	}

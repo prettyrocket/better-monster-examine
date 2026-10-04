@@ -19,7 +19,7 @@ import java.util.regex.Pattern;
  * template an editor drops into an infobox arrives as rendered HTML — {@code {{sic}}} as a
  * {@code <sup>} note, a thin space as {@code &thinsp;}, a footnote as a MediaWiki strip-marker.
  * Rather than chase each template, the rules below are generic: every tag goes, entities decode,
- * and line breaks survive as {@code \n}, since a field can list several values (#24).
+ * and line breaks survive as {@code \n}, since a field can list several values.
  *
  * <p>{@link #bucketGson} applies this to every string of every Bucket row as it is parsed, so
  * nothing downstream has to remember to.

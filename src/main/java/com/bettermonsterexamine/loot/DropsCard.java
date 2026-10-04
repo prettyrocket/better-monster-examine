@@ -65,7 +65,7 @@ public class DropsCard extends JPanel
 	// The icon cell must be at least the native OSRS item sprite (36×32), because a JLabel centres its
 	// icon and the row then crops what doesn't fit. At 28×28 that shaved 4px off each side and 2px off
 	// the top and bottom — and ItemManager draws the stack quantity into those very top-left pixels, so
-	// the tops of the numbers were cut off (#52).
+	// the tops of the numbers were cut off.
 	private static final int ICON_W = 36;
 	private static final int ICON_H = 32;
 	/** Wrap width for a band's title, leaving its line's remainder to the collapse controls. */

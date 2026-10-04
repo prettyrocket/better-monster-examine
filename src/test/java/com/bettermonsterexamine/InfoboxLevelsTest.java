@@ -127,7 +127,7 @@ public class InfoboxLevelsTest
 		}
 	}
 
-	/** Bucket stores a non-numeric attack speed as 0, so the wiki's word is recovered (#99). */
+	/** Bucket stores a non-numeric attack speed as 0, so the wiki's word is recovered. */
 	@Test
 	public void recoversANonNumericAttackSpeed()
 	{
