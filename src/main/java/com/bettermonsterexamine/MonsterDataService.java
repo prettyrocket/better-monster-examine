@@ -2,15 +2,14 @@ package com.bettermonsterexamine;
 
 import com.bettermonsterexamine.wiki.BucketQuery;
 import com.bettermonsterexamine.wiki.WikiApi;
+import com.bettermonsterexamine.wiki.WikiCache;
+import com.bettermonsterexamine.wiki.WikiClient;
 import com.google.gson.Gson;
-import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.reflect.TypeToken;
 import java.io.File;
 import java.io.IOException;
-import java.io.Reader;
 import java.lang.reflect.Type;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -23,19 +22,13 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.Collectors;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.RuneLite;
-import okhttp3.Call;
-import okhttp3.Callback;
-import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.Response;
 
 /**
  * Provides the monster dataset, indexed by NPC id and by name. The whole bestiary is fetched in a
@@ -50,8 +43,6 @@ import okhttp3.Response;
 public class MonsterDataService
 {
 	private static final File CACHE_DIR = new File(RuneLite.RUNELITE_DIR, "better-monster-examine");
-	private static final File CACHE_FILE = new File(CACHE_DIR, "bucket-monsters.json");
-	private static final File LEVELS_CACHE_FILE = new File(CACHE_DIR, "infobox-gaps.json");
 	private static final Duration MAX_AGE = Duration.ofDays(7);
 	/** MediaWiki caps a multi-title query at 50 pages. */
 	private static final int TITLES_PER_QUERY = 50;
@@ -83,7 +74,10 @@ public class MonsterDataService
 	private final Gson gson;
 	/** Parses Bucket rows, cleaning every string as it goes; see WikiSanitizer. */
 	private final Gson bucketGson;
-	private final OkHttpClient http;
+	private final WikiClient wiki;
+	private final WikiCache cache = new WikiCache(new File(CACHE_DIR, "bucket-monsters.json"), MAX_AGE);
+	// Refreshed alongside the dataset rather than on its own clock, so it has no age of its own.
+	private final WikiCache gapsCache = new WikiCache(new File(CACHE_DIR, "infobox-gaps.json"), MAX_AGE);
 
 	private volatile Map<Integer, MonsterData> byId = Collections.emptyMap();
 	// lower-case base name -> variants, insertion-ordered
@@ -96,7 +90,7 @@ public class MonsterDataService
 	{
 		this.gson = gson;
 		this.bucketGson = WikiSanitizer.bucketGson(gson);
-		this.http = http;
+		this.wiki = WikiApi.client(http, gson);
 		executor.execute(this::init);
 	}
 
@@ -114,25 +108,23 @@ public class MonsterDataService
 
 		boolean haveCache = false;
 		List<MonsterData> rows = null;
-		if (CACHE_FILE.isFile())
+		try
 		{
-			try (Reader r = Files.newBufferedReader(CACHE_FILE.toPath(), StandardCharsets.UTF_8))
+			String text = cache.read();
+			BucketResponse cached = text == null ? null : bucketGson.fromJson(text, BucketResponse.class);
+			// Only trust a cache that yielded rows; a truncated/empty/old-format file falls
+			// through to a fetch rather than masquerading as a valid (and "fresh") dataset.
+			if (cached != null && cached.bucket != null && !cached.bucket.isEmpty())
 			{
-				BucketResponse cached = bucketGson.fromJson(r, BucketResponse.class);
-				// Only trust a cache that yielded rows; a truncated/empty/old-format file falls
-				// through to a fetch rather than masquerading as a valid (and "fresh") dataset.
-				if (cached != null && cached.bucket != null && !cached.bucket.isEmpty())
-				{
-					rows = cached.bucket;
-					index(rows);
-					haveCache = true;
-					log.info("Loaded monster dataset from cache ({} entries)", byId.size());
-				}
+				rows = cached.bucket;
+				index(rows);
+				haveCache = true;
+				log.info("Loaded monster dataset from cache ({} entries)", byId.size());
 			}
-			catch (Exception e)
-			{
-				log.debug("Failed to read cached monster dataset", e);
-			}
+		}
+		catch (Exception e)
+		{
+			log.debug("Failed to read cached monster dataset", e);
 		}
 
 		// Use the cache immediately if it's recent; otherwise (missing or stale) pull a fresh
@@ -140,9 +132,7 @@ public class MonsterDataService
 		// A cache written before a field was added to FIELDS is stale whatever its age: it parses
 		// fine but silently lacks the data the current build reasons over, so the feature that
 		// needed the field looks broken until MAX_AGE elapses (#60).
-		boolean fresh = haveCache
-			&& (System.currentTimeMillis() - CACHE_FILE.lastModified()) < MAX_AGE.toMillis()
-			&& hasCurrentFields(rows);
+		boolean fresh = haveCache && cache.isFresh() && hasCurrentFields(rows);
 		if (fresh)
 		{
 			log.debug("Cache hit. Skipping monster data fetch.");
@@ -198,23 +188,8 @@ public class MonsterDataService
 		{
 			// Merge the raw rows rather than the parsed DTOs: the cache keeps Bucket's own JSON, and
 			// re-serialising MonsterData would bake sanitised text and derived fields into it.
-			JsonArray rows = new JsonArray();
-			for (int offset = 0; ; offset += BucketQuery.PAGE_SIZE)
-			{
-				JsonArray page = fetchPage(offset);
-				if (page == null)
-				{
-					return;
-				}
-				rows.addAll(page);
-				if (BucketQuery.isLastPage(page.size()))
-				{
-					break;
-				}
-			}
-
 			JsonObject merged = new JsonObject();
-			merged.add("bucket", rows);
+			merged.add("bucket", QUERY.fetchAll(wiki));
 			String json = gson.toJson(merged);
 			BucketResponse parsed = bucketGson.fromJson(json, BucketResponse.class);
 			if (parsed == null || parsed.bucket == null || parsed.bucket.isEmpty())
@@ -224,7 +199,7 @@ public class MonsterDataService
 			}
 			// Parse (and publish) before caching so a corrupt download never poisons the cache.
 			index(parsed.bucket);
-			writeCache(json);
+			writeCache(cache, json, "monster dataset");
 			log.info("Fetched and cached monster dataset ({} entries)", byId.size());
 			// The dataset is usable now (the gaps read as a dash, as they always did); the
 			// handful of levels Bucket can't carry fill in behind it.
@@ -236,42 +211,15 @@ public class MonsterDataService
 		}
 	}
 
-	/** One page of {@code infobox_monster} rows, as Bucket returned them, or null when the fetch fails. */
-	private JsonArray fetchPage(int offset) throws IOException
-	{
-		HttpUrl url = HttpUrl.get(WikiApi.API_URL).newBuilder()
-			.addQueryParameter("action", "bucket")
-			.addQueryParameter("format", "json")
-			.addQueryParameter("query", QUERY.page(offset))
-			.build();
-		Request req = new Request.Builder().url(url).header("User-Agent", WikiApi.USER_AGENT).build();
-		try (Response res = http.newCall(req).execute())
-		{
-			if (!res.isSuccessful() || res.body() == null)
-			{
-				log.debug("Monster dataset fetch returned {}", res.code());
-				return null;
-			}
-			JsonObject body = gson.fromJson(res.body().string(), JsonObject.class);
-			if (body == null || !body.has("bucket") || !body.get("bucket").isJsonArray())
-			{
-				log.debug("Monster dataset response carried no bucket");
-				return null;
-			}
-			return body.getAsJsonArray("bucket");
-		}
-	}
-
-	private static void writeCache(String json)
+	private static void writeCache(WikiCache cache, String text, String what)
 	{
 		try
 		{
-			Files.createDirectories(CACHE_DIR.toPath());
-			Files.write(CACHE_FILE.toPath(), json.getBytes(StandardCharsets.UTF_8));
+			cache.write(text);
 		}
 		catch (IOException e)
 		{
-			log.debug("Failed to cache monster dataset", e);
+			log.debug("Failed to cache {}", what, e);
 		}
 	}
 
@@ -325,74 +273,39 @@ public class MonsterDataService
 		}
 
 		log.debug("Gap-filling levels from {} wiki page(s)", pages.size());
-		fetchBatches(rows, pages, 0, new ConcurrentHashMap<>());
-	}
-
-	/**
-	 * Fetch the batch starting at {@code from}, then the next once it reports — one request at a time,
-	 * as the MediaWiki API etiquette asks. After the last batch, publish and re-index once.
-	 */
-	private void fetchBatches(List<MonsterData> rows, List<String> pages, int from,
-		Map<String, Map<String, InfoboxLevels.LevelText>> found)
-	{
-		if (from >= pages.size())
+		Map<String, Map<String, InfoboxLevels.LevelText>> found = new HashMap<>();
+		// Blocking, one batch at a time, as MediaWiki's API etiquette asks. This runs on the
+		// executor, from init or after a dataset fetch, never on the client thread or the EDT.
+		for (int i = 0; i < pages.size(); i += TITLES_PER_QUERY)
 		{
-			if (found.isEmpty())
+			List<String> batch = pages.subList(i, Math.min(i + TITLES_PER_QUERY, pages.size()));
+			try
 			{
-				return;
+				String json = wiki.fetch(wiki.action("query")
+					.addQueryParameter("formatversion", "2")
+					.addQueryParameter("prop", "revisions")
+					.addQueryParameter("rvprop", "content")
+					.addQueryParameter("rvslots", "main")
+					.addQueryParameter("redirects", "1")
+					.addQueryParameter("titles", String.join("|", batch))
+					.build());
+				readWikitext(gson.fromJson(json, QueryResponse.class), batch, found);
 			}
-			this.levelRanges = found;
-			writeLevelRanges(found);
-			index(rows);
-			log.info("Recovered values the Bucket API cannot carry for {} monster(s)", found.size());
-			return;
-		}
-		List<String> batch = pages.subList(from, Math.min(from + TITLES_PER_QUERY, pages.size()));
-		fetchWikitext(batch, found, () -> fetchBatches(rows, pages, from + TITLES_PER_QUERY, found));
-	}
-
-	/** One batched {@code action=query} for up to 50 pages' wikitext; parses each into {@code found}. */
-	private void fetchWikitext(List<String> titles, Map<String, Map<String, InfoboxLevels.LevelText>> found,
-		Runnable done)
-	{
-		HttpUrl url = HttpUrl.get(WikiApi.API_URL).newBuilder()
-			.addQueryParameter("action", "query")
-			.addQueryParameter("format", "json")
-			.addQueryParameter("formatversion", "2")
-			.addQueryParameter("prop", "revisions")
-			.addQueryParameter("rvprop", "content")
-			.addQueryParameter("rvslots", "main")
-			.addQueryParameter("redirects", "1")
-			.addQueryParameter("titles", String.join("|", titles))
-			.build();
-		Request req = new Request.Builder().url(url).header("User-Agent", WikiApi.USER_AGENT).build();
-		http.newCall(req).enqueue(new Callback()
-		{
-			@Override
-			public void onFailure(Call call, IOException e)
+			catch (Exception e)
 			{
 				// The dataset still serves; these levels simply stay a dash until the next refresh.
 				log.debug("Level gap-fill fetch failed", e);
-				done.run();
 			}
-
-			@Override
-			public void onResponse(Call call, Response response)
-			{
-				try (Response res = response)
-				{
-					if (res.isSuccessful() && res.body() != null)
-					{
-						readWikitext(gson.fromJson(res.body().string(), QueryResponse.class), titles, found);
-					}
-				}
-				catch (Exception e)
-				{
-					log.debug("Level gap-fill parse failed", e);
-				}
-				done.run();
-			}
-		});
+		}
+		if (found.isEmpty())
+		{
+			return;
+		}
+		// Publish once, after every batch, so the dataset is re-indexed only once.
+		this.levelRanges = found;
+		writeCache(gapsCache, gson.toJson(found, LEVEL_RANGES_TYPE), "level ranges");
+		index(rows);
+		log.info("Recovered values the Bucket API cannot carry for {} monster(s)", found.size());
 	}
 
 	/**
@@ -459,13 +372,11 @@ public class MonsterDataService
 
 	private void readLevelRanges()
 	{
-		if (!LEVELS_CACHE_FILE.isFile())
+		try
 		{
-			return;
-		}
-		try (Reader r = Files.newBufferedReader(LEVELS_CACHE_FILE.toPath(), StandardCharsets.UTF_8))
-		{
-			Map<String, Map<String, InfoboxLevels.LevelText>> cached = gson.fromJson(r, LEVEL_RANGES_TYPE);
+			String text = gapsCache.read();
+			Map<String, Map<String, InfoboxLevels.LevelText>> cached =
+				text == null ? null : gson.fromJson(text, LEVEL_RANGES_TYPE);
 			if (cached != null && !cached.isEmpty())
 			{
 				this.levelRanges = cached;
@@ -474,20 +385,6 @@ public class MonsterDataService
 		catch (Exception e)
 		{
 			log.debug("Failed to read cached level ranges", e);
-		}
-	}
-
-	private void writeLevelRanges(Map<String, Map<String, InfoboxLevels.LevelText>> ranges)
-	{
-		try
-		{
-			Files.createDirectories(CACHE_DIR.toPath());
-			Files.write(LEVELS_CACHE_FILE.toPath(), gson.toJson(ranges, LEVEL_RANGES_TYPE)
-				.getBytes(StandardCharsets.UTF_8));
-		}
-		catch (IOException e)
-		{
-			log.debug("Failed to cache level ranges", e);
 		}
 	}
 
