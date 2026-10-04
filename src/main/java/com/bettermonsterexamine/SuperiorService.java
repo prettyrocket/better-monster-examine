@@ -1,10 +1,10 @@
 package com.bettermonsterexamine;
 
+import com.bettermonsterexamine.wiki.TitleResolver;
 import com.bettermonsterexamine.wiki.WikiApi;
 import com.bettermonsterexamine.wiki.WikiCache;
 import com.bettermonsterexamine.wiki.WikiClient;
 import com.google.gson.Gson;
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.reflect.TypeToken;
 import java.io.File;
@@ -38,8 +38,6 @@ import okhttp3.OkHttpClient;
 public class SuperiorService
 {
 	private static final String PAGE = "Superior slayer monster";
-	/** MediaWiki caps a multi-title query at 50 pages. */
-	private static final int TITLES_PER_QUERY = 50;
 	private static final Type PAIRS_TYPE = new TypeToken<Map<String, String>>()
 	{
 	}.getType();
@@ -136,33 +134,21 @@ public class SuperiorService
 	private Map<String, String> redirectTargets(Map<String, String> pairs)
 	{
 		Map<String, String> out = new HashMap<>();
-		List<String> titles = new ArrayList<>(pairs.keySet());
-		for (int i = 0; i < titles.size(); i += TITLES_PER_QUERY)
+		for (List<String> batch : TitleResolver.batches(new ArrayList<>(pairs.keySet())))
 		{
 			try
 			{
-				JsonObject query = wiki.fetchJson(wiki.action("query")
+				TitleResolver resolver = new TitleResolver();
+				resolver.addAll(wiki.fetchJson(wiki.action("query")
 					.addQueryParameter("redirects", "1")
-					.addQueryParameter("titles",
-						String.join("|", titles.subList(i, Math.min(i + TITLES_PER_QUERY, titles.size()))))
-					.build()).getAsJsonObject("query");
-				// "normalized" first-letter-capitalises a title; "redirects" then follows it.
-				for (String kind : new String[]{"normalized", "redirects"})
+					.addQueryParameter("titles", String.join("|", batch))
+					.build()).getAsJsonObject("query"));
+				for (String linked : batch)
 				{
-					if (query == null || !query.has(kind))
+					String target = resolver.resolve(linked);
+					if (!target.equalsIgnoreCase(linked))
 					{
-						continue;
-					}
-					for (JsonElement el : query.getAsJsonArray(kind))
-					{
-						JsonObject r = el.getAsJsonObject();
-						String superior = pairs.containsKey(r.get("from").getAsString())
-							? pairs.get(r.get("from").getAsString())
-							: out.get(r.get("from").getAsString());
-						if (superior != null)
-						{
-							out.put(r.get("to").getAsString(), superior);
-						}
+						out.put(target, pairs.get(linked));
 					}
 				}
 			}
