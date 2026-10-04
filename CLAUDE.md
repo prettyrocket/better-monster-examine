@@ -89,6 +89,16 @@ sub-package for the drops/loot module (the first sub-package; the existing flat 
 below). (Stats began as a two-source design — Weirdgloop `monsters.json` + per-page wikitext
 scraping — cut over to Bucket in #26.)
 
+Every wiki request goes through **`com.bettermonsterexamine.wiki`**, a folder meant to be
+**copied into other projects**. It depends only on OkHttp, Gson and the JDK, so keep RuneLite,
+Lombok and the plugin's own classes out of it. `WikiClient` makes blocking GETs; `WikiCache` is one
+cached file with a maximum age (apply a download, *then* write it); `BucketQuery` pages past Bucket's
+silent 5000-row cap; `TitleResolver` handles 50-title batches and redirects; `WikitextTemplates`
+reads templates out of wikitext. `WikiApi` is the one plugin-specific file: the OSRS Wiki URL and
+our User-Agent, which includes a contact link because that is the wiki's one ask of API users.
+Services run requests on the shared executor, so they go out one at a time, as MediaWiki's etiquette
+asks. The domain parsers (`InfoboxLevels`, the drops HTML parse, the superior table) sit on top.
+
 ### Data flow
 
 1. **`MonsterDataService`** (singleton) — the dataset. Pulls the whole `infobox_monster` bucket from
