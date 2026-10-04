@@ -209,7 +209,7 @@ class MonsterHeader extends JPanel
 
 	private static String wikiUrl(MonsterData m)
 	{
-		return "https://oldschool.runescape.wiki/w/" + m.getName().replace(' ', '_');
+		return "https://oldschool.runescape.wiki/w/" + m.getWikiPage().replace(' ', '_');
 	}
 
 	// --------------------------------------------------------------- layout helpers
