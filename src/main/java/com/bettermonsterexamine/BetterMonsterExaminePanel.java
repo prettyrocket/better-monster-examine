@@ -357,7 +357,7 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		header.show(m, currentVariants);
 		card.show(m);
 		// Warm this monster's drops so the Drops tab is ready; render now if it's the active tab.
-		drops.request(m.getName());
+		drops.request(m.getWikiPage());
 		if (dropsTabActive)
 		{
 			renderDrops();
@@ -457,15 +457,15 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		}
 		// Ensure the page is loading, then show whatever's parsed so far. A null table means the
 		// page hasn't landed yet; the update listener re-renders when it does.
-		drops.request(m.getName());
-		dropsCard.show(drops.tableFor(m.getName()));
+		drops.request(m.getWikiPage());
+		dropsCard.show(drops.tableFor(m.getWikiPage()));
 	}
 
 	/** A page's drops landed async: re-render the Drops tab if it's showing this monster. */
 	private void onDropsLoaded(String page)
 	{
 		MonsterData m = currentSelection;
-		if (dropsTabActive && m != null && m.getName().equalsIgnoreCase(page))
+		if (dropsTabActive && m != null && m.getWikiPage().equalsIgnoreCase(page))
 		{
 			renderDrops();
 		}
