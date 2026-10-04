@@ -24,6 +24,13 @@ public final class WikiApi
 	 */
 	private static final Duration SHARED_CACHE_AGE = Duration.ofHours(1);
 
+	/**
+	 * How long a page-backed cache may go on revalidating by revision id before it downloads in full
+	 * anyway. Template edits don't change a page's revision, so this is what eventually picks up
+	 * a change to a shared drop table.
+	 */
+	public static final Duration FULL_REFETCH = Duration.ofDays(30);
+
 	/** A client for the OSRS Wiki that identifies as this plugin. */
 	public static WikiClient client(OkHttpClient http, Gson gson)
 	{

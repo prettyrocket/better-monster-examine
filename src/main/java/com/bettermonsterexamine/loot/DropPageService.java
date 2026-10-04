@@ -146,8 +146,9 @@ public class DropPageService
 			log.debug("Failed to read cached drop page for {}", pageName, e);
 		}
 
-		if (haveCache && cache.isFresh())
+		if (haveCache && (cache.isFresh() || cache.revalidate(wiki, pageName, WikiApi.FULL_REFETCH)))
 		{
+			// Fresh, or aged out but nobody has edited the page since: keep it and skip the download.
 			loading.remove(key);
 		}
 		else
@@ -166,12 +167,13 @@ public class DropPageService
 		{
 			String json = wiki.fetch(wiki.action("parse")
 				.addQueryParameter("page", pageName)
-				.addQueryParameter("prop", "text")
+				.addQueryParameter("prop", "text|revid")
 				// Follow redirects: plenty of monster names are redirect pages ("Hill giant" →
 				// "Hill Giant"), and without this we'd parse the redirect stub and show no drops.
 				.addQueryParameter("redirects", "1")
 				.build());
-			List<DropRow> rows = parse(htmlOf(gson.fromJson(json, ParseResponse.class)));
+			ParseResponse response = gson.fromJson(json, ParseResponse.class);
+			List<DropRow> rows = parse(htmlOf(response));
 			if (rows == null)
 			{
 				log.debug("Drop page for {} carried no rendered text", pageName);
@@ -179,7 +181,7 @@ public class DropPageService
 			}
 			// Parse (and publish) before caching so a corrupt download never poisons the cache.
 			publish(key, rows, pageName);
-			cache.write(json);
+			cache.write(json, revisionOf(response));
 			log.debug("Parsed and cached {} drop rows for {}", rows.size(), pageName);
 		}
 		catch (Exception e)
@@ -200,6 +202,11 @@ public class DropPageService
 		{
 			listener.accept(pageName);
 		}
+	}
+
+	private static long revisionOf(ParseResponse response)
+	{
+		return response == null || response.parse == null ? 0 : response.parse.revid;
 	}
 
 	private static String htmlOf(ParseResponse response)
@@ -473,6 +480,7 @@ public class DropPageService
 	static final class Parse
 	{
 		private Text text;
+		private long revid;
 	}
 
 	static final class Text

@@ -91,8 +91,13 @@ scraping — cut over to Bucket in #26.)
 
 Every wiki request goes through **`com.bettermonsterexamine.wiki`**, a folder meant to be
 **copied into other projects**. It depends only on OkHttp, Gson and the JDK, so keep RuneLite,
-Lombok and the plugin's own classes out of it. `WikiClient` makes blocking GETs; `WikiCache` is one
-cached file with a maximum age (apply a download, *then* write it); `BucketQuery` pages past Bucket's
+Lombok and the plugin's own classes out of it. `WikiClient` makes blocking GETs (with `maxage`/`smaxage`, so
+Cloudflare shares answers across users); `WikiCache` is one cached file with a maximum age
+(apply a download, *then* write it). A page-backed cache (drop pages, the Superior page) also stores
+the page's revision id in a `.rev` sidecar. Once the file ages out, it checks the revision (~1.5 KB)
+and only re-downloads an edited page, with a full download every `WikiApi.FULL_REFETCH` (30 days)
+regardless, because template edits don't change a page's revision. Don't switch that check to
+`touched`: every page is touched daily by the price-data bot. `BucketQuery` pages past Bucket's
 silent 5000-row cap; `TitleResolver` handles 50-title batches and redirects; `WikitextTemplates`
 reads templates out of wikitext. `WikiApi` is the one plugin-specific file: the OSRS Wiki URL and
 our User-Agent, which includes a contact link because that is the wiki's one ask of API users.
