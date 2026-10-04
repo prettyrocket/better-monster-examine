@@ -1,15 +1,13 @@
 package com.bettermonsterexamine.loot;
 
 import com.bettermonsterexamine.wiki.WikiApi;
+import com.bettermonsterexamine.wiki.WikiCache;
+import com.bettermonsterexamine.wiki.WikiClient;
 import com.google.gson.Gson;
 import com.google.gson.annotations.SerializedName;
 import java.io.File;
-import java.io.IOException;
-import java.io.Reader;
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -25,10 +23,7 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.RuneLite;
-import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.Response;
 
 /**
  * Provides a monster's drop tables on demand by parsing its <b>rendered OSRS Wiki page</b> (the
@@ -69,7 +64,7 @@ public class DropPageService
 		Pattern.compile("<span[^>]*data-drop-oneover=\"([^\"]*)\"[^>]*>.*?</span>", Pattern.DOTALL);
 
 	private final Gson gson;
-	private final OkHttpClient http;
+	private final WikiClient wiki;
 	private final ScheduledExecutorService executor;
 
 	/** lower-case page name -> that page's parsed drop rows; an entry means "loaded". */
@@ -83,7 +78,7 @@ public class DropPageService
 	DropPageService(Gson gson, OkHttpClient http, ScheduledExecutorService executor)
 	{
 		this.gson = gson;
-		this.http = http;
+		this.wiki = WikiApi.client(http, gson);
 		this.executor = executor;
 	}
 
@@ -134,33 +129,30 @@ public class DropPageService
 	 */
 	private void load(String pageName, String key)
 	{
-		File cacheFile = cacheFileFor(key);
+		WikiCache cache = cacheFor(key);
 		boolean haveCache = false;
-		if (cacheFile.isFile())
+		try
 		{
-			try (Reader r = Files.newBufferedReader(cacheFile.toPath(), StandardCharsets.UTF_8))
+			String text = cache.read();
+			List<DropRow> rows = text == null ? null : parse(htmlOf(gson.fromJson(text, ParseResponse.class)));
+			if (rows != null)
 			{
-				List<DropRow> rows = parse(htmlOf(gson.fromJson(r, ParseResponse.class)));
-				if (rows != null)
-				{
-					publish(key, rows, pageName);
-					haveCache = true;
-				}
-			}
-			catch (Exception e)
-			{
-				log.debug("Failed to read cached drop page for {}", pageName, e);
+				publish(key, rows, pageName);
+				haveCache = true;
 			}
 		}
+		catch (Exception e)
+		{
+			log.debug("Failed to read cached drop page for {}", pageName, e);
+		}
 
-		boolean fresh = haveCache && (System.currentTimeMillis() - cacheFile.lastModified()) < MAX_AGE.toMillis();
-		if (fresh)
+		if (haveCache && cache.isFresh())
 		{
 			loading.remove(key);
 		}
 		else
 		{
-			fetch(pageName, key, cacheFile);
+			fetch(pageName, key, cache);
 		}
 	}
 
@@ -168,40 +160,27 @@ public class DropPageService
 	 * Fetch and parse the monster's wiki page synchronously on the executor thread — never the client
 	 * thread or EDT — then publish and cache it. A failed request leaves any served stale cache in place.
 	 */
-	private void fetch(String pageName, String key, File cacheFile)
+	private void fetch(String pageName, String key, WikiCache cache)
 	{
 		try
 		{
-			HttpUrl url = HttpUrl.get(WikiApi.API_URL).newBuilder()
-				.addQueryParameter("action", "parse")
+			String json = wiki.fetch(wiki.action("parse")
 				.addQueryParameter("page", pageName)
 				.addQueryParameter("prop", "text")
-				.addQueryParameter("format", "json")
 				// Follow redirects: plenty of monster names are redirect pages ("Hill giant" →
 				// "Hill Giant"), and without this we'd parse the redirect stub and show no drops.
 				.addQueryParameter("redirects", "1")
-				.build();
-			Request req = new Request.Builder().url(url).header("User-Agent", WikiApi.USER_AGENT).build();
-			try (Response res = http.newCall(req).execute())
+				.build());
+			List<DropRow> rows = parse(htmlOf(gson.fromJson(json, ParseResponse.class)));
+			if (rows == null)
 			{
-				if (!res.isSuccessful() || res.body() == null)
-				{
-					log.debug("Drop page fetch for {} returned {}", pageName, res.code());
-					return;
-				}
-				String json = res.body().string();
-				String html = htmlOf(gson.fromJson(json, ParseResponse.class));
-				List<DropRow> rows = parse(html);
-				if (rows == null)
-				{
-					log.debug("Drop page for {} carried no rendered text", pageName);
-					return;
-				}
-				// Parse (and publish) before caching so a corrupt download never poisons the cache.
-				publish(key, rows, pageName);
-				writeCache(cacheFile, json);
-				log.debug("Parsed and cached {} drop rows for {}", rows.size(), pageName);
+				log.debug("Drop page for {} carried no rendered text", pageName);
+				return;
 			}
+			// Parse (and publish) before caching so a corrupt download never poisons the cache.
+			publish(key, rows, pageName);
+			cache.write(json);
+			log.debug("Parsed and cached {} drop rows for {}", rows.size(), pageName);
 		}
 		catch (Exception e)
 		{
@@ -447,24 +426,11 @@ public class DropPageService
 		return sb.toString().replace('\u00A0', ' ').replaceAll("\\s+", " ").trim();
 	}
 
-	private static File cacheFileFor(String key)
+	private static WikiCache cacheFor(String key)
 	{
 		// Slugify for a safe filename, disambiguated with a hash so distinct names never collide.
 		String slug = key.replaceAll("[^a-z0-9]+", "-");
-		return new File(CACHE_DIR, slug + "-" + Integer.toHexString(key.hashCode()) + ".json");
-	}
-
-	private static void writeCache(File cacheFile, String json)
-	{
-		try
-		{
-			Files.createDirectories(CACHE_DIR.toPath());
-			Files.write(cacheFile.toPath(), json.getBytes(StandardCharsets.UTF_8));
-		}
-		catch (IOException e)
-		{
-			log.debug("Failed to cache drop page to {}", cacheFile, e);
-		}
+		return new WikiCache(new File(CACHE_DIR, slug + "-" + Integer.toHexString(key.hashCode()) + ".json"), MAX_AGE);
 	}
 
 	/** An {@code <h2>} heading: where its content starts (just after {@code </h2>}) and its cleaned title. */
