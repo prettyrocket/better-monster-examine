@@ -1,7 +1,10 @@
 package com.bettermonsterexamine;
 
+import com.bettermonsterexamine.wiki.BucketQuery;
 import com.bettermonsterexamine.wiki.WikiApi;
 import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
 import com.google.gson.reflect.TypeToken;
 import java.io.File;
 import java.io.IOException;
@@ -74,6 +77,8 @@ public class MonsterDataService
 		"slayer_level", "slayer_experience", "slayer_category", "assigned_by", "uses_skill",
 		"image", "league_region", "release_date", "is_members_only",
 	};
+
+	private static final BucketQuery QUERY = new BucketQuery("infobox_monster", FIELDS);
 
 	private final Gson gson;
 	/** Parses Bucket rows, cleaning every string as it goes; see WikiSanitizer. */
@@ -182,67 +187,79 @@ public class MonsterDataService
 		}
 	}
 
+	/**
+	 * Fetch the whole bestiary a Bucket page at a time, synchronously on the executor (init's thread),
+	 * then publish and cache it. Bucket clamps a page to 5000 rows without saying so, so a single
+	 * query would silently lose every row past that once the bestiary outgrows it.
+	 */
 	private void fetch()
+	{
+		try
+		{
+			// Merge the raw rows rather than the parsed DTOs: the cache keeps Bucket's own JSON, and
+			// re-serialising MonsterData would bake sanitised text and derived fields into it.
+			JsonArray rows = new JsonArray();
+			for (int offset = 0; ; offset += BucketQuery.PAGE_SIZE)
+			{
+				JsonArray page = fetchPage(offset);
+				if (page == null)
+				{
+					return;
+				}
+				rows.addAll(page);
+				if (BucketQuery.isLastPage(page.size()))
+				{
+					break;
+				}
+			}
+
+			JsonObject merged = new JsonObject();
+			merged.add("bucket", rows);
+			String json = gson.toJson(merged);
+			BucketResponse parsed = bucketGson.fromJson(json, BucketResponse.class);
+			if (parsed == null || parsed.bucket == null || parsed.bucket.isEmpty())
+			{
+				log.debug("Monster dataset response carried no rows");
+				return;
+			}
+			// Parse (and publish) before caching so a corrupt download never poisons the cache.
+			index(parsed.bucket);
+			writeCache(json);
+			log.info("Fetched and cached monster dataset ({} entries)", byId.size());
+			// The dataset is usable now (the gaps read as a dash, as they always did); the
+			// handful of levels Bucket can't carry fill in behind it.
+			gapFill(parsed.bucket);
+		}
+		catch (Exception e)
+		{
+			log.debug("Monster dataset fetch/parse failed", e);
+		}
+	}
+
+	/** One page of {@code infobox_monster} rows, as Bucket returned them, or null when the fetch fails. */
+	private JsonArray fetchPage(int offset) throws IOException
 	{
 		HttpUrl url = HttpUrl.get(WikiApi.API_URL).newBuilder()
 			.addQueryParameter("action", "bucket")
 			.addQueryParameter("format", "json")
-			.addQueryParameter("query", buildQuery())
+			.addQueryParameter("query", QUERY.page(offset))
 			.build();
 		Request req = new Request.Builder().url(url).header("User-Agent", WikiApi.USER_AGENT).build();
-		http.newCall(req).enqueue(new Callback()
+		try (Response res = http.newCall(req).execute())
 		{
-			@Override
-			public void onFailure(Call call, IOException e)
+			if (!res.isSuccessful() || res.body() == null)
 			{
-				log.debug("Monster dataset fetch failed", e);
+				log.debug("Monster dataset fetch returned {}", res.code());
+				return null;
 			}
-
-			@Override
-			public void onResponse(Call call, Response response)
+			JsonObject body = gson.fromJson(res.body().string(), JsonObject.class);
+			if (body == null || !body.has("bucket") || !body.get("bucket").isJsonArray())
 			{
-				try (Response res = response)
-				{
-					if (!res.isSuccessful() || res.body() == null)
-					{
-						return;
-					}
-					String json = res.body().string();
-					BucketResponse parsed = bucketGson.fromJson(json, BucketResponse.class);
-					if (parsed == null || parsed.bucket == null || parsed.bucket.isEmpty())
-					{
-						log.debug("Monster dataset response carried no rows");
-						return;
-					}
-					// Parse (and publish) before caching so a corrupt download never poisons the cache.
-					index(parsed.bucket);
-					writeCache(json);
-					log.info("Fetched and cached monster dataset ({} entries)", byId.size());
-					// The dataset is usable now (the gaps read as a dash, as they always did); the
-					// handful of levels Bucket can't carry fill in behind it.
-					gapFill(parsed.bucket);
-				}
-				catch (Exception e)
-				{
-					log.debug("Monster dataset fetch/parse failed", e);
-				}
+				log.debug("Monster dataset response carried no bucket");
+				return null;
 			}
-		});
-	}
-
-	/** Build the uncapped {@code select(…).run()} Bucket query over {@code infobox_monster}. */
-	private static String buildQuery()
-	{
-		StringBuilder sel = new StringBuilder();
-		for (String f : FIELDS)
-		{
-			if (sel.length() > 0)
-			{
-				sel.append(',');
-			}
-			sel.append('\'').append(f).append('\'');
+			return body.getAsJsonArray("bucket");
 		}
-		return "bucket('infobox_monster').select(" + sel + ").limit(5000).run()";
 	}
 
 	private static void writeCache(String json)
