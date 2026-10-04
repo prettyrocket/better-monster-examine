@@ -34,6 +34,7 @@ import javax.swing.SwingUtilities;
 import javax.swing.border.EmptyBorder;
 import net.runelite.api.ItemComposition;
 import net.runelite.client.callback.ClientThread;
+import net.runelite.client.config.ConfigManager;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
@@ -48,7 +49,8 @@ import net.runelite.http.api.item.ItemPrice;
  * left-aligned under the name below — grouped into the wiki's own sections in page order (Herbs, Gem/Rare drop
  * table, Catacombs/Wilderness tables, …). Where the wiki splits a monster's drops by location or combat
  * level, each of those groups gets a band above its sections, so tables that belong to one variant are
- * never read as the monster's drops as a whole. The stack's GE value sits under the quantity;
+ * never read as the monster's drops as a whole. The stack's GE value sits under the quantity,
+ * coloured by the player's Ground Items value tiers ({@link ValueTiers});
  * the per-item GE / High Alch comparison goes in the row's hover tooltip.
  *
  * <p>The drop list is parsed from the monster's wiki page ({@link DropPageService}), so it arrives
@@ -93,6 +95,7 @@ public class DropsCard extends JPanel
 	private static final Color CB_ULTRA = new Color(0xcc, 0x79, 0xa7);       // reddish purple
 
 	private final ItemManager itemManager;
+	private final ConfigManager configManager;
 	private final ClientThread clientThread;
 	private final ItemIdService itemIds;
 	private final BetterMonsterExamineConfig config;
@@ -108,9 +111,11 @@ public class DropsCard extends JPanel
 	/** The table on screen, so a collapse-all can re-render through {@link #show} rather than by hand. */
 	private DropTable current;
 
-	public DropsCard(ItemManager itemManager, ClientThread clientThread, ItemIdService itemIds, BetterMonsterExamineConfig config, NotEnoughRunesLink ner)
+	public DropsCard(ItemManager itemManager, ClientThread clientThread, ItemIdService itemIds, BetterMonsterExamineConfig config,
+		ConfigManager configManager, NotEnoughRunesLink ner)
 	{
 		this.itemManager = itemManager;
+		this.configManager = configManager;
 		this.clientThread = clientThread;
 		this.itemIds = itemIds;
 		this.config = config;
@@ -752,6 +757,8 @@ public class DropsCard extends JPanel
 		{
 			long alchRuneCost = itemManager.getItemPrice(NATURE_RUNE_ID)
 				+ FIRE_RUNES_PER_ALCH * itemManager.getItemPrice(FIRE_RUNE_ID);
+			// Read per render, so a change to the player's Ground Items tiers shows on the next one.
+			ValueTiers tiers = ValueTiers.fromGroundItems(configManager);
 			List<Runnable> updates = new ArrayList<>();
 			for (PriceCell c : cells)
 			{
@@ -775,6 +782,7 @@ public class DropsCard extends JPanel
 				AsyncBufferedImage img = itemManager.getImage(iconId, c.quantity, stackable);
 				String tip = priceTooltip(c.itemName, ge, ha, alchRuneCost);
 				String value = DropFormat.value(ge, c.quantityText);
+				Color valueColor = tiers.colorFor(DropFormat.tierValue(ge, c.quantityText));
 				updates.add(() ->
 				{
 					if (img != null)
@@ -788,6 +796,7 @@ public class DropsCard extends JPanel
 					if (c.value != null)
 					{
 						c.value.setText(value);
+						c.value.setForeground(valueColor != null ? valueColor : ColorScheme.LIGHT_GRAY_COLOR);
 					}
 				});
 			}

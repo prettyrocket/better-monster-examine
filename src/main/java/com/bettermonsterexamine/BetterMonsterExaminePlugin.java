@@ -10,6 +10,7 @@ import java.util.Collections;
 import com.bettermonsterexamine.loot.DropPageService;
 import com.bettermonsterexamine.loot.DropsCard;
 import com.bettermonsterexamine.loot.ItemIdService;
+import com.bettermonsterexamine.loot.ValueTiers;
 import com.google.gson.Gson;
 import com.google.inject.Provides;
 import lombok.extern.slf4j.Slf4j;
@@ -204,7 +205,7 @@ public class BetterMonsterExaminePlugin extends Plugin
 	{
 		log.debug("Adding side panel navigation button");
 		BufferedImage icon = titleIcon;
-		DropsCard dropsCard = new DropsCard(itemManager, clientThread, itemIdService, config, new NotEnoughRunesLink(eventBus, pluginManager, config));
+		DropsCard dropsCard = new DropsCard(itemManager, clientThread, itemIdService, config, configManager, new NotEnoughRunesLink(eventBus, pluginManager, config));
 		monsterStatsPanel = new BetterMonsterExaminePanel(monsterIcons, dataService, dropPageService, itemIdService, dropsCard, config, configManager, gson, () -> playerCombatLevel, () -> playerHpLevel, () -> playerSlayerLevel, icon);
 		// Mirror whatever the panel is showing into the overlay (when the overlay is a target).
 		monsterStatsPanel.setSelectionListener(this::showInOverlay);
@@ -239,6 +240,16 @@ public class BetterMonsterExaminePlugin extends Plugin
 	@Subscribe
 	public void onConfigChanged(ConfigChanged event)
 	{
+		// Drop values take Ground Items' tier colours, so follow a change to those too.
+		if (event.getGroup().equals(ValueTiers.GROUP) && ValueTiers.isTierSetting(event.getKey()))
+		{
+			BetterMonsterExaminePanel panel = monsterStatsPanel;
+			if (panel != null)
+			{
+				SwingUtilities.invokeLater(panel::refresh);
+			}
+			return;
+		}
 		if (!event.getGroup().equals(CONFIG_GROUP))
 		{
 			return;

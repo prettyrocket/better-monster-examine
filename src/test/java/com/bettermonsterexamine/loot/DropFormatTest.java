@@ -61,6 +61,16 @@ public class DropFormatTest
 	}
 
 	@Test
+	public void tierValueIsTheStackAtTheMidpointOfTheQuantity()
+	{
+		assertEquals(250, DropFormat.tierValue(250, "1"));
+		assertEquals(2_400, DropFormat.tierValue(1_200, "1-3 (noted)"));
+		assertEquals(7_100_000, DropFormat.tierValue(100_000, "57; 85 (noted)"));
+		assertEquals(0, DropFormat.tierValue(0, "1"));
+		assertEquals(0, DropFormat.tierValue(500, "N/A"));
+	}
+
+	@Test
 	public void valueIsBlankWithoutAPriceOrACount()
 	{
 		assertEquals("", DropFormat.value(0, "1"));

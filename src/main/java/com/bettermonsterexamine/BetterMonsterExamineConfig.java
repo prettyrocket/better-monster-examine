@@ -182,7 +182,7 @@ public interface BetterMonsterExamineConfig extends Config
 	@ConfigItem(
 		keyName = "showDropValues",
 		name = "Drop values",
-		description = "Show each drop's GE value under its quantity on the Drops tab. GE and High Alch are always in the row's tooltip.",
+		description = "Show each drop's GE value under its quantity on the Drops tab, coloured by your Ground Items value tiers. GE and High Alch are always in the row's tooltip.",
 		section = panelSection,
 		position = 2
 	)
