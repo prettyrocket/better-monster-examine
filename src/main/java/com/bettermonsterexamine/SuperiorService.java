@@ -4,6 +4,7 @@ import com.bettermonsterexamine.wiki.TitleResolver;
 import com.bettermonsterexamine.wiki.WikiApi;
 import com.bettermonsterexamine.wiki.WikiCache;
 import com.bettermonsterexamine.wiki.WikiClient;
+import com.bettermonsterexamine.wiki.WikitextTemplates;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.reflect.TypeToken;
@@ -246,40 +247,15 @@ public class SuperiorService
 		return cells;
 	}
 
-	/** Index of the {@code |} splitting a cell's attributes from its content, ignoring links and templates. */
-	private static int attributeBar(String cell)
-	{
-		int depth = 0;
-		for (int i = 0; i < cell.length(); i++)
-		{
-			char ch = cell.charAt(i);
-			if ((ch == '[' || ch == '{') && i + 1 < cell.length() && cell.charAt(i + 1) == ch)
-			{
-				depth++;
-				i++;
-			}
-			else if ((ch == ']' || ch == '}') && i + 1 < cell.length() && cell.charAt(i + 1) == ch)
-			{
-				depth--;
-				i++;
-			}
-			else if (ch == '|' && depth == 0)
-			{
-				return i;
-			}
-		}
-		return -1;
-	}
-
 	private static String attributes(String cell)
 	{
-		int bar = attributeBar(cell);
+		int bar = WikitextTemplates.indexOfBar(cell, 0);
 		return bar < 0 ? "" : cell.substring(0, bar);
 	}
 
 	private static String content(String cell)
 	{
-		int bar = attributeBar(cell);
+		int bar = WikitextTemplates.indexOfBar(cell, 0);
 		return (bar < 0 ? cell : cell.substring(bar + 1)).trim();
 	}
 
