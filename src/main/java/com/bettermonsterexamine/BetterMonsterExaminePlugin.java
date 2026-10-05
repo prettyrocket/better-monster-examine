@@ -115,14 +115,8 @@ public class BetterMonsterExaminePlugin extends Plugin
 	private volatile NavigationButton navButton;
 	private volatile BetterMonsterExaminePanel monsterStatsPanel;
 	private volatile MonsterCardOverlay cardOverlay;
+	private volatile OverlayController overlayController;
 	private MouseAdapter overlayMouseListener;
-	// The monster the overlay currently shows (name + version), or null when hidden; lets a
-	// second Stats click on the same monster toggle the overlay off. Touched from the client
-	// thread (toggle) and an OkHttp callback (wiki landing), so volatile.
-	private volatile String overlayKey;
-	// The monster the user explicitly closed; suppresses the panel re-feeding it (e.g. when the
-	// wiki fields land) so a dismissed overlay stays closed until stats are requested again.
-	private volatile String dismissedKey;
 	private volatile BufferedImage titleIcon;
 	// Cached on the client thread (GameTick) so the panel can read them safely off-thread (EDT).
 	private volatile int playerCombatLevel = -1;
@@ -150,6 +144,7 @@ public class BetterMonsterExaminePlugin extends Plugin
 		titleIcon = ImageUtil.loadImageResource(getClass(), "/icon.png");
 		cardOverlay = new MonsterCardOverlay(config, monsterIcons, () -> playerCombatLevel, () -> playerHpLevel, () -> playerSlayerLevel);
 		overlayManager.add(cardOverlay);
+		overlayController = new OverlayController(cardOverlay, () -> config.statsRenderTarget().showsOverlay());
 
 		// Route left-clicks on the overlay's tab strip to the overlay, consuming them so they
 		// don't also walk the player or interact with the scene underneath.
@@ -159,11 +154,12 @@ public class BetterMonsterExaminePlugin extends Plugin
 			public MouseEvent mousePressed(MouseEvent event)
 			{
 				MonsterCardOverlay overlay = cardOverlay;
-				if (overlay != null && event.getButton() == MouseEvent.BUTTON1)
+				OverlayController controller = overlayController;
+				if (overlay != null && controller != null && event.getButton() == MouseEvent.BUTTON1)
 				{
 					if (overlay.closeAt(event.getX(), event.getY()))
 					{
-						dismissOverlay();
+						controller.dismiss();
 						event.consume();
 						return event;
 					}
@@ -199,7 +195,7 @@ public class BetterMonsterExaminePlugin extends Plugin
 			overlayManager.remove(cardOverlay);
 			cardOverlay = null;
 		}
-		overlayKey = null;
+		overlayController = null;
 		examineSummaryQueue.clear();
 		log.info("Better Monster Examine stopped");
 	}
@@ -211,7 +207,14 @@ public class BetterMonsterExaminePlugin extends Plugin
 		DropsCard dropsCard = new DropsCard(itemManager, clientThread, itemIdService, config, configManager, new NotEnoughRunesLink(eventBus, pluginManager, config));
 		monsterStatsPanel = new BetterMonsterExaminePanel(monsterIcons, dataService, superiorService, dropPageService, itemIdService, dropsCard, config, configManager, gson, () -> playerCombatLevel, () -> playerHpLevel, () -> playerSlayerLevel, icon);
 		// Mirror whatever the panel is showing into the overlay (when the overlay is a target).
-		monsterStatsPanel.setSelectionListener(this::showInOverlay);
+		monsterStatsPanel.setSelectionListener(m ->
+		{
+			OverlayController controller = overlayController;
+			if (controller != null)
+			{
+				controller.mirror(m);
+			}
+		});
 		navButton = NavigationButton.builder()
 				.tooltip("Better Monster Examine")
 				.icon(icon)
@@ -292,9 +295,10 @@ public class BetterMonsterExaminePlugin extends Plugin
 		else if (event.getKey().equals("statsRenderTarget"))
 		{
 			// If the overlay is no longer a render target, hide whatever it's showing.
-			if (!config.statsRenderTarget().showsOverlay())
+			OverlayController controller = overlayController;
+			if (controller != null && !config.statsRenderTarget().showsOverlay())
 			{
-				hideOverlay();
+				controller.hide();
 			}
 		}
 		else if (event.getKey().equals("notEnoughRunesLink"))
@@ -744,15 +748,17 @@ public class BetterMonsterExaminePlugin extends Plugin
 	{
 		RenderTarget target = config.statsRenderTarget();
 		// The overlay draws on the client thread, so update it here; the panel is Swing (EDT).
-		if (target.showsOverlay())
+		OverlayController controller = overlayController;
+		MonsterData selection = target.showsOverlay() && controller != null ? dataService.variant(name, version) : null;
+		if (selection != null)
 		{
 			if (toggleOverlayOff)
 			{
-				toggleOverlay(name, version);
+				controller.toggle(selection);
 			}
 			else
 			{
-				showOverlay(name, version);
+				controller.show(selection);
 			}
 		}
 		// Feeding the panel records the lookup via its own select() choke point.
@@ -793,91 +799,4 @@ public class BetterMonsterExaminePlugin extends Plugin
 		RenderTarget target = config.statsRenderTarget();
 		return target.showsOverlay() || (target.showsPanel() && config.enableSidePanel());
 	}
-
-	/**
-	 * Show the overlay for the given monster, or hide it if it's already showing that exact
-	 * monster (a second Stats click toggles it off). Client thread.
-	 */
-	private void toggleOverlay(String name, String version)
-	{
-		if (cardOverlay == null)
-		{
-			return;
-		}
-		if ((name + ' ' + version).equals(overlayKey))
-		{
-			// Already showing this monster — a second Stats click closes it (and keeps it closed).
-			dismissOverlay();
-			return;
-		}
-		showOverlay(name, version);
-	}
-
-	/** Show the overlay for a monster, leaving it up if it's already the one showing. Client thread. */
-	private void showOverlay(String name, String version)
-	{
-		MonsterCardOverlay overlay = cardOverlay;
-		if (overlay == null)
-		{
-			return;
-		}
-		MonsterData selection = dataService.variant(name, version);
-		if (selection == null)
-		{
-			return;
-		}
-		overlay.setMonster(selection);
-		overlayKey = name + ' ' + version;
-		dismissedKey = null;
-	}
-
-	/** Clear the overlay (e.g. it's no longer a render target), forgetting any dismissal. */
-	private void hideOverlay()
-	{
-		MonsterCardOverlay overlay = cardOverlay;
-		if (overlay != null)
-		{
-			overlay.clear();
-		}
-		overlayKey = null;
-		dismissedKey = null;
-	}
-
-	/** Close the overlay at the user's request, remembering it so it doesn't auto-reopen. */
-	private void dismissOverlay()
-	{
-		MonsterCardOverlay overlay = cardOverlay;
-		if (overlay != null)
-		{
-			overlay.clear();
-		}
-		dismissedKey = overlayKey;
-		overlayKey = null;
-	}
-
-	/**
-	 * Mirror the side panel's current monster into the overlay (when the overlay is a render
-	 * target), so searching or switching variants in the panel updates the overlay. Called on the
-	 * EDT. The data is synchronous now, so an unchanged selection needs no update (the overlay
-	 * redraws live each frame); only a different monster swaps the overlay and resets its tab.
-	 */
-	private void showInOverlay(MonsterData m)
-	{
-		MonsterCardOverlay overlay = cardOverlay;
-		if (overlay == null || m == null || !config.statsRenderTarget().showsOverlay())
-		{
-			return;
-		}
-		String key = m.getName() + ' ' + m.getVersion();
-		// Honour an explicit close (while this monster stays selected), and skip redundant
-		// re-pushes of the monster already on screen.
-		if (key.equals(dismissedKey) || key.equals(overlayKey))
-		{
-			return;
-		}
-		overlay.setMonster(m);
-		overlayKey = key;
-		dismissedKey = null;
-	}
-
 }
