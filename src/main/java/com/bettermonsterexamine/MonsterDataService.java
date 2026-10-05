@@ -46,7 +46,7 @@ public class MonsterDataService
 {
 	private static final File CACHE_DIR = new File(RuneLite.RUNELITE_DIR, "better-monster-examine");
 	private static final Duration MAX_AGE = Duration.ofDays(7);
-	private static final Type LEVEL_RANGES_TYPE =
+	private static final Type INFOBOX_VALUES_TYPE =
 		new TypeToken<Map<String, Map<String, InfoboxLevels.LevelText>>>()
 		{
 		}.getType();
@@ -75,15 +75,16 @@ public class MonsterDataService
 	/** Parses Bucket rows, cleaning every string as it goes; see WikiSanitizer. */
 	private final Gson bucketGson;
 	private final WikiClient wiki;
+	private final ScheduledExecutorService executor;
 	private final WikiCache cache = new WikiCache(new File(CACHE_DIR, "bucket-monsters.json"), MAX_AGE);
 	// Refreshed alongside the dataset rather than on its own clock, so it has no age of its own.
-	private final WikiCache gapsCache = new WikiCache(new File(CACHE_DIR, "infobox-gaps.json"), MAX_AGE);
+	private final WikiCache valuesCache = new WikiCache(new File(CACHE_DIR, "infobox-values.json"), MAX_AGE);
 
 	private volatile Map<Integer, MonsterData> byId = Collections.emptyMap();
 	// lower-case base name -> variants, insertion-ordered
 	private volatile Map<String, List<MonsterData>> byName = Collections.emptyMap();
-	// "page|version anchor" (lower-case) -> the levels Bucket dropped for that variant; see gapFill.
-	private volatile Map<String, Map<String, InfoboxLevels.LevelText>> levelRanges = Collections.emptyMap();
+	// "page|version anchor" (lower-case) -> the values Bucket lacks for that variant; see gapFill.
+	private volatile Map<String, Map<String, InfoboxLevels.LevelText>> infoboxValues = Collections.emptyMap();
 
 	@Inject
 	MonsterDataService(Gson gson, OkHttpClient http, ScheduledExecutorService executor)
@@ -91,6 +92,7 @@ public class MonsterDataService
 		this.gson = gson;
 		this.bucketGson = WikiSanitizer.bucketGson(gson);
 		this.wiki = WikiApi.client(http, gson);
+		this.executor = executor;
 		executor.execute(this::init);
 	}
 
@@ -103,8 +105,8 @@ public class MonsterDataService
 	private void init()
 	{
 		deleteLegacyCache();
-		// Load the gap-filled levels first, so the very first index() already applies them.
-		readLevelRanges();
+		// Load the gap-filled values first, so the very first index() already applies them.
+		readInfoboxValues();
 
 		boolean haveCache = false;
 		List<MonsterData> rows = null;
@@ -136,9 +138,9 @@ public class MonsterDataService
 		if (fresh)
 		{
 			log.debug("Cache hit. Skipping monster data fetch.");
-			// A fresh dataset cached before this feature existed has no level ranges beside it;
+			// A fresh dataset cached before this feature existed has no infobox values beside it;
 			// fill them without re-pulling the whole bestiary.
-			if (levelRanges.isEmpty())
+			if (infoboxValues.isEmpty())
 			{
 				gapFill(rows);
 			}
@@ -170,6 +172,8 @@ public class MonsterDataService
 			// Levels only, from before attack speed was gap-filled. A fresh dataset gap-fills
 			// only when nothing is cached, so the new file has a new name rather than reusing this.
 			Files.deleteIfExists(new File(CACHE_DIR, "level-ranges.json").toPath());
+			// Only the pages with a level hole, from before Aggressive and Respawn were read off every page.
+			Files.deleteIfExists(new File(CACHE_DIR, "infobox-gaps.json").toPath());
 		}
 		catch (IOException e)
 		{
@@ -202,7 +206,7 @@ public class MonsterDataService
 			writeCache(cache, json, "monster dataset");
 			log.info("Fetched and cached monster dataset ({} entries)", byId.size());
 			// The dataset is usable now (the gaps read as a dash, as they always did); the
-			// handful of levels Bucket can't carry fill in behind it.
+			// values Bucket can't carry fill in behind it.
 			gapFill(parsed.bucket);
 		}
 		catch (Exception e)
@@ -231,14 +235,14 @@ public class MonsterDataService
 	// (its Strength and Defence scale with remaining HP, e.g. "270-360"), which is why they rendered
 	// as a dash. There is no Bucket field to fix, so the values come from the page wikitext instead.
 	// Attack speed is INTEGER too, but a non-numeric one ("Varies", "N/A") arrives as 0 rather than
-	// absent, so 0 counts as a gap.
+	// absent, so 0 counts as a gap. Aggressive and respawn time are never written to Bucket at all,
+	// which is why every monster page is read, not just the ones with a hole.
 	//
-	// Rather than make stats fetch per monster — which would cost the whole layer its offline-first,
-	// synchronous render — we only ever look at rows Bucket left a hole in (~50 pages bestiary-wide,
-	// the rest of which are genuinely blank on the wiki and rightly stay a dash) and pull those in
-	// batched queries, cached and refreshed alongside the dataset itself.
+	// Rather than make stats fetch per monster, which would cost the whole layer its offline-first,
+	// synchronous render, the pages are pulled in batched queries, cached and refreshed alongside
+	// the dataset itself.
 
-	/** The key a parsed page's levels are matched back to Bucket rows by: page + version anchor. */
+	/** The key a parsed page's values are matched back to Bucket rows by: page + version anchor. */
 	private static String levelKey(String page, String versionAnchor)
 	{
 		String anchor = versionAnchor == null ? "" : versionAnchor.trim();
@@ -246,7 +250,7 @@ public class MonsterDataService
 	}
 
 	/**
-	 * The page a row's infobox lives on. Per row, not per name: the levels belong to the infobox the
+	 * The page a row's infobox lives on. Per row, not per name: the values belong to the infobox the
 	 * row came from, so Venenatis (PvM Arena)'s "Varies" attack speed is on its own page, not on
 	 * Venenatis's. Keying by page also keeps two pages' blank-anchor rows apart.
 	 */
@@ -255,7 +259,7 @@ public class MonsterDataService
 		return m.getPageName() != null ? m.getPageName() : m.getName();
 	}
 
-	/** Fetch + parse the pages whose Bucket rows are missing a level, then re-index with the results. */
+	/** Fetch + parse every monster page's infobox, then re-index with the results. */
 	private void gapFill(List<MonsterData> rows)
 	{
 		if (rows == null)
@@ -263,7 +267,7 @@ public class MonsterDataService
 			return;
 		}
 		List<String> pages = rows.stream()
-			.filter(m -> m != null && m.getName() != null && hasData(m) && m.hasBucketGap())
+			.filter(m -> m != null && m.getName() != null && hasData(m))
 			.map(MonsterDataService::infoboxPage)
 			.distinct()
 			.collect(Collectors.toList());
@@ -272,43 +276,55 @@ public class MonsterDataService
 			return;
 		}
 
-		log.debug("Gap-filling levels from {} wiki page(s)", pages.size());
-		Map<String, Map<String, InfoboxLevels.LevelText>> found = new HashMap<>();
-		// Blocking, one batch at a time, as MediaWiki's API etiquette asks. This runs on the
-		// executor, from init or after a dataset fetch, never on the client thread or the EDT.
-		for (List<String> batch : TitleResolver.batches(pages))
+		log.debug("Gap-filling infobox values from {} wiki page(s)", pages.size());
+		gapFillBatch(rows, TitleResolver.batches(pages), 0, new HashMap<>());
+	}
+
+	/**
+	 * Fetch one batch, then queue the next as its own executor task. The executor is shared and runs
+	 * one task at a time, so a single task looping over every batch would hold up anything queued
+	 * behind it (a Drops tab waiting on its page) until the whole bestiary was read. Still one request
+	 * at a time, as MediaWiki's API etiquette asks.
+	 */
+	private void gapFillBatch(List<MonsterData> rows, List<List<String>> batches, int next,
+		Map<String, Map<String, InfoboxLevels.LevelText>> found)
+	{
+		List<String> batch = batches.get(next);
+		try
 		{
-			try
-			{
-				String json = wiki.fetch(wiki.action("query")
-					.addQueryParameter("formatversion", "2")
-					.addQueryParameter("prop", "revisions")
-					.addQueryParameter("rvprop", "content")
-					.addQueryParameter("rvslots", "main")
-					.addQueryParameter("redirects", "1")
-					.addQueryParameter("titles", String.join("|", batch))
-					.build());
-				readWikitext(gson.fromJson(json, QueryResponse.class), batch, found);
-			}
-			catch (Exception e)
-			{
-				// The dataset still serves; these levels simply stay a dash until the next refresh.
-				log.debug("Level gap-fill fetch failed", e);
-			}
+			String json = wiki.fetch(wiki.action("query")
+				.addQueryParameter("formatversion", "2")
+				.addQueryParameter("prop", "revisions")
+				.addQueryParameter("rvprop", "content")
+				.addQueryParameter("rvslots", "main")
+				.addQueryParameter("redirects", "1")
+				.addQueryParameter("titles", String.join("|", batch))
+				.build());
+			readWikitext(gson.fromJson(json, QueryResponse.class), batch, found);
+		}
+		catch (Exception e)
+		{
+			// The dataset still serves; these values simply stay a dash until the next refresh.
+			log.debug("Infobox gap-fill fetch failed", e);
+		}
+		if (next + 1 < batches.size())
+		{
+			executor.execute(() -> gapFillBatch(rows, batches, next + 1, found));
+			return;
 		}
 		if (found.isEmpty())
 		{
 			return;
 		}
 		// Publish once, after every batch, so the dataset is re-indexed only once.
-		this.levelRanges = found;
-		writeCache(gapsCache, gson.toJson(found, LEVEL_RANGES_TYPE), "level ranges");
+		this.infoboxValues = found;
+		writeCache(valuesCache, gson.toJson(found, INFOBOX_VALUES_TYPE), "infobox values");
 		index(rows);
 		log.info("Recovered values the Bucket API cannot carry for {} monster(s)", found.size());
 	}
 
 	/**
-	 * Parse each returned page's infobox and key its levels by the page we asked for. The title we
+	 * Parse each returned page's infobox and key its values by the page we asked for. The title we
 	 * get back isn't always the one we asked for (MediaWiki normalises case and follows redirects),
 	 * so the response's own alias lists map our title to the page that answered it.
 	 */
@@ -353,21 +369,21 @@ public class MonsterDataService
 		}
 	}
 
-	private void readLevelRanges()
+	private void readInfoboxValues()
 	{
 		try
 		{
-			String text = gapsCache.read();
+			String text = valuesCache.read();
 			Map<String, Map<String, InfoboxLevels.LevelText>> cached =
-				text == null ? null : gson.fromJson(text, LEVEL_RANGES_TYPE);
+				text == null ? null : gson.fromJson(text, INFOBOX_VALUES_TYPE);
 			if (cached != null && !cached.isEmpty())
 			{
-				this.levelRanges = cached;
+				this.infoboxValues = cached;
 			}
 		}
 		catch (Exception e)
 		{
-			log.debug("Failed to read cached level ranges", e);
+			log.debug("Failed to read cached infobox values", e);
 		}
 	}
 
@@ -433,16 +449,16 @@ public class MonsterDataService
 		// Group by name, dropping rows with no combat data (e.g. a Vanguard's non-combat "Moving"
 		// pose, which Bucket returns with null stats).
 		Map<String, List<MonsterData>> name = new LinkedHashMap<>();
-		Map<String, Map<String, InfoboxLevels.LevelText>> ranges = this.levelRanges;
+		Map<String, Map<String, InfoboxLevels.LevelText>> ranges = this.infoboxValues;
 		for (MonsterData m : all)
 		{
 			if (m == null || m.getName() == null || !hasData(m))
 			{
 				continue;
 			}
-			// Hand back the levels Bucket dropped for this variant, if we recovered any.
+			// Hand back the values Bucket lacks for this variant, if we recovered any.
 			Map<String, InfoboxLevels.LevelText> dropped = ranges.get(levelKey(infoboxPage(m), m.getVersionAnchor()));
-			m.setLevelRanges(dropped != null ? dropped : Collections.emptyMap());
+			m.setInfoboxValues(dropped != null ? dropped : Collections.emptyMap());
 			name.computeIfAbsent(m.getName().toLowerCase(Locale.ROOT), k -> new ArrayList<>()).add(m);
 		}
 

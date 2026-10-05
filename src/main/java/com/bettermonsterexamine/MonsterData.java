@@ -72,10 +72,10 @@ public class MonsterData
 	@SerializedName("ranged_level")
 	private Integer rangedLevel;
 
-	/** The levels the wiki carries but Bucket dropped, by Bucket field name; filled by the service. */
+	/** Values the wiki carries but Bucket lacks, by Bucket field name or infobox parameter; filled by the service. */
 	@Getter(AccessLevel.NONE)
 	@Setter
-	private Map<String, InfoboxLevels.LevelText> levelRanges = Collections.emptyMap();
+	private Map<String, InfoboxLevels.LevelText> infoboxValues = Collections.emptyMap();
 
 	/** The wiki page this monster's name stands for; filled by the service. See {@link #getWikiPage}. */
 	@Getter(AccessLevel.NONE)
@@ -265,22 +265,12 @@ public class MonsterData
 	}
 
 	/**
-	 * True when Bucket carries no value at all for one of the five combat levels — either the wiki
-	 * leaves it blank, or (Vardorvis) its value is a range Bucket's INTEGER column can't hold — or an
-	 * attack speed of 0 or below, which is how Bucket stores a non-numeric one ({@code Varies} and
-	 * {@code N/A} as 0, {@code No} as -1).
-	 * Only these few monsters are worth fetching a page for; see {@link InfoboxLevels}.
+	 * The wiki's value for a field Bucket dropped (a level of {@code "270-360"}) or never carries
+	 * ({@code "aggressive"}, {@code "respawn"}), or null if none.
 	 */
-	boolean hasBucketGap()
+	InfoboxLevels.LevelText getInfoboxValue(String field)
 	{
-		return attackLevel == null || strengthLevel == null || defenceLevel == null
-			|| magicLevel == null || rangedLevel == null || attackSpeed <= 0;
-	}
-
-	/** The wiki's value for a level Bucket dropped (e.g. {@code "270-360"}), or null if none. */
-	InfoboxLevels.LevelText getLevelRange(String bucketField)
-	{
-		return levelRanges.get(bucketField);
+		return infoboxValues.get(field);
 	}
 
 	/** The first (primary) NPC id, or 0 when the row carries none — used for the DPS-calc deep link. */

@@ -156,6 +156,65 @@ public class InfoboxLevelsTest
 		}
 	}
 
+	/** Bucket never carries these, so even a plain "No" or "50" is kept. */
+	@Test
+	public void keepsAggressiveAndRespawnEvenWhenPlain()
+	{
+		Map<String, Map<String, InfoboxLevels.LevelText>> levels = InfoboxLevels.parse(String.join("\n",
+			"{{Infobox Monster",
+			"|aggressive = No",
+			"|respawn = 50",
+			"|att = 1",
+			"}}"));
+
+		assertEquals("No", levels.get("").get("aggressive").getValue());
+		assertEquals("50", levels.get("").get("respawn").getValue());
+		assertNull(levels.get("").get("attack_level"));
+	}
+
+	@Test
+	public void readsAggressivePerVersion()
+	{
+		Map<String, Map<String, InfoboxLevels.LevelText>> levels = InfoboxLevels.parse(String.join("\n",
+			"{{Infobox Monster",
+			"|version1 = Surface",
+			"|version2 = Lair",
+			"|aggressive1 = No",
+			"|aggressive2 = Yes",
+			"|respawn = 25",
+			"}}"));
+
+		assertEquals("No", levels.get("surface").get("aggressive").getValue());
+		assertEquals("Yes", levels.get("lair").get("aggressive").getValue());
+		assertEquals("25", levels.get("lair").get("respawn").getValue());
+	}
+
+	/** Conditional wording keeps its spaces and link labels; a citation and a line break don't survive as text. */
+	@Test
+	public void cleansConditionalText()
+	{
+		Map<String, Map<String, InfoboxLevels.LevelText>> levels = InfoboxLevels.parse(String.join("\n",
+			"{{Infobox Monster",
+			"|aggressive = Yes (unless the player is holding a [[monkey greegree]])<ref>Tested.</ref>",
+			"|respawn = 36 ticks,<br/>or 13 with a [[cowbell amulet|cowbell]]",
+			"}}"));
+
+		assertEquals("Yes (unless the player is holding a monkey greegree)", levels.get("").get("aggressive").getValue());
+		assertEquals("36 ticks, or 13 with a cowbell", levels.get("").get("respawn").getValue());
+	}
+
+	@Test
+	public void readsABlankOrNotApplicableTextValueAsAbsent()
+	{
+		Map<String, Map<String, InfoboxLevels.LevelText>> levels = InfoboxLevels.parse(String.join("\n",
+			"{{Infobox Monster",
+			"|aggressive = N/A",
+			"|respawn = ",
+			"}}"));
+
+		assertTrue(levels.isEmpty());
+	}
+
 	@Test
 	public void toleratesAPageWithNoInfobox()
 	{

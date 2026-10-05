@@ -61,7 +61,7 @@ final class StatFormat
 		int t = m.getAttackSpeed();
 		if (t <= 0)
 		{
-			InfoboxLevels.LevelText text = m.getLevelRange("attack_speed");
+			InfoboxLevels.LevelText text = m.getInfoboxValue("attack_speed");
 			return text == null ? "—" : cap(text.getValue());
 		}
 		return t + (t == 1 ? " tick" : " ticks") + " (" + String.format("%.1f", t * 0.6) + " seconds)";

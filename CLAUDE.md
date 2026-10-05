@@ -187,17 +187,19 @@ section.
      to an INTEGER column, so `Varies` / `Random` / `N/A` arrive as **`0`** and `No` as **`-1`**. A
      speed `<= 0` therefore counts as a gap. The recovered word renders as written (Basilisk Knight's
      "Varies"); a placeholder (`N/A`/`None`/`No`, e.g. an impling that doesn't attack) stays a dash.
-   - **The gap-fill.** `MonsterDataService` takes the rows with a hole (about 120 pages), fetches
-     their wikitext in batches of 50, one batch at a time, parses the infobox here and re-indexes. It
-     goes per **row**: it reads each row's own `page_name` and keys what it recovers by page + version
-     anchor, since the levels belong to that row's infobox (Venenatis (PvM Arena)'s "Varies" speed is
-     on its own page). It is cached beside the dataset (`infobox-gaps.json`) and refreshed with it,
-     so stats stay **offline-first and synchronously rendered**. Most gap rows are genuinely blank on
-     the wiki and keep rendering a dash.
+   - **Aggressive** and **Respawn time** are in every infobox but never written to Bucket at all.
+     They're read for every monster as text (`TEXT_PARAMS`), kept even when plain (`No`, `50`),
+     since there's no Bucket value to fall back on. Only `N/A`/`None` and blanks count as absent.
+   - **The gap-fill.** Because of those two, `MonsterDataService` reads **every** monster page
+     (about 1,600) rather than only the rows with a level hole. It fetches wikitext in batches of 50,
+     **one batch per executor task**, so a queued Drops request isn't held up behind the whole pass,
+     then parses the infobox here and re-indexes once at the end. It goes per **row**: it reads each
+     row's own `page_name` and keys what it recovers by page + version anchor, since the values belong
+     to that row's infobox (Venenatis (PvM Arena)'s "Varies" speed is on its own page). It is cached
+     beside the dataset (`infobox-values.json`) and refreshed with it, so stats stay **offline-first
+     and synchronously rendered**. `MonsterData.getInfoboxValue(field)` hands a value back.
    - The wiki's own `{{efn}}` footnote rides along as the panel tooltip; a Defence that counts
      *down* (215→145) otherwise reads as a bug.
-   - **No source:** **Aggressive** and **Respawn time** are in every infobox but never written to
-     Bucket, so they have no source short of parsing every monster page.
 
 5. **`SuperiorService`** (singleton) — which superior slayer monster each monster spawns. No Bucket
    carries the pairing, so it parses the table on the wiki's *Superior slayer monster* page
@@ -404,7 +406,7 @@ never block either on network I/O.
 JUnit 4 under `src/test/java`. Pure-logic tests exercise the static helpers and the view-model:
 - **Stats:** `MonsterDataServiceTest` (name matching, variant labelling, default pick, relevant
   variants, wiki page resolution), `WikiSanitizerTest` (the Bucket field-cleaning shapes),
-  `InfoboxLevelsTest` (recovering a value Bucket dropped; blanks stay a dash),
+  `InfoboxLevelsTest` (recovering a value Bucket dropped or lacks; blanks stay a dash),
   `SuperiorServiceTest` (the superior-table parse), `MonsterStatsTest` (view-model semantics),
   `DefenceRollsTest`, `ExamineSummaryTest` (compact combat strings), `ExamineSummaryQueueTest`
   (native/injected ordering), `OverlayControllerTest` (toggle, dismissal vs mirroring),

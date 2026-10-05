@@ -229,7 +229,7 @@ public class MonsterStatsTest
 	{
 		MonsterData m = monster("{\"hitpoints\":700,\"attack_level\":280,\"magic_level\":215}");
 		String note = "Scales linearly with Vardorvis' remaining HP.";
-		m.setLevelRanges(Map.of(
+		m.setInfoboxValues(Map.of(
 			"strength_level", new InfoboxLevels.LevelText("270-360", note),
 			"defence_level", new InfoboxLevels.LevelText("215-145", note)));
 
@@ -248,7 +248,7 @@ public class MonsterStatsTest
 	public void aNonNumericAttackSpeedRendersTheWikisWord()
 	{
 		MonsterData m = monster("{\"attack_speed\":0}");
-		m.setLevelRanges(Map.of("attack_speed", new InfoboxLevels.LevelText("varies", "Matches the player's.")));
+		m.setInfoboxValues(Map.of("attack_speed", new InfoboxLevels.LevelText("varies", "Matches the player's.")));
 
 		assertEquals("Varies", stats(m).attackSpeed().value());
 		assertEquals("Matches the player's.", stats(m).attackSpeed().tooltip());

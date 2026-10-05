@@ -10,7 +10,7 @@ import java.util.regex.Pattern;
 import lombok.Getter;
 
 /**
- * Recovers the monster levels the Bucket API <b>cannot</b> carry, by parsing the wiki page's
+ * Recovers the monster values the Bucket API <b>cannot</b> carry, by parsing the wiki page's
  * {@code Infobox Monster} wikitext.
  *
  * <p>The wiki's {@code Module:Infobox Monster} writes each level to Bucket as
@@ -23,13 +23,19 @@ import lombok.Getter;
  * <p>Attack speed has the same hole with a different symptom: Bucket stores a non-numeric speed
  * as {@code 0} rather than omitting it, so Basilisk Knight's {@code Varies} rendered as "0 ticks".
  *
+ * <p>Aggressive and respawn time are in every infobox but never written to Bucket at all, so they
+ * are read for every monster and kept as the wiki writes them ({@link #TEXT_PARAMS}).
+ *
  * <p>Pure and static, so it stays unit-testable without the network ({@link WikiSanitizer} does the
- * same for Bucket's TEXT fields). {@link MonsterDataService} fetches the handful of affected pages
- * in bulk and feeds their wikitext through here.
+ * same for Bucket's TEXT fields). {@link MonsterDataService} fetches every monster page in bulk and
+ * feeds its wikitext through here.
  */
 final class InfoboxLevels
 {
-	/** Bucket field name -> the {@code Infobox Monster} wikitext parameter that feeds it. */
+	/** Infobox parameters Bucket never carries, kept even when plain (a respawn of "50", an aggressive "No"). */
+	static final String[] TEXT_PARAMS = {"aggressive", "respawn"};
+
+	/** Bucket field name (or text parameter) -> the {@code Infobox Monster} wikitext parameter that feeds it. */
 	private static final Map<String, String> PARAMS;
 
 	static
@@ -41,6 +47,10 @@ final class InfoboxLevels
 		p.put("magic_level", "mage");
 		p.put("ranged_level", "range");
 		p.put("attack_speed", "attack speed");
+		for (String text : TEXT_PARAMS)
+		{
+			p.put(text, text);
+		}
 		PARAMS = Collections.unmodifiableMap(p);
 	}
 
@@ -51,13 +61,17 @@ final class InfoboxLevels
 	private static final Pattern PLAIN_INT = Pattern.compile("-?\\d+");
 	/** The wiki's "no value" ({@code N/A} on an impling's attack speed): a dash, not a word. */
 	private static final Pattern PLACEHOLDER = Pattern.compile("(?i)n/a|none|no");
+	/** The same for a text parameter, where {@code No} is a real answer ("Aggressive: No"). */
+	private static final Pattern TEXT_PLACEHOLDER = Pattern.compile("(?i)n/a|none");
 	private static final Pattern BR = Pattern.compile("(?i)<br\\s*/?>");
+	/** A {@code <ref>} citation, self-closing or with a body; its text isn't part of the value. */
+	private static final Pattern REF = Pattern.compile("(?is)<ref\\b[^>]*/>|<ref\\b[^>]*>.*?</ref>");
 
 	private InfoboxLevels()
 	{
 	}
 
-	/** One level the wiki carries but Bucket dropped: the value as displayed, plus its footnote. */
+	/** One value the wiki carries but Bucket dropped: the value as displayed, plus its footnote. */
 	@Getter
 	static final class LevelText
 	{
@@ -74,9 +88,9 @@ final class InfoboxLevels
 
 	/**
 	 * Parse a monster page's wikitext into <em>version anchor</em> (lower-case; {@code ""} when the
-	 * page has no versions) -> <em>Bucket field name</em> -> the dropped level. Levels that are
-	 * plain integers are skipped: Bucket already carries those. A page with nothing dropped yields
-	 * an empty map.
+	 * page has no versions) -> <em>Bucket field name</em> (or {@link #TEXT_PARAMS text parameter}) ->
+	 * the value. Levels that are plain integers are skipped: Bucket already carries those. A page
+	 * with nothing to add yields an empty map.
 	 */
 	static Map<String, Map<String, LevelText>> parse(String wikitext)
 	{
@@ -107,7 +121,7 @@ final class InfoboxLevels
 		return out;
 	}
 
-	/** Pull one infobox's dropped levels into {@code out}, keyed by the version each belongs to. */
+	/** Pull one infobox's values into {@code out}, keyed by the version each belongs to. */
 	private static void readInfobox(String block, Map<String, String> footnotes,
 		Map<String, Map<String, LevelText>> out)
 	{
@@ -131,6 +145,7 @@ final class InfoboxLevels
 
 		for (Map.Entry<String, String> field : PARAMS.entrySet())
 		{
+			boolean text = field.getKey().equals(field.getValue());
 			for (Map.Entry<String, String> anchor : anchors.entrySet())
 			{
 				// "str2" belongs to version2; a suffix-less "str" applies to every version.
@@ -139,7 +154,7 @@ final class InfoboxLevels
 				{
 					value = params.get(field.getValue());
 				}
-				LevelText level = value == null ? null : clean(value, footnotes);
+				LevelText level = value == null ? null : clean(value, footnotes, text);
 				if (level == null)
 				{
 					continue;
@@ -151,19 +166,20 @@ final class InfoboxLevels
 	}
 
 	/**
-	 * Clean one raw level parameter to what the wiki displays, and resolve any footnote it
-	 * references: {@code "270-<br />360{{efn|name=def}}"} -> value {@code "270-360"} + the "def"
-	 * note. Null when the parameter is blank (genuinely unknown on the wiki — it must stay a dash)
-	 * or a plain integer (Bucket already carries it, so nothing was dropped).
+	 * Clean one raw parameter to what the wiki displays, and resolve any footnote it references:
+	 * {@code "270-<br />360{{efn|name=def}}"} -> value {@code "270-360"} + the "def" note. Null when
+	 * the parameter is blank (genuinely unknown on the wiki — it must stay a dash), or for a level, a
+	 * plain integer (Bucket already carries it, so nothing was dropped).
 	 *
 	 * <p>The {@code <br>} the wiki uses to wrap a range across a narrow infobox cell is dropped
 	 * rather than kept as a line break, and en/em dashes become a plain hyphen — they look bad at
-	 * panel size, the same reason {@code DropFormat} normalises them.
+	 * panel size, the same reason {@code DropFormat} normalises them. A text parameter keeps its
+	 * words, and its {@code <br>}s become spaces.
 	 */
-	private static LevelText clean(String raw, Map<String, String> footnotes)
+	private static LevelText clean(String raw, Map<String, String> footnotes, boolean text)
 	{
 		String note = null;
-		StringBuilder text = new StringBuilder();
+		StringBuilder out = new StringBuilder();
 		int i = 0;
 		while (i < raw.length())
 		{
@@ -182,10 +198,15 @@ final class InfoboxLevels
 					continue;
 				}
 			}
-			text.append(raw.charAt(i++));
+			out.append(raw.charAt(i++));
 		}
 
-		String value = plain(text.toString()).replaceAll("\\s+", "");
+		if (text)
+		{
+			String value = plain(BR.matcher(out).replaceAll(" ")).replaceAll("\\s+", " ").trim();
+			return value.isEmpty() || TEXT_PLACEHOLDER.matcher(value).matches() ? null : new LevelText(value, note);
+		}
+		String value = plain(out.toString()).replaceAll("\\s+", "");
 		// Test before dropping thousands commas: "1,000" is a value Bucket dropped (Lua's tonumber
 		// rejects the comma), so it has to survive the plain-integer check that "280" is caught by.
 		if (value.isEmpty() || PLAIN_INT.matcher(value).matches() || PLACEHOLDER.matcher(value).matches())
@@ -201,10 +222,10 @@ final class InfoboxLevels
 		return plain(raw).replaceAll("\\s+", " ").trim().toLowerCase(Locale.ROOT);
 	}
 
-	/** Shared text cleanup: drop {@code <br>}s and wiki markup (which covers en dashes), and em dashes. */
+	/** Shared text cleanup: drop citations, {@code <br>}s and wiki markup (which covers en dashes), and em dashes. */
 	private static String plain(String raw)
 	{
-		String out = BR.matcher(raw).replaceAll("");
+		String out = BR.matcher(REF.matcher(raw).replaceAll("")).replaceAll("");
 		return WikiSanitizer.text(out).replace('—', '-');
 	}
 }

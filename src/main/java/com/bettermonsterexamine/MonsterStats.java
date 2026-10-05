@@ -240,7 +240,7 @@ final class MonsterStats
 	/** The speed, with the wiki's footnote as the tooltip when it was recovered from the page. */
 	StatField attackSpeed()
 	{
-		InfoboxLevels.LevelText text = m.getAttackSpeed() <= 0 ? m.getLevelRange("attack_speed") : null;
+		InfoboxLevels.LevelText text = m.getAttackSpeed() <= 0 ? m.getInfoboxValue("attack_speed") : null;
 		return new StatField(StatFormat.attackSpeed(m), ColourRole.NEUTRAL, text == null ? null : text.getNote());
 	}
 
@@ -292,7 +292,7 @@ final class MonsterStats
 	 */
 	private StatField level(int value, String bucketField)
 	{
-		InfoboxLevels.LevelText range = bucketField == null ? null : m.getLevelRange(bucketField);
+		InfoboxLevels.LevelText range = bucketField == null ? null : m.getInfoboxValue(bucketField);
 		if (value <= 0 && range != null)
 		{
 			return new StatField(range.getValue(), ColourRole.NEUTRAL, range.getNote());
