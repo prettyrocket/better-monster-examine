@@ -258,6 +258,55 @@ public class MonsterStatsTest
 		assertNull(stats(monster("{\"attack_speed\":4}")).attackSpeed().tooltip());
 	}
 
+	private static MonsterData withInfobox(String field, String value)
+	{
+		MonsterData m = monster("{}");
+		m.setInfoboxValues(Map.of(field, new InfoboxLevels.LevelText(value, null)));
+		return m;
+	}
+
+	@Test
+	public void aggressiveYesIsDangerAndNoIsNeutral()
+	{
+		MonsterStats.StatField yes = stats(withInfobox("aggressive", "Yes")).aggressive();
+		assertEquals("Yes", yes.value());
+		assertEquals(ColourRole.DANGER, yes.role());
+		assertEquals("Attacks on sight.", yes.tooltip());
+
+		MonsterStats.StatField no = stats(withInfobox("aggressive", "No")).aggressive();
+		assertEquals(ColourRole.NEUTRAL, no.role());
+		assertNull(no.tooltip());
+	}
+
+	/** A condition is kept whole, and still flags a leading Yes. */
+	@Test
+	public void conditionalAggressionKeepsItsWording()
+	{
+		MonsterStats.StatField f = stats(withInfobox("aggressive", "Yes (unless the player is holding a monkey greegree)")).aggressive();
+		assertEquals("Yes (unless the player is holding a monkey greegree)", f.value());
+		assertEquals(ColourRole.DANGER, f.role());
+
+		MonsterStats.StatField other = stats(withInfobox("aggressive", "only when wearing a Zamorak item")).aggressive();
+		assertEquals("Only when wearing a Zamorak item", other.value());
+		assertEquals(ColourRole.NEUTRAL, other.role());
+	}
+
+	@Test
+	public void respawnInTicksShowsSecondsAndWordingIsKept()
+	{
+		assertEquals("50 ticks (30.0 seconds)", stats(withInfobox("respawn", "50")).respawn().value());
+		assertEquals("36 ticks, or 13 with a cowbell", stats(withInfobox("respawn", "36 ticks, or 13 with a cowbell")).respawn().value());
+	}
+
+	/** Before the pages are read, or when the wiki leaves them blank. */
+	@Test
+	public void unknownAggressionAndRespawnAreADash()
+	{
+		MonsterStats s = stats(monster("{}"));
+		assertEquals("—", s.aggressive().value());
+		assertEquals("—", s.respawn().value());
+	}
+
 	@Test
 	public void defenceRollsUseTheMatchingLevel()
 	{

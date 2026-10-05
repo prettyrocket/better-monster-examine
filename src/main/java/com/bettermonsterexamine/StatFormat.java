@@ -64,6 +64,12 @@ final class StatFormat
 			InfoboxLevels.LevelText text = m.getInfoboxValue("attack_speed");
 			return text == null ? "—" : cap(text.getValue());
 		}
+		return ticks(t);
+	}
+
+	/** "5 ticks (3.0 seconds)". */
+	static String ticks(int t)
+	{
 		return t + (t == 1 ? " tick" : " ticks") + " (" + String.format("%.1f", t * 0.6) + " seconds)";
 	}
 

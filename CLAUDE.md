@@ -212,6 +212,10 @@ The view-model **`MonsterStats`** sits between the DTO and both renderers: it re
 to show and their colour roles, so the panel and overlay stay in sync. Poison and venom resistance
 come from `poison_resistance` / `venom_resistance` (`0` / `100` / `200` / venom-only `Poisons`),
 shown in the immunities block as Immune / `200% resistance` / Converts to poison; 0 takes no row.
+**Aggressive** and **Respawn** come from the gap-fill (`getInfoboxValue`) and sit in Combat info
+(the overlay's Aggressive and Info tabs). Aggressive keeps the wiki's whole wording, conditions
+included, and is flagged danger when it starts with Yes; a respawn in plain ticks gains its seconds.
+Both read as a dash until the pages are read.
 
 ### Drops feature (`loot/`)
 

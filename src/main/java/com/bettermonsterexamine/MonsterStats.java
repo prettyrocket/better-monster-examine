@@ -244,6 +244,38 @@ final class MonsterStats
 		return new StatField(StatFormat.attackSpeed(m), ColourRole.NEUTRAL, text == null ? null : text.getNote());
 	}
 
+	/**
+	 * Whether it attacks on sight, as the wiki words it: usually Yes or No, sometimes with a condition
+	 * ("Yes (unless the player is holding a monkey greegree)"), which is kept whole rather than cut to
+	 * a Yes. Flagged {@link ColourRole#DANGER} when it starts with Yes. A dash until the page is read,
+	 * or when the wiki leaves it blank.
+	 */
+	StatField aggressive()
+	{
+		InfoboxLevels.LevelText text = m.getInfoboxValue("aggressive");
+		if (text == null)
+		{
+			return new StatField("—", ColourRole.NEUTRAL, null);
+		}
+		String value = StatFormat.cap(text.getValue());
+		boolean yes = StatFormat.affirmative(value);
+		String tooltip = text.getNote() != null ? text.getNote() : value.equalsIgnoreCase("yes") ? "Attacks on sight." : null;
+		return new StatField(value, yes ? ColourRole.DANGER : ColourRole.NEUTRAL, tooltip);
+	}
+
+	/** Ticks until it respawns, as "50 ticks (30.0 seconds)", or the wiki's own wording; a dash when unknown. */
+	StatField respawn()
+	{
+		InfoboxLevels.LevelText text = m.getInfoboxValue("respawn");
+		if (text == null)
+		{
+			return new StatField("—", ColourRole.NEUTRAL, null);
+		}
+		String value = text.getValue();
+		String shown = value.matches("[1-9][0-9]{0,5}") ? StatFormat.ticks(Integer.parseInt(value)) : StatFormat.cap(value);
+		return new StatField(shown, ColourRole.NEUTRAL, text.getNote());
+	}
+
 	// ---- Max hit -------------------------------------------------------------
 
 	/**
