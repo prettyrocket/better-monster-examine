@@ -259,6 +259,16 @@ public class MonsterStatsTest
 	}
 
 	@Test
+	public void respawnShowsTicksAndSeconds()
+	{
+		assertEquals("30 ticks (18.0 seconds)", stats(monster("{\"respawn_time\":30}")).respawn());
+		assertEquals("1 tick (0.6 seconds)", stats(monster("{\"respawn_time\":1}")).respawn());
+		// Bucket omits a respawn that isn't a plain number ("Varies"), so absent is a dash.
+		assertEquals("—", stats(monster("{}")).respawn());
+		assertEquals("—", stats(monster("{\"respawn_time\":0}")).respawn());
+	}
+
+	@Test
 	public void defenceRollsUseTheMatchingLevel()
 	{
 		MonsterStats s = stats(monster("{\"defence_level\":20,\"magic_level\":1,"

@@ -140,12 +140,13 @@ class MonsterCard extends JPanel
 			add(Box.createRigidArea(new Dimension(0, 6)));
 		}
 
-		// COMBAT INFO — attack style + speed (dataset).
+		// COMBAT INFO — attack style + speed, respawn time.
 		JPanel combatInfo = block();
 		combatInfo.add(sectionHeader("Combat info"));
 		combatInfo.add(kv("Attack style", stats.attackStyle(), Color.WHITE));
 		MonsterStats.StatField speed = stats.attackSpeed();
 		combatInfo.add(kv("Attack speed", speed.value(), Color.WHITE, speed.tooltip()));
+		combatInfo.add(kv("Respawn", stats.respawn(), Color.WHITE));
 		capHeight(combatInfo);
 		add(combatInfo);
 		add(Box.createRigidArea(new Dimension(0, 6)));
