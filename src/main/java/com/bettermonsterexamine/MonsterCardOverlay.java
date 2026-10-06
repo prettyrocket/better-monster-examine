@@ -298,6 +298,8 @@ class MonsterCardOverlay extends Overlay
 		{
 			rows.add(Row.kv("Poisonous", pois.value(), StatColors.resolve(pois.role(), mode)));
 		}
+		MonsterStats.StatField aggressive = stats.aggressive();
+		rows.add(Row.kv("Aggressive", aggressive.value(), StatColors.resolve(aggressive.role(), mode)));
 
 		List<String> off = stats.offensiveBonuses();
 		if (!off.isEmpty())
