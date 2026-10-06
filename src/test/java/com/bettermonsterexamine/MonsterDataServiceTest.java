@@ -383,9 +383,9 @@ public class MonsterDataServiceTest
 	@Test
 	public void aCacheCarryingTheNewestFieldIsUsable()
 	{
-		// One row carrying poison_resistance is enough: ~4% of rows legitimately leave it blank.
+		// One row carrying is_aggressive is enough: ~3% of rows legitimately leave it blank.
 		assertTrue(MonsterDataService.hasCurrentFields(Arrays.asList(
-			monster(BOSS), monster("{\"name\":\"Cow\",\"poison_resistance\":\"0\"}"))));
+			monster(BOSS), monster("{\"name\":\"Cow\",\"is_aggressive\":\"No\"}"))));
 	}
 
 	@Test
