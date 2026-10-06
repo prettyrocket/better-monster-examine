@@ -63,7 +63,7 @@ public class MonsterDataService
 		"heavy_range_defence_bonus", "flat_armour",
 		"attack_style", "attack_speed", "max_hit", "experience_bonus",
 		"attribute", "elemental_weakness", "elemental_weakness_percent",
-		"examine", "poisonous",
+		"examine", "poisonous", "is_aggressive",
 		"cannon_immune", "thrall_immune", "burn_immune", "freeze_resistance", "poison_resistance", "venom_resistance",
 		"slayer_level", "slayer_experience", "slayer_category", "assigned_by", "uses_skill",
 		"image", "league_region", "release_date", "is_members_only",
@@ -152,12 +152,12 @@ public class MonsterDataService
 
 	/**
 	 * True when cached rows carry the fields this build expects. Only the newest field is checked,
-	 * {@code poison_resistance}: ~96% of rows carry it, so its total absence means the cache predates
+	 * {@code is_aggressive}: ~97% of rows carry it, so its total absence means the cache predates
 	 * the field being selected. Cheap and self-maintaining — a later field addition just moves this probe.
 	 */
 	static boolean hasCurrentFields(List<MonsterData> rows)
 	{
-		return rows != null && rows.stream().anyMatch(m -> m != null && m.getPoisonResistance() != null);
+		return rows != null && rows.stream().anyMatch(m -> m != null && m.getAggressive() != null);
 	}
 
 	/** Remove the caches earlier builds left in every upgraded user's cache dir. */
