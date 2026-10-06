@@ -237,6 +237,26 @@ final class MonsterStats
 		return st.isEmpty() ? "—" : String.join(", ", st);
 	}
 
+	/**
+	 * Whether it attacks on sight, as the wiki words it: usually Yes or No, sometimes with a condition
+	 * ("Yes, unless wearing a Zamorak-affiliated item"), which is kept whole rather than cut to a Yes.
+	 * Flagged {@link ColourRole#DANGER} when it starts with Yes. A dash when the wiki leaves it blank or
+	 * says N/A, which marks an NPC that never attacks (an impling) rather than one that won't start a fight.
+	 */
+	StatField aggressive()
+	{
+		String value = m.getAggressive();
+		if (value == null || value.trim().isEmpty() || value.trim().equalsIgnoreCase("n/a")
+			|| value.trim().equalsIgnoreCase("none"))
+		{
+			return new StatField("—", ColourRole.NEUTRAL, null);
+		}
+		value = StatFormat.cap(value.trim());
+		boolean yes = StatFormat.affirmative(value);
+		return new StatField(value, yes ? ColourRole.DANGER : ColourRole.NEUTRAL,
+			value.equals("Yes") ? "Attacks on sight." : null);
+	}
+
 	/** The speed, with the wiki's footnote as the tooltip when it was recovered from the page. */
 	StatField attackSpeed()
 	{

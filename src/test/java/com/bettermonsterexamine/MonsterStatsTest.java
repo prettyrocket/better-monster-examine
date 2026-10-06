@@ -258,6 +258,60 @@ public class MonsterStatsTest
 		assertNull(stats(monster("{\"attack_speed\":4}")).attackSpeed().tooltip());
 	}
 
+	private static MonsterStats.StatField aggressive(String value)
+	{
+		return stats(monster("{\"is_aggressive\":\"" + value + "\"}")).aggressive();
+	}
+
+	@Test
+	public void aggressiveYesIsDangerAndNoIsNeutral()
+	{
+		MonsterStats.StatField yes = aggressive("Yes");
+		assertEquals("Yes", yes.value());
+		assertEquals(ColourRole.DANGER, yes.role());
+		assertEquals("Attacks on sight.", yes.tooltip());
+		assertEquals(ColourRole.DANGER, aggressive("yes").role());
+
+		MonsterStats.StatField no = aggressive("No");
+		assertEquals("No", no.value());
+		assertEquals(ColourRole.NEUTRAL, no.role());
+		assertNull(no.tooltip());
+	}
+
+	/** A condition is kept whole, and a leading Yes still flags it. */
+	@Test
+	public void conditionalAggressionKeepsItsWording()
+	{
+		MonsterStats.StatField f = aggressive("Yes, unless wearing a Zamorak-affiliated item");
+		assertEquals("Yes, unless wearing a Zamorak-affiliated item", f.value());
+		assertEquals(ColourRole.DANGER, f.role());
+		assertNull(f.tooltip());
+
+		MonsterStats.StatField talk = aggressive("No (unless talked to)");
+		assertEquals("No (unless talked to)", talk.value());
+		assertEquals(ColourRole.NEUTRAL, talk.role());
+	}
+
+	/** Bucket keeps the wiki's links; the parse unwraps them. */
+	@Test
+	public void aggressiveWikilinksAreUnwrapped()
+	{
+		assertEquals("Yes, unless the player has completed Monkey Madness II",
+			aggressive("Yes, unless the player has completed [[Monkey Madness II]]").value());
+		assertEquals("Yes (without vyre noble robes)",
+			aggressive("Yes (without [[Vyre_noble_clothing|vyre noble robes]])").value());
+	}
+
+	/** N/A marks an NPC that never attacks; it and a blank read as a dash, not as No. */
+	@Test
+	public void absentOrNotApplicableAggressionIsADash()
+	{
+		assertEquals("—", stats(monster("{}")).aggressive().value());
+		assertEquals("—", aggressive("N/A").value());
+		assertEquals("—", aggressive("").value());
+		assertEquals(ColourRole.NEUTRAL, aggressive("N/A").role());
+	}
+
 	@Test
 	public void defenceRollsUseTheMatchingLevel()
 	{
