@@ -244,6 +244,13 @@ final class MonsterStats
 		return new StatField(StatFormat.attackSpeed(m), ColourRole.NEUTRAL, text == null ? null : text.getNote());
 	}
 
+	/** Ticks until it respawns, as "50 ticks (30.0 seconds)"; a dash when the wiki gives no plain number. */
+	String respawn()
+	{
+		Integer t = m.getRespawnTime();
+		return t == null || t <= 0 ? "—" : StatFormat.ticks(t);
+	}
+
 	// ---- Max hit -------------------------------------------------------------
 
 	/**

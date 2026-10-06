@@ -168,6 +168,9 @@ public class MonsterData
 	private String poisonResistance;
 	@SerializedName("venom_resistance")
 	private String venomResistance;
+	/** Ticks; null when the wiki's respawn isn't a plain number (or isn't given). */
+	@SerializedName("respawn_time")
+	private Integer respawnTime;
 
 	// --- Captured for completeness (not yet rendered) ---
 	@SerializedName("slayer_level")
@@ -386,6 +389,7 @@ public class MonsterData
 			.append(cannonImmune).append('|').append(thrallImmune).append('|').append(burnImmune)
 			.append('|').append(freezeResistance).append('|').append(poisonResistance).append('|')
 			.append(venomResistance).append('|').append(slayerLevel).append('|')
+			.append(respawnTime).append('|')
 			.append(attackStyles).append('|').append(maxHit).append('|').append(attributes)
 			.toString();
 	}

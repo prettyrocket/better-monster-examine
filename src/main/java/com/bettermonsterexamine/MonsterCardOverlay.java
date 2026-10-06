@@ -365,6 +365,7 @@ class MonsterCardOverlay extends Overlay
 		{
 			rows.add(Row.plain(sizeAttr, white));
 		}
+		rows.add(Row.kv("Respawn", stats.respawn(), white));
 		if (stats.slayerMonster())
 		{
 			MonsterStats.StatField req = stats.slayerRequirement();

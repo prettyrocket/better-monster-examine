@@ -383,9 +383,9 @@ public class MonsterDataServiceTest
 	@Test
 	public void aCacheCarryingTheNewestFieldIsUsable()
 	{
-		// One row carrying poison_resistance is enough: ~4% of rows legitimately leave it blank.
+		// One row carrying respawn_time is enough: a non-numeric respawn legitimately leaves it blank.
 		assertTrue(MonsterDataService.hasCurrentFields(Arrays.asList(
-			monster(BOSS), monster("{\"name\":\"Cow\",\"poison_resistance\":\"0\"}"))));
+			monster(BOSS), monster("{\"name\":\"Cow\",\"respawn_time\":45}"))));
 	}
 
 	@Test
