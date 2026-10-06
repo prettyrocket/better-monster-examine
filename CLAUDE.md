@@ -196,8 +196,6 @@ section.
      the wiki and keep rendering a dash.
    - The wiki's own `{{efn}}` footnote rides along as the panel tooltip; a Defence that counts
      *down* (215→145) otherwise reads as a bug.
-   - **No source:** **Respawn time** is in every infobox but never written to Bucket, so it has no
-     source short of parsing every monster page.
 
 5. **`SuperiorService`** (singleton) — which superior slayer monster each monster spawns. No Bucket
    carries the pairing, so it parses the table on the wiki's *Superior slayer monster* page
@@ -214,6 +212,9 @@ shown in the immunities block as Immune / `200% resistance` / Converts to poison
 in Combat info (the overlay's Aggressive tab). It keeps the wording whole, conditions included
 ("Yes, unless wearing a Zamorak-affiliated item"), and is flagged danger when it starts with Yes.
 `N/A` marks an NPC that never attacks (an impling), so it and a blank read as a dash, not as No.
+**Respawn** comes from `respawn_time` (ticks), shown in Combat info and the overlay's Info tab as
+ticks plus seconds. The wiki writes it with `tonumber()`, so a respawn that isn't a plain number
+(`Varies`, a range) has no value and reads as a dash.
 
 ### Drops feature (`loot/`)
 
