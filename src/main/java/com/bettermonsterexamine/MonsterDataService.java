@@ -67,6 +67,7 @@ public class MonsterDataService
 		"cannon_immune", "thrall_immune", "burn_immune", "freeze_resistance", "poison_resistance", "venom_resistance",
 		"slayer_level", "slayer_experience", "slayer_category", "assigned_by", "uses_skill",
 		"image", "league_region", "release_date", "is_members_only",
+		"respawn_time",
 	};
 
 	private static final BucketQuery QUERY = new BucketQuery("infobox_monster", FIELDS);
@@ -152,12 +153,12 @@ public class MonsterDataService
 
 	/**
 	 * True when cached rows carry the fields this build expects. Only the newest field is checked,
-	 * {@code poison_resistance}: ~96% of rows carry it, so its total absence means the cache predates
-	 * the field being selected. Cheap and self-maintaining — a later field addition just moves this probe.
+	 * {@code respawn_time}: most rows carry it, so its total absence means the cache predates the
+	 * field being selected. Cheap and self-maintaining — a later field addition just moves this probe.
 	 */
 	static boolean hasCurrentFields(List<MonsterData> rows)
 	{
-		return rows != null && rows.stream().anyMatch(m -> m != null && m.getPoisonResistance() != null);
+		return rows != null && rows.stream().anyMatch(m -> m != null && m.getRespawnTime() != null);
 	}
 
 	/** Remove the caches earlier builds left in every upgraded user's cache dir. */
