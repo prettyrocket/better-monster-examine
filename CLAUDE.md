@@ -196,8 +196,8 @@ section.
      the wiki and keep rendering a dash.
    - The wiki's own `{{efn}}` footnote rides along as the panel tooltip; a Defence that counts
      *down* (215→145) otherwise reads as a bug.
-   - **No source:** **Aggressive** and **Respawn time** are in every infobox but never written to
-     Bucket, so they have no source short of parsing every monster page.
+   - **No source:** **Respawn time** is in every infobox but never written to Bucket, so it has no
+     source short of parsing every monster page.
 
 5. **`SuperiorService`** (singleton) — which superior slayer monster each monster spawns. No Bucket
    carries the pairing, so it parses the table on the wiki's *Superior slayer monster* page
@@ -210,6 +210,10 @@ The view-model **`MonsterStats`** sits between the DTO and both renderers: it re
 to show and their colour roles, so the panel and overlay stay in sync. Poison and venom resistance
 come from `poison_resistance` / `venom_resistance` (`0` / `100` / `200` / venom-only `Poisons`),
 shown in the immunities block as Immune / `200% resistance` / Converts to poison; 0 takes no row.
+**Aggressive** comes from `is_aggressive`, a TEXT field holding the infobox's own wording, and sits
+in Combat info (the overlay's Aggressive tab). It keeps the wording whole, conditions included
+("Yes, unless wearing a Zamorak-affiliated item"), and is flagged danger when it starts with Yes.
+`N/A` marks an NPC that never attacks (an impling), so it and a blank read as a dash, not as No.
 
 ### Drops feature (`loot/`)
 
