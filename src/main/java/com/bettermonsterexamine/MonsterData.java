@@ -154,6 +154,9 @@ public class MonsterData
 
 	private String examine;
 	private String poisonous;
+	/** The infobox's own wording: Yes / No / N/A, or a condition ("Yes, unless wearing a Zamorak-affiliated item"). */
+	@SerializedName("is_aggressive")
+	private String aggressive;
 
 	@SerializedName("cannon_immune")
 	private String cannonImmune;
@@ -382,7 +385,7 @@ public class MonsterData
 			.append(standardRangeDefenceBonus).append('|').append(heavyRangeDefenceBonus).append('|')
 			.append(flatArmour).append('|').append(attackSpeed).append('|')
 			.append(experienceBonus).append('|').append(weaknessElement).append('|')
-			.append(weaknessPercent).append('|').append(poisonous).append('|')
+			.append(weaknessPercent).append('|').append(poisonous).append('|').append(aggressive).append('|')
 			.append(cannonImmune).append('|').append(thrallImmune).append('|').append(burnImmune)
 			.append('|').append(freezeResistance).append('|').append(poisonResistance).append('|')
 			.append(venomResistance).append('|').append(slayerLevel).append('|')
