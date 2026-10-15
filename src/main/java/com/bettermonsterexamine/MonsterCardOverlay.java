@@ -435,6 +435,11 @@ class MonsterCardOverlay extends Overlay
 		{
 			rows.add(Row.kv("Venom", venom.value(), StatColors.resolve(venom.role(), mode)));
 		}
+		MonsterStats.StatField freeze = stats.freeze();
+		if (freeze != null)
+		{
+			rows.add(Row.kv("Freeze", freeze.value(), StatColors.resolve(freeze.role(), mode)));
+		}
 		MonsterStats.StatField cannon = stats.cannon();
 		if (cannon != null)
 		{

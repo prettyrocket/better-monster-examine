@@ -5,6 +5,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * The neutral view-model behind both renderers ({@link MonsterCard} and
@@ -21,6 +23,8 @@ import java.util.Map;
  */
 final class MonsterStats
 {
+	private static final Pattern FREEZE = Pattern.compile("(\\d+)% resistance");
+
 	/** A resolved field: a display value with a semantic colour role and optional tooltip. */
 	static final class StatField
 	{
@@ -462,6 +466,21 @@ final class MonsterStats
 	StatField venom()
 	{
 		return resistance(m.getVenomResistance());
+	}
+
+	/**
+	 * Freeze resistance; null when the monster can be frozen normally. The wiki writes it as
+	 * {@code "N% resistance"}, so 100% reads "Immune" and anything else between shows as written.
+	 */
+	StatField freeze()
+	{
+		String raw = m.getFreezeResistance();
+		Matcher pct = raw == null ? null : FREEZE.matcher(raw.trim());
+		if (pct == null || !pct.matches() || Integer.parseInt(pct.group(1)) == 0)
+		{
+			return null;
+		}
+		return resistance(pct.group(1));
 	}
 
 	/**

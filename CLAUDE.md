@@ -208,6 +208,8 @@ The view-model **`MonsterStats`** sits between the DTO and both renderers: it re
 to show and their colour roles, so the panel and overlay stay in sync. Poison and venom resistance
 come from `poison_resistance` / `venom_resistance` (`0` / `100` / `200` / venom-only `Poisons`),
 shown in the immunities block as Immune / `200% resistance` / Converts to poison; 0 takes no row.
+Freeze resistance follows the same rule from `freeze_resistance`, which the wiki writes as
+`N% resistance`.
 **Aggressive** comes from `is_aggressive`, a TEXT field holding the infobox's own wording, and sits
 in Combat info (the overlay's Aggressive tab). It keeps the wording whole, conditions included
 ("Yes, unless wearing a Zamorak-affiliated item"), and is flagged danger when it starts with Yes.
