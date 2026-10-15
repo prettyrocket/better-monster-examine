@@ -218,7 +218,7 @@ class MonsterCard extends JPanel
 				defenceTips(rolls, new String[]{"Light", "Standard", "Heavy"}, rangedBonus)));
 		}
 
-		// Immunities — burn / cannon / thrall, all from Bucket.
+		// Immunities — burn / poison / venom / freeze / cannon / thrall, all from Bucket.
 		JPanel imm = block();
 		imm.add(sectionHeader("Immunities"));
 		boolean anyImm = false;
@@ -238,6 +238,12 @@ class MonsterCard extends JPanel
 		if (venom != null)
 		{
 			imm.add(kv("Venom", venom.value(), resolve(venom.role())));
+			anyImm = true;
+		}
+		MonsterStats.StatField freeze = stats.freeze();
+		if (freeze != null)
+		{
+			imm.add(kv("Freeze", freeze.value(), resolve(freeze.role())));
 			anyImm = true;
 		}
 		MonsterStats.StatField cannon = stats.cannon();

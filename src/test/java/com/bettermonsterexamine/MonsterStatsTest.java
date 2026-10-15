@@ -131,6 +131,17 @@ public class MonsterStatsTest
 	}
 
 	@Test
+	public void freezeResistanceFollowsThePoisonRule()
+	{
+		assertEquals("Immune", stats(monster("{\"freeze_resistance\":\"100% resistance\"}")).freeze().value());
+		MonsterStats.StatField partial = stats(monster("{\"freeze_resistance\":\"33% resistance\"}")).freeze();
+		assertEquals("33% resistance", partial.value());
+		assertEquals(ColourRole.DANGER, partial.role());
+		assertNull(stats(monster("{\"freeze_resistance\":\"0% resistance\"}")).freeze());
+		assertNull(stats(monster("{}")).freeze());
+	}
+
+	@Test
 	public void slayerMonsterOnlyWhenCategoryPresent()
 	{
 		assertTrue(stats(monster("{\"slayer_category\":[\"Abyssal demons\"]}")).slayerMonster());
