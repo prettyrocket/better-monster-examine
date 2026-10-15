@@ -292,7 +292,9 @@ see the region tables at all (a Catacombs/Wilderness monster emits none of those
   level to a variant**, so it covers variant spawn ids the dataset doesn't carry (e.g. Hellhounds
   across dungeons). When the Examine summary is enabled, it snapshots the compact lines on the
   native click and waits for the matching `NPC_EXAMINE` chat response before queueing them, so the
-  vanilla text always appears first. Followers are rejected before resolution, and examines record
+  vanilla text always appears first. Followers, and NPCs without an **Attack** action, are rejected
+  before resolution: the wiki gives passive critters (the Farming Guild's ducks) combat stats too,
+  so a dataset row alone doesn't mean a player can fight it. Examines record
   in Recent history when enabled. Caches the player's combat, HP and Slayer levels each `GameTick`
   so the panel can read them safely off-thread.
 - **`BetterMonsterExaminePanel`** (`PluginPanel`) — search field over a card area: a shared
@@ -431,6 +433,7 @@ JUnit 4 under `src/test/java`. Pure-logic tests exercise the static helpers and 
   revisions, and every case that must mean "download"), `BucketQueryTest`, `TitleResolverTest`
   (normalise-then-redirect, loops, batching), `WikitextTemplatesTest` (nesting, bars inside links,
   footnotes).
+- `AttackableNpcTest` covers the Attack-action gate on which NPCs resolve.
 - `MonsterLookupMessageTest` covers the inbound cross-plugin contract: precedence, defaults, and
   above all that a wrongly-typed or empty payload is ignored rather than thrown.
 - `BetterMonsterExaminePluginTest` and `OverlayPreview` are dev launchers, not assertions.
