@@ -301,8 +301,10 @@ see the region tables at all (a Catacombs/Wilderness monster emits none of those
   chatheads (`resources/slayer/`, listed in `SLAYER_MASTERS`) bundled with the plugin.
 - **`MonsterCardOverlay`** (`Overlay`) — the in-game overlay, modelled on the Monster Examine
   spell: a compact, tabbed box drawn directly with `Graphics2D` (not a snapshot of the Swing card).
-  Four **clickable** tabs — Combat / Aggressive / Defensive / Info. The plugin pushes the selected
-  `MonsterData` in via `setMonster`. It reads the highlight palette live, so a config change applies
+  Four **clickable** tabs — Combat / Aggressive / Defensive / Info. What it shows is decided by
+  **`OverlayController`**: a second Stats click on the same monster closes it, the panel's selection
+  mirrors in, and a monster the user closed stays closed until they ask for it again rather than
+  being re-fed by the panel. It reads the highlight palette live, so a config change applies
   immediately. Tab clicks are routed from a `MouseManager` listener in the plugin: `tabAt` hit-tests
   a canvas point against the tab strip (using renderer-maintained bounds) and `setActiveTab` switches
   tabs, consuming the click. Content comes from **`MonsterStats`** and colours from **`StatColors`**,
@@ -405,8 +407,8 @@ JUnit 4 under `src/test/java`. Pure-logic tests exercise the static helpers and 
   `InfoboxLevelsTest` (recovering a value Bucket dropped; blanks stay a dash),
   `SuperiorServiceTest` (the superior-table parse), `MonsterStatsTest` (view-model semantics),
   `DefenceRollsTest`, `ExamineSummaryTest` (compact combat strings), `ExamineSummaryQueueTest`
-  (native/injected ordering), `StatFormatTest`, `StatColorsTest`, `RenderTargetTest`,
-  `LookupHistoryTest`.
+  (native/injected ordering), `OverlayControllerTest` (toggle, dismissal vs mirroring),
+  `StatFormatTest`, `StatColorsTest`, `RenderTargetTest`, `LookupHistoryTest`.
 - **`loot/`:** `DropPageServiceTest` (the rendered-page parse: rows inherit their `<h3>/<h4>` section,
   a drops region stops at the next `<h2>`, entity/footnote cleaning), `DropTableTest` (group →
   section grouping in page order; like-named sections in different groups stay distinct),
