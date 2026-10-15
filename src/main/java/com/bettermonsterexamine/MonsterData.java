@@ -345,8 +345,9 @@ public class MonsterData
 	}
 
 	/**
-	 * True when this row's page marks it as a form removed from the game — the wiki keeps
-	 * {@code (historical)} pages for old sprites and stats no player can meet.
+	 * True when this row's page marks it as a form no player can meet — the wiki keeps
+	 * {@code (historical)} pages for old sprites and stats, and {@code (unused)} and
+	 * {@code (RuneScape 2 Beta)} pages for content that was cut or never shipped.
 	 *
 	 * <p>Deliberately narrow. It keys on the specific marker rather than on merely having a
 	 * parenthetical, because most parentheses mean a live location: {@code Goblin (Vault of War)} and
@@ -361,7 +362,8 @@ public class MonsterData
 			return false;
 		}
 		String p = pageName.toLowerCase(Locale.ROOT);
-		return p.endsWith("(historical)") || p.endsWith("(removed)");
+		return p.endsWith("(historical)") || p.endsWith("(removed)")
+			|| p.endsWith("(unused)") || p.endsWith("(unused npc)") || p.endsWith("(runescape 2 beta)");
 	}
 
 	/**
