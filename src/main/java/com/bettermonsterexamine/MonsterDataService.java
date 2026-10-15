@@ -647,17 +647,6 @@ public class MonsterDataService
 		return byId.get(npcId);
 	}
 
-	/** All variants sharing the given (live NPC's) base name, in dataset order. */
-	public List<MonsterData> variantsForId(int npcId)
-	{
-		MonsterData m = byId.get(npcId);
-		if (m == null)
-		{
-			return Collections.emptyList();
-		}
-		return byName.getOrDefault(m.getName().toLowerCase(Locale.ROOT), Collections.singletonList(m));
-	}
-
 	public List<MonsterData> variantsForName(String name)
 	{
 		return byName.getOrDefault(name.toLowerCase(Locale.ROOT), Collections.emptyList());
