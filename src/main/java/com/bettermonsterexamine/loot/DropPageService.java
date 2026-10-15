@@ -62,6 +62,9 @@ public class DropPageService
 	// the raw source fraction ("16/100") and data-drop-oneover is the 1/x the wiki actually shows.
 	private static final Pattern ONE_OVER =
 		Pattern.compile("<span[^>]*data-drop-oneover=\"([^\"]*)\"[^>]*>.*?</span>", Pattern.DOTALL);
+	// The wiki's "Main article: Page § Drops" hatnote, matched only within its own <div>.
+	private static final Pattern DROPS_HATNOTE = Pattern.compile(
+		"class=\"hatnote[^\"]*\"[^>]*>(?:(?!</div>).)*?<a href=\"/w/([^\"?#]+)#Drops\"", Pattern.DOTALL);
 
 	private final Gson gson;
 	private final WikiClient wiki;
@@ -69,6 +72,8 @@ public class DropPageService
 
 	/** lower-case page name -> that page's parsed drop rows; an entry means "loaded". */
 	private final Map<String, List<DropRow>> byPage = new ConcurrentHashMap<>();
+	/** lower-case page name -> the page whose drops it shows instead, for a page with none of its own. */
+	private final Map<String, String> sharedWith = new ConcurrentHashMap<>();
 	/** Pages with a fetch in flight, so concurrent requests coalesce into one network call. */
 	private final Set<String> loading = ConcurrentHashMap.newKeySet();
 
@@ -110,11 +115,33 @@ public class DropPageService
 	 * The drop table for a page — the wiki's sections in page order — or null when the page isn't
 	 * loaded yet (call {@link #request} first and react via the update listener). A loaded page with no
 	 * drops yields an empty table, never null.
+	 *
+	 * <p>A page whose drops section only points at another page's (Dusk and Dawn, whose loot is the
+	 * Grotesque Guardians' table, rolled once both are defeated) shows that page's table, banded under
+	 * its title so it never reads as this monster's own. One hop only, and null while that page loads.
 	 */
 	public DropTable tableFor(String pageName)
 	{
-		List<DropRow> rows = byPage.get(pageName.toLowerCase(Locale.ROOT));
-		return rows == null ? null : DropTable.of(rows);
+		String key = pageName.toLowerCase(Locale.ROOT);
+		List<DropRow> rows = byPage.get(key);
+		String shared = sharedWith.get(key);
+		if (rows == null || !rows.isEmpty() || shared == null)
+		{
+			return rows == null ? null : DropTable.of(rows);
+		}
+		List<DropRow> sharedRows = byPage.get(shared.toLowerCase(Locale.ROOT));
+		return sharedRows == null ? null : DropTable.of(underGroup(shared, sharedRows));
+	}
+
+	/** Scope rows under an outer group label, keeping any grouping they already carry beneath it. */
+	static List<DropRow> underGroup(String label, List<DropRow> rows)
+	{
+		List<DropRow> out = new ArrayList<>(rows.size());
+		for (DropRow r : rows)
+		{
+			out.add(new DropRow(r.getItem(), r.getQuantity(), r.getRarity(), join(label, r.getGroup()), r.getSection()));
+		}
+		return out;
 	}
 
 	/** True once this page's drops have been loaded (from cache or network), so reads return real data. */
@@ -134,10 +161,11 @@ public class DropPageService
 		try
 		{
 			String text = cache.read();
-			List<DropRow> rows = text == null ? null : parse(htmlOf(gson.fromJson(text, ParseResponse.class)));
+			String html = text == null ? null : htmlOf(gson.fromJson(text, ParseResponse.class));
+			List<DropRow> rows = parse(html);
 			if (rows != null)
 			{
-				publish(key, rows, pageName);
+				publish(key, rows, pageName, html);
 				haveCache = true;
 			}
 		}
@@ -173,14 +201,15 @@ public class DropPageService
 				.addQueryParameter("redirects", "1")
 				.build());
 			ParseResponse response = gson.fromJson(json, ParseResponse.class);
-			List<DropRow> rows = parse(htmlOf(response));
+			String html = htmlOf(response);
+			List<DropRow> rows = parse(html);
 			if (rows == null)
 			{
 				log.debug("Drop page for {} carried no rendered text", pageName);
 				return;
 			}
 			// Parse (and publish) before caching so a corrupt download never poisons the cache.
-			publish(key, rows, pageName);
+			publish(key, rows, pageName, html);
 			cache.write(json, revisionOf(response));
 			log.debug("Parsed and cached {} drop rows for {}", rows.size(), pageName);
 		}
@@ -194,13 +223,32 @@ public class DropPageService
 		}
 	}
 
-	private void publish(String key, List<DropRow> rows, String pageName)
+	private void publish(String key, List<DropRow> rows, String pageName, String html)
 	{
+		String shared = rows.isEmpty() ? sharedDropsPage(html) : null;
+		if (shared != null && !shared.equalsIgnoreCase(pageName))
+		{
+			sharedWith.put(key, shared);
+			request(shared);
+		}
+		else
+		{
+			sharedWith.remove(key);
+		}
 		byPage.put(key, rows);
+
 		Consumer<String> listener = updateListener;
 		if (listener != null)
 		{
 			listener.accept(pageName);
+			// Pages showing this one's drops in place of their own re-render with it.
+			sharedWith.forEach((source, target) ->
+			{
+				if (target.equalsIgnoreCase(pageName))
+				{
+					listener.accept(source);
+				}
+			});
 		}
 	}
 
@@ -232,13 +280,7 @@ public class DropPageService
 			return null;
 		}
 
-		// Locate every <h2> so a drops region can be cut from its heading to the next <h2> of any kind.
-		List<Heading2> h2s = new ArrayList<>();
-		Matcher h2m = H2.matcher(html);
-		while (h2m.find())
-		{
-			h2s.add(new Heading2(h2m.end(), clean(h2m.group(1))));
-		}
+		List<Heading2> h2s = headings2(html);
 
 		// Drop tables live under an <h2> whose title mentions "drops" — one generic "Drops" heading on
 		// most pages, or per-level headings on combat-level variants. Anything else (store, spawns, …) is
@@ -333,6 +375,45 @@ public class DropPageService
 			}
 			out.add(new DropRow(e.cells[0], e.cells[1], e.cells[2], group, section));
 		}
+	}
+
+	/**
+	 * The page a drops section defers to through the wiki's {@code {{main|Page#Drops}}} hatnote, or null
+	 * when there's none. Read from the drops {@code <h2>} region(s) only. Pure, so it's unit-testable.
+	 */
+	static String sharedDropsPage(String html)
+	{
+		if (html == null)
+		{
+			return null;
+		}
+		List<Heading2> h2s = headings2(html);
+		for (int i = 0; i < h2s.size(); i++)
+		{
+			if (!h2s.get(i).title.toLowerCase(Locale.ROOT).contains("drop"))
+			{
+				continue;
+			}
+			int end = i + 1 < h2s.size() ? h2s.get(i + 1).start : html.length();
+			Matcher m = DROPS_HATNOTE.matcher(html.substring(h2s.get(i).start, end));
+			if (m.find())
+			{
+				return decodeSlug(m.group(1));
+			}
+		}
+		return null;
+	}
+
+	/** Every {@code <h2>} on the page, so a drops region can be cut from its heading to the next one. */
+	private static List<Heading2> headings2(String html)
+	{
+		List<Heading2> h2s = new ArrayList<>();
+		Matcher h2m = H2.matcher(html);
+		while (h2m.find())
+		{
+			h2s.add(new Heading2(h2m.end(), clean(h2m.group(1))));
+		}
+		return h2s;
 	}
 
 	/** Join the heading levels scoping a row into one group label, skipping the ones it doesn't have. */

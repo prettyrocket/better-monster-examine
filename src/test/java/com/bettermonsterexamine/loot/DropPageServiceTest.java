@@ -1,5 +1,6 @@
 package com.bettermonsterexamine.loot;
 
+import java.util.Arrays;
 import java.util.List;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -225,6 +226,54 @@ public class DropPageServiceTest
 
 		assertEquals(1, rows.size());
 		assertEquals("1/200 ; 1/101.56", rows.get(0).getRarity());
+	}
+
+	// Dusk's live Drops section: no table, only a pointer to the Grotesque Guardians' drops.
+	private static final String DUSK =
+		"<div class=\"mw-heading mw-heading2\"><h2 id=\"Drops\">Drops</h2></div>"
+		+ "<div role=\"note\" class=\"hatnote navigation-not-searchable\">Main article: "
+		+ "<a href=\"/w/Grotesque_Guardians#Drops\" title=\"Grotesque Guardians\">Grotesque Guardians § Drops</a></div>"
+		+ "<p><i>In addition to the 100% drop of <a href=\"/w/Granite_dust\">granite dust</a>, the player will"
+		+ " also have two rolls on the <a href=\"/w/Grotesque_Guardians\">Grotesque Guardians</a>' drop table.</i></p>"
+		+ "<div class=\"mw-heading mw-heading2\"><h2 id=\"Gallery\">Gallery</h2></div>";
+
+	@Test
+	public void dropsSectionThatOnlyPointsElsewhereNamesThatPage()
+	{
+		assertTrue(DropPageService.parse(DUSK).isEmpty());
+		assertEquals("Grotesque Guardians", DropPageService.sharedDropsPage(DUSK));
+	}
+
+	@Test
+	public void hatnoteOutsideTheDropsSectionOrWithoutTheDropsAnchorIsIgnored()
+	{
+		String elsewhere = "<h2 id=\"Strategy\">Strategy</h2>"
+			+ "<div class=\"hatnote\">Main article: <a href=\"/w/Some_boss#Drops\">x</a></div>"
+			+ "<h2 id=\"Drops\">Drops</h2>";
+		String chest = "<h2 id=\"Drops\">Drops</h2>"
+			+ "<div class=\"hatnote\">Main article: <a href=\"/w/Reward_Chest_(The_Gauntlet)\">x</a></div>";
+		// A later link to the page's drops is not the hatnote's own link.
+		String later = "<h2 id=\"Drops\">Drops</h2>"
+			+ "<div class=\"hatnote\">See also: <a href=\"/w/Other\">Other</a></div>"
+			+ "<p><a href=\"/w/Some_boss#Drops\">x</a></p>";
+
+		assertNull(DropPageService.sharedDropsPage(elsewhere));
+		assertNull(DropPageService.sharedDropsPage(chest));
+		assertNull(DropPageService.sharedDropsPage(later));
+		assertNull(DropPageService.sharedDropsPage(null));
+	}
+
+	@Test
+	public void sharedRowsAreBandedUnderThePageTheyCameFrom()
+	{
+		List<DropRow> rows = DropPageService.underGroup("Grotesque Guardians", Arrays.asList(
+			new DropRow("Granite dust", "50-100", "Always", "", "100%"),
+			new DropRow("Black tourmaline core", "1", "1/500", "Hard mode", "Unique")));
+
+		assertEquals("Grotesque Guardians", rows.get(0).getGroup());
+		assertEquals("100%", rows.get(0).getSection());
+		assertEquals("Grotesque Guardians: Hard mode", rows.get(1).getGroup());
+		assertEquals("Black tourmaline core", rows.get(1).getItem());
 	}
 
 	@Test

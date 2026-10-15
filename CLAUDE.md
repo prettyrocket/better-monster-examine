@@ -226,6 +226,11 @@ see the region tables at all (a Catacombs/Wilderness monster emits none of those
   with its revision, and publishes parsed rows into a concurrent by-page index. `tableFor(pageName)`
   reads it without blocking (null until loaded). Refreshed weekly per page, with the revision check
   above. Concurrent requests coalesce; an update listener notifies when a page lands.
+  **Shared drops.** A drops region with no rows of its own, only the wiki's `{{main|Page#Drops}}`
+  hatnote (`sharedDropsPage`), shows that page's table instead, banded under its title. Dusk and
+  Dawn point at Grotesque Guardians this way, since the loot is rolled once both are defeated. It
+  follows one hop, and only to a `#Drops` anchor, so a reward-chest pointer (Crystalline Hunllef)
+  doesn't count.
   Its static `parse(html)` is pure (unit-tested). It reads each `<h2>` region whose title contains
   "drop" (one generic "Drops", or several like "Level 99 drops" / "Drop table 2"), merges headings and
   table rows by document position so each row inherits the headings above it, and pulls `[item ·
