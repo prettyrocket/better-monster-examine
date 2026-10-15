@@ -711,7 +711,11 @@ public class BetterMonsterExaminePlugin extends Plugin
 		client.refreshChat();
 	}
 
-	/** Resolve an NPC by spawn id, falling back to name plus its in-game combat level. */
+	/**
+	 * Resolve an NPC by spawn id, falling back to name plus its in-game combat level. Only an NPC the
+	 * player can fight resolves: the wiki gives passive critters (the Farming Guild's ducks) combat
+	 * stats too, and a pet shares its monster's name.
+	 */
 	private MonsterData resolveMonster(NPC npc)
 	{
 		if (npc == null)
@@ -719,7 +723,7 @@ public class BetterMonsterExaminePlugin extends Plugin
 			return null;
 		}
 		NPCComposition composition = npc.getTransformedComposition();
-		if (composition != null && composition.isFollower())
+		if (composition == null || composition.isFollower() || !isAttackable(composition.getActions()))
 		{
 			return null;
 		}
@@ -736,6 +740,26 @@ public class BetterMonsterExaminePlugin extends Plugin
 			return null;
 		}
 		return dataService.variantForLevel(name, npc.getCombatLevel());
+	}
+
+	/**
+	 * Whether an NPC's menu actions include Attack. Read from the transformed composition, so a
+	 * spawn that changes form (or only becomes fightable later) is judged as it is now.
+	 */
+	static boolean isAttackable(String[] actions)
+	{
+		if (actions == null)
+		{
+			return false;
+		}
+		for (String action : actions)
+		{
+			if ("Attack".equalsIgnoreCase(action))
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
