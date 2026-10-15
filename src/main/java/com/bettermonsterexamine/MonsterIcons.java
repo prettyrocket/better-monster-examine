@@ -17,7 +17,7 @@ public class MonsterIcons
 {
 	/** The Slayer masters we bundle a chathead for (keyed by the lower-case name Bucket uses). */
 	static final String[] SLAYER_MASTERS =
-		{"turael", "spria", "mazchna", "vannaka", "chaeldar", "nieve", "steve", "duradel", "kuradal", "konar", "krystilia"};
+		{"turael", "spria", "mazchna", "vannaka", "chaeldar", "nieve", "steve", "duradel", "kuradal", "konar", "krystilia", "mortimer"};
 
 	final BufferedImage stabIcon;
 	final BufferedImage crushIcon;
