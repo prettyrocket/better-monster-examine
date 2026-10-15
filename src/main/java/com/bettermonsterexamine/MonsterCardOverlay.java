@@ -383,6 +383,7 @@ class MonsterCardOverlay extends Overlay
 				rows.add(Row.kv("Category", String.join(", ", categories), white));
 			}
 			List<BufferedImage> heads = new ArrayList<>();
+			List<String> unbundled = new ArrayList<>();
 			for (String master : stats.slayerMasters())
 			{
 				BufferedImage head = icons.masterIcon(master);
@@ -390,10 +391,20 @@ class MonsterCardOverlay extends Overlay
 				{
 					heads.add(head);
 				}
+				else
+				{
+					unbundled.add(StatFormat.masterName(master));
+				}
 			}
 			if (!heads.isEmpty())
 			{
 				rows.add(Row.icons("Assigned by", heads));
+			}
+			// A master added to the game after the chatheads were bundled still shows, by name.
+			if (!unbundled.isEmpty())
+			{
+				String names = String.join(", ", unbundled);
+				rows.add(heads.isEmpty() ? Row.kv("Assigned by", names, white) : Row.plain(names, white));
 			}
 		}
 		// Flat armour: a flat damage adjustment, 0 for most monsters — shown only when non-zero,
