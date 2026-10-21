@@ -133,6 +133,7 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		// icons/prices — land in the background (background thread → EDT).
 		drops.setUpdateListener(page -> SwingUtilities.invokeLater(() -> onDropsLoaded(page)));
 		itemIds.setUpdateListener(() -> SwingUtilities.invokeLater(this::onItemIdsLoaded));
+		data.setUpdateListener(() -> SwingUtilities.invokeLater(this::onDatasetLoaded));
 
 		setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
 		setBorder(new EmptyBorder(8, 8, 8, 8));
@@ -274,6 +275,10 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		}
 
 		List<String> names = data.searchNames(query, 40);
+		if (names.isEmpty())
+		{
+			data.refreshOnMiss();
+		}
 
 		for (String name : names)
 		{
@@ -477,6 +482,16 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		if (dropsTabActive && currentSelection != null)
 		{
 			renderDrops();
+		}
+	}
+
+	/** A downloaded dataset landed: re-run a live search, which may have missed for want of it. */
+	private void onDatasetLoaded()
+	{
+		String text = searchField.getText();
+		if (mode == Mode.NORMAL && currentSelection == null && text != null && !text.trim().isEmpty())
+		{
+			search(text, false, null);
 		}
 	}
 

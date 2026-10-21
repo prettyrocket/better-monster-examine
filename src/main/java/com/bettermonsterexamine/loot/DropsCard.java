@@ -765,6 +765,8 @@ public class DropsCard extends JPanel
 				Integer id = resolveId(c.itemName);
 				if (id == null)
 				{
+					// Likely an item newer than the cached map; the panel re-renders when the refresh lands.
+					itemIds.refreshOnMiss();
 					continue;
 				}
 				ItemComposition comp = itemManager.getItemComposition(id);

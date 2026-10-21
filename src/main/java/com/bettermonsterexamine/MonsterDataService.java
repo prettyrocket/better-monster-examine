@@ -1,6 +1,7 @@
 package com.bettermonsterexamine;
 
 import com.bettermonsterexamine.wiki.BucketQuery;
+import com.bettermonsterexamine.wiki.RefreshGate;
 import com.bettermonsterexamine.wiki.TitleResolver;
 import com.bettermonsterexamine.wiki.WikiApi;
 import com.bettermonsterexamine.wiki.WikiCache;
@@ -37,8 +38,8 @@ import okhttp3.OkHttpClient;
  * single uncapped query from the OSRS Wiki <b>Bucket</b> API ({@code infobox_monster}) — the wiki's
  * official structured-data store — and cached under {@code .runelite/better-monster-examine/} so
  * subsequent launches work offline; it refreshes in the background once the cache ages past
- * {@link #MAX_AGE}. All loading happens off the client thread, and accessors safely return empty
- * until it lands.
+ * {@link #MAX_AGE}, or sooner when a lookup misses ({@link #refreshOnMiss}). All loading happens off
+ * the client thread, and accessors safely return empty until it lands.
  */
 @Slf4j
 @Singleton
@@ -79,6 +80,9 @@ public class MonsterDataService
 	private final WikiCache cache = new WikiCache(new File(CACHE_DIR, "bucket-monsters.json"), MAX_AGE);
 	// Refreshed alongside the dataset rather than on its own clock, so it has no age of its own.
 	private final WikiCache gapsCache = new WikiCache(new File(CACHE_DIR, "infobox-gaps.json"), MAX_AGE);
+	private final RefreshGate refreshGate = new RefreshGate(cache, WikiApi.SHARED_CACHE_AGE);
+	private final ScheduledExecutorService executor;
+	private volatile Runnable updateListener;
 
 	private volatile Map<Integer, MonsterData> byId = Collections.emptyMap();
 	// lower-case base name -> variants, insertion-ordered
@@ -92,7 +96,27 @@ public class MonsterDataService
 		this.gson = gson;
 		this.bucketGson = WikiSanitizer.bucketGson(gson);
 		this.wiki = WikiApi.client(http, gson);
+		this.executor = executor;
 		executor.execute(this::init);
+	}
+
+	/** Set the callback fired (on a background thread) once a downloaded dataset has been published. */
+	public void setUpdateListener(Runnable listener)
+	{
+		this.updateListener = listener;
+	}
+
+	/**
+	 * A lookup found nothing, so the game may have monsters the cache predates: refresh it now rather
+	 * than at its weekly age. Throttled by {@link RefreshGate}, so it is safe to call on every miss.
+	 */
+	public void refreshOnMiss()
+	{
+		if (isLoaded() && refreshGate.tryStart())
+		{
+			log.debug("Lookup missed. Refreshing monster data early.");
+			executor.execute(this::fetchGated);
+		}
 	}
 
 	/** The wrapper the Bucket API returns: {@code {"bucketQuery": …, "bucket": [ rows ]}}. */
@@ -147,7 +171,20 @@ public class MonsterDataService
 		else
 		{
 			log.debug("{} Fetching monster data.", haveCache ? "Cache stale." : "Cache miss.");
+			refreshGate.start();
+			fetchGated();
+		}
+	}
+
+	private void fetchGated()
+	{
+		try
+		{
 			fetch();
+		}
+		finally
+		{
+			refreshGate.finish();
 		}
 	}
 
@@ -205,6 +242,11 @@ public class MonsterDataService
 			// The dataset is usable now (the gaps read as a dash, as they always did); the
 			// handful of levels Bucket can't carry fill in behind it.
 			gapFill(parsed.bucket);
+			Runnable listener = updateListener;
+			if (listener != null)
+			{
+				listener.run();
+			}
 		}
 		catch (Exception e)
 		{
