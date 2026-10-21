@@ -20,9 +20,10 @@ public final class WikiApi
 	/**
 	 * How long the wiki's CDN may serve one answer to every user. An hour is invisible next
 	 * to our own 7-day caches, but it turns a burst of identical requests (a popular monster, or the
-	 * bestiary after everyone's weekly refresh) into one hit on the wiki's servers.
+	 * bestiary after everyone's weekly refresh) into one hit on the wiki's servers. It is also the
+	 * shortest interval worth refreshing at, since a repeat inside it gets the same answer.
 	 */
-	private static final Duration SHARED_CACHE_AGE = Duration.ofHours(1);
+	public static final Duration SHARED_CACHE_AGE = Duration.ofHours(1);
 
 	/**
 	 * How long a page-backed cache may go on revalidating by revision id before it downloads in full
