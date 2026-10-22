@@ -43,6 +43,8 @@ public class ItemIdService
 	private final WikiClient wiki;
 	private WikiCache cache;
 	private volatile RefreshGate refreshGate;
+	// Set once startup has run, loaded or not; see MonsterDataService.
+	private volatile boolean initDone;
 	private final ScheduledExecutorService executor;
 
 	/** wiki item page name -> client item id; published atomically once the bulk load lands. */
@@ -93,8 +95,7 @@ public class ItemIdService
 	 */
 	public void refreshOnMiss()
 	{
-		RefreshGate gate = refreshGate;
-		if (gate != null && isLoaded() && gate.tryStart())
+		if (initDone && refreshGate.tryStart())
 		{
 			log.debug("Item lookup missed. Refreshing item-id map early.");
 			executor.execute(this::fetchGated);
@@ -102,6 +103,18 @@ public class ItemIdService
 	}
 
 	private void init()
+	{
+		try
+		{
+			load();
+		}
+		finally
+		{
+			initDone = true;
+		}
+	}
+
+	private void load()
 	{
 		boolean haveCache = false;
 		try

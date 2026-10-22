@@ -80,6 +80,9 @@ public class MonsterDataService
 	// Refreshed alongside the dataset rather than on its own clock, so it has no age of its own.
 	private WikiCache gapsCache;
 	private volatile RefreshGate refreshGate;
+	// Set once startup has run, loaded or not: a first run that couldn't reach the wiki must still
+	// retry on a miss, but nothing may refresh while startup is still deciding whether to download.
+	private volatile boolean initDone;
 	private volatile Runnable updateListener;
 
 	private volatile Map<Integer, MonsterData> byId = Collections.emptyMap();
@@ -123,8 +126,7 @@ public class MonsterDataService
 	 */
 	public void refreshOnMiss()
 	{
-		RefreshGate gate = refreshGate;
-		if (gate != null && isLoaded() && gate.tryStart())
+		if (initDone && refreshGate.tryStart())
 		{
 			log.debug("Lookup missed. Refreshing monster data early.");
 			executor.execute(this::fetchGated);
@@ -138,6 +140,18 @@ public class MonsterDataService
 	}
 
 	private void init()
+	{
+		try
+		{
+			load();
+		}
+		finally
+		{
+			initDone = true;
+		}
+	}
+
+	private void load()
 	{
 		deleteLegacyCache();
 		// Load the gap-filled levels first, so the very first index() already applies them.
