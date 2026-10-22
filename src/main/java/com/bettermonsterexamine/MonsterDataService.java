@@ -81,6 +81,9 @@ public class MonsterDataService
 	// Refreshed alongside the dataset rather than on its own clock, so it has no age of its own.
 	private final WikiCache gapsCache = new WikiCache(new File(CACHE_DIR, "infobox-gaps.json"), MAX_AGE);
 	private final RefreshGate refreshGate = new RefreshGate(cache, WikiApi.SHARED_CACHE_AGE);
+	// Set once startup has run, loaded or not: a first run that couldn't reach the wiki must still
+	// retry on a miss, but nothing may refresh while startup is still deciding whether to download.
+	private volatile boolean initDone;
 	private final ScheduledExecutorService executor;
 	private volatile Runnable updateListener;
 
@@ -112,7 +115,7 @@ public class MonsterDataService
 	 */
 	public void refreshOnMiss()
 	{
-		if (isLoaded() && refreshGate.tryStart())
+		if (initDone && refreshGate.tryStart())
 		{
 			log.debug("Lookup missed. Refreshing monster data early.");
 			executor.execute(this::fetchGated);
@@ -126,6 +129,18 @@ public class MonsterDataService
 	}
 
 	private void init()
+	{
+		try
+		{
+			load();
+		}
+		finally
+		{
+			initDone = true;
+		}
+	}
+
+	private void load()
 	{
 		deleteLegacyCache();
 		// Load the gap-filled levels first, so the very first index() already applies them.

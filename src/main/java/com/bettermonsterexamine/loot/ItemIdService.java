@@ -45,6 +45,8 @@ public class ItemIdService
 	private final WikiCache cache = new WikiCache(
 		new File(new File(RuneLite.RUNELITE_DIR, "better-monster-examine"), "item-ids.json"), MAX_AGE);
 	private final RefreshGate refreshGate = new RefreshGate(cache, WikiApi.SHARED_CACHE_AGE);
+	// Set once startup has run, loaded or not; see MonsterDataService.
+	private volatile boolean initDone;
 	private final ScheduledExecutorService executor;
 
 	/** wiki item page name -> client item id; published atomically once the bulk load lands. */
@@ -84,7 +86,7 @@ public class ItemIdService
 	 */
 	public void refreshOnMiss()
 	{
-		if (isLoaded() && refreshGate.tryStart())
+		if (initDone && refreshGate.tryStart())
 		{
 			log.debug("Item lookup missed. Refreshing item-id map early.");
 			executor.execute(this::fetchGated);
@@ -92,6 +94,18 @@ public class ItemIdService
 	}
 
 	private void init()
+	{
+		try
+		{
+			load();
+		}
+		finally
+		{
+			initDone = true;
+		}
+	}
+
+	private void load()
 	{
 		boolean haveCache = false;
 		try

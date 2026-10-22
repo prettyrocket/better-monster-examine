@@ -136,7 +136,9 @@ section.
    A cache missing the newest selected field counts as stale whatever its age. `refreshOnMiss`
    refreshes early through `RefreshGate` when a fightable NPC doesn't resolve or a search finds
    nothing, so new content lands within minutes for the players who go to it; the panel re-runs
-   a live search when the download lands. Builds two indexes,
+   a live search when the download lands. It is gated on startup having *finished*, not on data
+   having loaded, so a first install that couldn't reach the wiki still recovers without a restart.
+   Builds two indexes,
    published atomically: **by NPC id** (each row carries a repeated `id` array) and **by lower-case
    base name → variant list**. Accessors return empty until the async load lands.
    - **Variants.** A name (e.g. Vorkath) can have several `MonsterData` variants. Each gets a unique
