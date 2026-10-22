@@ -109,6 +109,10 @@ plugin's own classes out of it.
   don't change a page's revision, so there is a full download every `WikiApi.FULL_REFETCH` (30 days)
   regardless. Don't use `touched` or template revisions as the change signal instead: a bot edits
   `Module:GEPrices/data.json` daily, so both fire on every page every day.
+- **`RefreshGate`**: lets a cache refresh before its maximum age when a lookup misses, since a
+  miss is how new game content shows up. One refresh at a time, and none within the CDN age
+  (`WikiApi.SHARED_CACHE_AGE`, an hour) of the last download or attempt, because a repeat inside
+  it gets the same answer. A lookup that never succeeds (a typo) costs one refresh an hour.
 - **`BucketQuery`**: a Bucket `select`, fetched a page at a time. Bucket clamps a query to 5000
   rows **silently**, with no error or continuation, so only a full page means there's more.
 - **`TitleResolver`**: 50-title batches, which page answered each title after normalisation and
@@ -129,7 +133,12 @@ section.
 1. **`MonsterDataService`** (singleton) — the dataset. Pulls the whole `infobox_monster` bucket
    (about 3,260 rows; 3.1 MB decoded, 250 KB gzipped) through `BucketQuery`, caches it under
    `.runelite/better-monster-examine/bucket-monsters.json`, and refreshes weekly (`MAX_AGE = 7 days`).
-   A cache missing the newest selected field counts as stale whatever its age. Builds two indexes,
+   A cache missing the newest selected field counts as stale whatever its age. `refreshOnMiss`
+   refreshes early through `RefreshGate` when a fightable NPC doesn't resolve or a search finds
+   nothing, so new content lands within minutes for the players who go to it; the panel re-runs
+   a live search when the download lands. It is gated on startup having *finished*, not on data
+   having loaded, so a first install that couldn't reach the wiki still recovers without a restart.
+   Builds two indexes,
    published atomically: **by NPC id** (each row carries a repeated `id` array) and **by lower-case
    base name → variant list**. Accessors return empty until the async load lands.
    - **Variants.** A name (e.g. Vorkath) can have several `MonsterData` variants. Each gets a unique
@@ -251,6 +260,7 @@ see the region tables at all (a Catacombs/Wilderness monster emits none of those
   under `.runelite/better-monster-examine/item-ids.json` and refreshed weekly. Bridges the parsed
   item **name** to the client **id**, so the RuneLite client supplies price / High Alch / **icon**,
   including untradeables `ItemManager.search` misses. `idFor(name)` returns null until it lands.
+  A drop whose item resolves to no id at all calls `refreshOnMiss`, the same early refresh.
 - **`DropRow`** — one parsed row: item, quantity + rarity (as the wiki renders them), and the two
   headings it sits under, the **section** and its optional **group** (`""` when the page doesn't
   split its drops). Price/alch/icon aren't stored; they come from the client by id at render time.
@@ -430,7 +440,8 @@ JUnit 4 under `src/test/java`. Pure-logic tests exercise the static helpers and 
   values and their midpoint), and `ValueTiersTest` (Ground Items' tiers: defaults, the strict
   comparison, a disabled tier).
 - **`wiki/`:** `WikiClientTest` (URL shape and the CDN parameters), `WikiCacheTest` (read/write,
-  revisions, and every case that must mean "download"), `BucketQueryTest`, `TitleResolverTest`
+  revisions, and every case that must mean "download"), `RefreshGateTest` (one at a time, the
+  interval, a recent download counting as an attempt), `BucketQueryTest`, `TitleResolverTest`
   (normalise-then-redirect, loops, batching), `WikitextTemplatesTest` (nesting, bars inside links,
   footnotes).
 - `AttackableNpcTest` covers the Attack-action gate on which NPCs resolve.

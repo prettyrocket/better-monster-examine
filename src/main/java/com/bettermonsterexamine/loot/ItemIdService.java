@@ -1,6 +1,7 @@
 package com.bettermonsterexamine.loot;
 
 import com.bettermonsterexamine.wiki.BucketQuery;
+import com.bettermonsterexamine.wiki.RefreshGate;
 import com.bettermonsterexamine.wiki.WikiApi;
 import com.bettermonsterexamine.wiki.WikiCache;
 import com.bettermonsterexamine.wiki.WikiClient;
@@ -28,7 +29,8 @@ import okhttp3.OkHttpClient;
  *
  * <p>Bulk-loaded once (like {@link com.bettermonsterexamine.MonsterDataService}) — the map changes
  * rarely, so it's fetched whole, cached under {@code .runelite/better-monster-examine/item-ids.json},
- * and refreshed in the background past {@link #MAX_AGE}. Loading happens off the client thread and EDT,
+ * and refreshed in the background past {@link #MAX_AGE}, or sooner when a drop's item misses
+ * ({@link #refreshOnMiss}). Loading happens off the client thread and EDT,
  * paginating past the 5000-row cap; accessors return null until it lands.
  */
 @Slf4j
@@ -42,6 +44,9 @@ public class ItemIdService
 	private final WikiClient wiki;
 	private final WikiCache cache = new WikiCache(
 		new File(new File(RuneLite.RUNELITE_DIR, "better-monster-examine"), "item-ids.json"), MAX_AGE);
+	private final RefreshGate refreshGate = new RefreshGate(cache, WikiApi.SHARED_CACHE_AGE);
+	// Set once startup has run, loaded or not; see MonsterDataService.
+	private volatile boolean initDone;
 	private final ScheduledExecutorService executor;
 
 	/** wiki item page name -> client item id; published atomically once the bulk load lands. */
@@ -75,7 +80,32 @@ public class ItemIdService
 		return itemName == null ? null : byName.get(itemName);
 	}
 
+	/**
+	 * A drop's item resolved to no id, so the game may have items the cache predates: refresh it now
+	 * rather than at its weekly age. Throttled by {@link RefreshGate}, so it is safe to call on every miss.
+	 */
+	public void refreshOnMiss()
+	{
+		if (initDone && refreshGate.tryStart())
+		{
+			log.debug("Item lookup missed. Refreshing item-id map early.");
+			executor.execute(this::fetchGated);
+		}
+	}
+
 	private void init()
+	{
+		try
+		{
+			load();
+		}
+		finally
+		{
+			initDone = true;
+		}
+	}
+
+	private void load()
 	{
 		boolean haveCache = false;
 		try
@@ -97,7 +127,20 @@ public class ItemIdService
 		if (!haveCache || !cache.isFresh())
 		{
 			log.debug("{} Fetching item-id map.", haveCache ? "Cache stale." : "Cache miss.");
+			refreshGate.start();
+			fetchGated();
+		}
+	}
+
+	private void fetchGated()
+	{
+		try
+		{
 			fetch();
+		}
+		finally
+		{
+			refreshGate.finish();
 		}
 	}
 
