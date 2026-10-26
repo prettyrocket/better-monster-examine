@@ -34,7 +34,14 @@ A GitHub **Release** (publish a release, or run the `release.yml` workflow manua
 `workflow_dispatch`) triggers the plugin-hub update: it opens/updates a PR against
 `runelite/plugin-hub` (pushed via the `prettyrocket/plugin-hub` fork, needs the
 `PLUGIN_HUB_TOKEN` secret) that pins `plugins/better-monster-examine` to the released commit.
-**No version bump** — the hub tracks the pinned commit, not a version string.
+A manual run takes a `tag` input (default: the latest release) and ships that release's commit.
+
+**No version bump by hand.** The hub shows `version=` from `runelite-plugin.properties` at the
+pinned commit, so the workflow commits `version=<tag minus the v>` on top of the tagged commit,
+pushes it as tag `hub/<tag>`, and pins the hub to that. The stamp never lands on `main`, so `main`
+has no `version=` line, and a release can ship any commit, not just `main`'s head. GitHub runs a
+`release` event with the workflow file **at the tagged commit**, so a release cut from before this
+stamping existed runs the old workflow: disable it, publish, re-enable, then run it manually.
 
 **Sync the fork first** — this is a required step, not housekeeping:
 

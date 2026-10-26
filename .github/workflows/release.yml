@@ -3,11 +3,21 @@ name: Release to plugin hub
 # When a GitHub Release is published (or this is run manually), open/update a PR
 # against runelite/plugin-hub that pins the hub to this repo's released commit.
 # The branch is pushed to the prettyrocket/plugin-hub fork; the PR targets upstream
-# master. No version bump is involved — the hub shows the pinned commit.
+# master.
+#
+# The hub shows `version=` from runelite-plugin.properties at the pinned commit, so the
+# workflow stamps it from the tag rather than anyone bumping it by hand: it commits the
+# version on top of the released commit, keeps that commit alive under a `hub/<tag>` tag,
+# and pins the hub to it. The stamp never lands on main.
 on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to ship (default: the latest release)."
+        required: false
+        type: string
 
 concurrency:
   group: plugin-hub-release
@@ -17,13 +27,65 @@ permissions:
   contents: read
 
 jobs:
+  stamp:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      sha: ${{ steps.commit.outputs.sha }}
+    steps:
+      - name: Resolve the release tag
+        id: tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          REL_TAG: ${{ github.event.release.tag_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "release" ]; then
+            tag="$REL_TAG"
+          elif [ -n "$INPUT_TAG" ]; then
+            tag="$INPUT_TAG"
+          else
+            tag="$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName)"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout the released commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ steps.tag.outputs.tag }}
+
+      - name: Stamp the version and tag it for the hub
+        id: commit
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          sed -i '/^version=/d' runelite-plugin.properties
+          echo "version=$version" >> runelite-plugin.properties
+          # Dated like the released commit, so a re-run makes the identical commit and the push is a no-op.
+          export GIT_AUTHOR_DATE GIT_COMMITTER_DATE
+          GIT_AUTHOR_DATE="$(git log -1 --format=%cI)"
+          GIT_COMMITTER_DATE="$GIT_AUTHOR_DATE"
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -am "Release $version"
+          git push origin "HEAD:refs/tags/hub/$TAG"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "Stamped version=$version as $(git rev-parse HEAD) (hub/$TAG)"
+
   verify:
+    needs: stamp
     uses: ./.github/workflows/hub-verify.yml
     with:
-      commit: ${{ github.sha }}
+      commit: ${{ needs.stamp.outputs.sha }}
 
   hub-pr:
-    needs: verify
+    needs: [stamp, verify]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout runelite/plugin-hub (base)
@@ -63,35 +125,27 @@ jobs:
         run: |
           cat > plugins/better-monster-examine <<EOF
           repository=${{ github.server_url }}/${{ github.repository }}.git
-          commit=${{ github.sha }}
+          commit=${{ needs.stamp.outputs.sha }}
           EOF
           echo "Manifest now reads:"
           cat plugins/better-monster-examine
 
       - name: Resolve the release notes
         id: notes
-        # On `release: published` the notes ride in on the event payload; on a manual
-        # workflow_dispatch there is none, so fall back to the latest release. Everything is
-        # passed through env (never inlined into the script) so notes content can't inject shell.
+        # Read from the release itself, so a manual run gets the same notes as a published one.
+        # Everything is passed through env (never inlined into the script) so notes content
+        # can't inject shell.
         env:
           GH_TOKEN: ${{ github.token }}
-          EVENT_NAME: ${{ github.event_name }}
-          REL_TAG: ${{ github.event.release.tag_name }}
-          REL_URL: ${{ github.event.release.html_url }}
-          REL_NAME: ${{ github.event.release.name }}
-          REL_BODY: ${{ github.event.release.body }}
-          SHA: ${{ github.sha }}
+          TAG: ${{ needs.stamp.outputs.tag }}
+          SHA: ${{ needs.stamp.outputs.sha }}
         run: |
           set -euo pipefail
-          if [ "$EVENT_NAME" = "release" ]; then
-            tag="$REL_TAG"; url="$REL_URL"; name="$REL_NAME"; body="$REL_BODY"
-          else
-            tag="$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName)"
-            url="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json url -q .url)"
-            name="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json name -q .name)"
-            body="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json body -q .body)"
-          fi
-          echo "tag=${tag:-the latest release}" >> "$GITHUB_OUTPUT"
+          tag="$TAG"
+          url="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json url -q .url)"
+          name="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json name -q .name)"
+          body="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json body -q .body)"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
           commit_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$SHA"
           {
             echo "PR_BODY<<__HUB_PR_BODY__"
@@ -114,7 +168,7 @@ jobs:
           base: master
           branch: better-monster-examine-release
           delete-branch: true
-          commit-message: "better-monster-examine: update to ${{ github.sha }}"
+          commit-message: "better-monster-examine: update to ${{ needs.stamp.outputs.sha }}"
           title: "better-monster-examine: update to ${{ steps.notes.outputs.tag }}"
           body: ${{ env.PR_BODY }}
 
