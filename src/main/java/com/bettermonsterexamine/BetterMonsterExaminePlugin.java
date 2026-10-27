@@ -5,12 +5,14 @@ import javax.swing.SwingUtilities;
 
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
+import java.io.IOException;
 import java.util.Collections;
 
 import com.bettermonsterexamine.loot.DropPageService;
 import com.bettermonsterexamine.loot.DropsCard;
 import com.bettermonsterexamine.loot.ItemIdService;
 import com.bettermonsterexamine.loot.ValueTiers;
+import com.bettermonsterexamine.wiki.CacheStore;
 import com.google.gson.Gson;
 import com.google.inject.Provides;
 import lombok.extern.slf4j.Slf4j;
@@ -54,6 +56,8 @@ import net.runelite.client.util.LinkBrowser;
 @Slf4j
 @PluginDescriptor(
 		name = "Better Monster Examine",
+		internalName = "better-monster-examine",
+		legacyDataDirectory = "better-monster-examine",
 		description = "Search any monster and view its full wiki-style combat stats",
 		tags = {"npc", "stats", "examine", "search", "defensive", "weakness", "elemental", "bestiary", "monster", "wiki", "dps"}
 )
@@ -140,6 +144,11 @@ public class BetterMonsterExaminePlugin extends Plugin
 	{
 		log.info("Better Monster Examine started");
 		migrateMenuOptions();
+		CacheStore store = cacheStore();
+		dataService.start(store);
+		superiorService.start(store);
+		itemIdService.start(store);
+		dropPageService.start(store);
 		examineSummaryQueue.clear();
 		titleIcon = ImageUtil.loadImageResource(getClass(), "/icon.png");
 		cardOverlay = new MonsterCardOverlay(config, monsterIcons, () -> playerCombatLevel, () -> playerHpLevel, () -> playerSlayerLevel);
@@ -178,6 +187,20 @@ public class BetterMonsterExaminePlugin extends Plugin
 		if (config.enableSidePanel())
 		{
 			addNavBar();
+		}
+	}
+
+	/** The plugin data folder, moved from {@code .runelite/better-monster-examine/} on first use. */
+	private CacheStore cacheStore()
+	{
+		try
+		{
+			return new FilepathStore(getPluginDirectory());
+		}
+		catch (IOException e)
+		{
+			log.warn("No plugin data folder, so nothing is cached this session", e);
+			return FilepathStore.NONE;
 		}
 	}
 
