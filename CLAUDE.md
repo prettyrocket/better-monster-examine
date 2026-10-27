@@ -30,25 +30,22 @@ gh pr list                                  # open PRs
 
 ## Releases
 
-A GitHub **Release** (publish a release, or run the `release.yml` workflow manually via
-`workflow_dispatch`) triggers the plugin-hub update: it opens/updates a PR against
-`runelite/plugin-hub` (pushed via the `prettyrocket/plugin-hub` fork, needs the
-`PLUGIN_HUB_TOKEN` secret) that pins `plugins/better-monster-examine` to the released commit.
-**No version bump** — the hub tracks the pinned commit, not a version string.
-
-**Sync the fork first** — this is a required step, not housekeeping:
+Releases are cut locally with `scripts/release.sh`, using your own `gh` login (it needs the `workflow` scope to sync the plugin-hub fork). A release is a PR against `runelite/plugin-hub` that pins `plugins/better-monster-examine` to a commit, opened from the `prettyrocket/plugin-hub` fork on branch `better-monster-examine-release`, so a second release before the first merges updates the open PR in place.
 
 ```
-gh repo sync prettyrocket/plugin-hub    # before publishing a release
+scripts/release.sh --dry-run             # build and show the plan, push nothing
+scripts/release.sh --title "Short summary" --notes-file notes.md
+scripts/release.sh <commit>...           # release only these, holding the rest back
+scripts/release.sh --redo                # replace the latest release while its hub PR is unmerged
 ```
 
-The release branch is built on **upstream** master and force-pushed to the fork, so every upstream
-commit the fork lacks rides along on that push — and GitHub rejects the whole push when one of them
-touches `.github/workflows/`, which upstream changes often. Keeping the fork level means only the
-manifest commit is new, so the push is always clean. `release.yml` can't do the sync itself: the
-fast-forward is a workflow-file change, which needs the `workflow` scope that `PLUGIN_HUB_TOKEN`
-doesn't have. A local `gh` token with the scope can do it. Skip it and the release fails after
-tagging, with the fix printed in the log.
+- **Releases are their own line of history.** Each is built on the previous `v*` tag, never on `main`, and never merges back. The script cherry-picks the main commits onto the last tag and adds a `Release X.Y.Z` commit, so each hub PR diffs cleanly against the last release.
+- **`main` never gets a `version=` line.** The release commit adds it to `runelite-plugin.properties`; the hub shows that to players. There is no version-bump PR.
+- **The default is everything unreleased.** "Unreleased" means `git cherry <last tag> origin/main`, which matches by patch id because cherry-picked hashes differ. Plugin-hub reviewers asked for small changes to come batched in one release, so name commits only to hold something back, not to split a release.
+- **Version:** a patch bump by default, `--minor` / `--major`, or `--version X.Y.Z`, which must be greater than the last tag. An existing tag is refused.
+- **Nothing leaves the machine before `[y/N]`.** The cherry-picks, the release commit and `./gradlew build` happen in a temporary worktree, so the checkout you run it from is untouched; a conflict or failed build stops there. After the prompt it pushes the tag, creates the GitHub release, runs `gh repo sync prettyrocket/plugin-hub`, and builds the hub branch as one commit on the synced master. The sync matters: a hub branch carrying upstream commits the fork lacked would drag them along.
+- **`--redo`** deletes the latest release and its tag and builds it again, keeping its version, title and notes unless told otherwise. It refuses once the hub serves that release.
+- Every PR to `main` already runs the real hub packager (`hub-verify.yml`, from `build.yml`).
 
 ## Commands
 
