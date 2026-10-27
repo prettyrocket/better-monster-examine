@@ -43,7 +43,7 @@ fails the build. The two that catch people out:
 - **Imports must be ordered, and unused imports removed.**
 
 Otherwise it's standard RuneLite house style for braces and whitespace. Config lives in
-`checkstyle.xml`, with `suppressions.xml` alongside it.
+`config/checkstyle/checkstyle.xml`, with `suppressions.xml` alongside it.
 
 **Please run `./gradlew build` locally before pushing.** Both the build and the plugin-hub
 packager verification run on every PR, and a formatting failure costs a round-trip.

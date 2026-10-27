@@ -73,8 +73,8 @@ Run a single test class/method (JUnit 4):
 
 ## Linting — strict, will fail the build
 
-Checkstyle runs as part of `build` with `maxWarnings = 0` (config: `checkstyle.xml`,
-suppressions: `suppressions.xml`). **Any** style violation fails CI. Notably:
+Checkstyle runs as part of `build` with `maxWarnings = 0` (config:
+`config/checkstyle/checkstyle.xml`, suppressions: `config/checkstyle/suppressions.xml`). **Any** style violation fails CI. Notably:
 
 - **Indent with tabs, not spaces** (the whole codebase uses tabs).
 - Imports must be ordered and unused imports removed.

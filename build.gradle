@@ -38,8 +38,6 @@ tasks.withType(JavaCompile).configureEach {
 checkstyle {
 	maxWarnings = 0
 	toolVersion = '8.36'
-	configDirectory = file("$rootDir")
-	configFile = file('checkstyle.xml')
 }
 
 // Launch a dev RuneLite client with this plugin loaded (via the test main()).
