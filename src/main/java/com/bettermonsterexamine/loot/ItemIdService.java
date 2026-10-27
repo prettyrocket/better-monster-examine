@@ -2,12 +2,12 @@ package com.bettermonsterexamine.loot;
 
 import com.bettermonsterexamine.wiki.BucketQuery;
 import com.bettermonsterexamine.wiki.WikiApi;
+import com.bettermonsterexamine.wiki.CacheStore;
 import com.bettermonsterexamine.wiki.WikiCache;
 import com.bettermonsterexamine.wiki.WikiClient;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.annotations.SerializedName;
-import java.io.File;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
@@ -17,7 +17,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
-import net.runelite.client.RuneLite;
 import okhttp3.OkHttpClient;
 
 /**
@@ -27,7 +26,7 @@ import okhttp3.OkHttpClient;
  * have the id, {@code ItemManager}/{@code ItemComposition} supply everything else with zero network.
  *
  * <p>Bulk-loaded once (like {@link com.bettermonsterexamine.MonsterDataService}) — the map changes
- * rarely, so it's fetched whole, cached under {@code .runelite/better-monster-examine/item-ids.json},
+ * rarely, so it's fetched whole, cached as {@code item-ids.json} in the plugin data folder,
  * and refreshed in the background past {@link #MAX_AGE}. Loading happens off the client thread and EDT,
  * paginating past the 5000-row cap; accessors return null until it lands.
  */
@@ -40,8 +39,7 @@ public class ItemIdService
 
 	private final Gson gson;
 	private final WikiClient wiki;
-	private final WikiCache cache = new WikiCache(
-		new File(new File(RuneLite.RUNELITE_DIR, "better-monster-examine"), "item-ids.json"), MAX_AGE);
+	private WikiCache cache;
 	private final ScheduledExecutorService executor;
 
 	/** wiki item page name -> client item id; published atomically once the bulk load lands. */
@@ -54,6 +52,16 @@ public class ItemIdService
 		this.gson = gson;
 		this.wiki = WikiApi.client(http, gson);
 		this.executor = executor;
+	}
+
+	/** Start loading the map from {@code store}, then the wiki. Later calls do nothing. */
+	public void start(CacheStore store)
+	{
+		if (cache != null)
+		{
+			return;
+		}
+		cache = new WikiCache(store, "item-ids.json", MAX_AGE);
 		executor.execute(this::init);
 	}
 

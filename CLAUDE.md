@@ -93,6 +93,13 @@ Stats bulk-load the whole bestiary from the OSRS Wiki's **Bucket API** once, cac
 offline-first. Drops are fetched **on demand per monster** from the rendered page and cached per
 page. The asymmetry is intentional; see the Drops section.
 
+Every cache lives in the plugin data folder, `.runelite/plugin-data/better-monster-examine/`, reached
+only through `Plugin.getPluginDirectory()`. `startUp` hands it to each service's `start`, which is
+what begins that service's load; until then a service holds nothing. On first call RuneLite moves
+the old `.runelite/better-monster-examine/` there (`legacyDataDirectory`), so players keep their
+caches. Never use `Filepath.Unchecked`: RuneLite documents that it stops a hub plugin from being
+reviewed automatically.
+
 ### The wiki client (`wiki/`)
 
 Every wiki request goes through `com.bettermonsterexamine.wiki`, a folder meant to be **copied into
@@ -108,7 +115,11 @@ plugin's own classes out of it.
   ages out, it checks the revision (about 1.5 KB) and re-downloads only an edited page. Template edits
   don't change a page's revision, so there is a full download every `WikiApi.FULL_REFETCH` (30 days)
   regardless. Don't use `touched` or template revisions as the change signal instead: a bot edits
-  `Module:GEPrices/data.json` daily, so both fire on every page every day.
+  `Module:GEPrices/data.json` daily, so both fire on every page every day. The sidecar also holds
+  the last-checked time, which is what makes a revalidated file fresh: freshness never sets a
+  file's modified time, because a `Filepath` can't.
+- **`CacheStore`**: where a `WikiCache` keeps its files, by relative name. The plugin's is
+  `FilepathStore`; tests use `CacheStore.directory` on a temp folder.
 - **`BucketQuery`**: a Bucket `select`, fetched a page at a time. Bucket clamps a query to 5000
   rows **silently**, with no error or continuation, so only a full page means there's more.
 - **`TitleResolver`**: 50-title batches, which page answered each title after normalisation and
@@ -127,8 +138,8 @@ section.
 ### Data flow
 
 1. **`MonsterDataService`** (singleton) — the dataset. Pulls the whole `infobox_monster` bucket
-   (about 3,260 rows; 3.1 MB decoded, 250 KB gzipped) through `BucketQuery`, caches it under
-   `.runelite/better-monster-examine/bucket-monsters.json`, and refreshes weekly (`MAX_AGE = 7 days`).
+   (about 3,260 rows; 3.1 MB decoded, 250 KB gzipped) through `BucketQuery`, caches it as
+   `bucket-monsters.json`, and refreshes weekly (`MAX_AGE = 7 days`).
    A cache missing the newest selected field counts as stale whatever its age. Builds two indexes,
    published atomically: **by NPC id** (each row carries a repeated `id` array) and **by lower-case
    base name → variant list**. Accessors return empty until the async load lands.
@@ -229,7 +240,7 @@ see the region tables at all (a Catacombs/Wilderness monster emits none of those
 
 - **`DropPageService`** (singleton) — the source. `request(pageName)` fetches the monster's
   rendered page via `action=parse` (`redirects=1`, so `Hill giant` → `Hill Giant` still resolves)
-  off-thread, caches the raw response per page under `.runelite/better-monster-examine/droppages/`
+  off-thread, caches the raw response per page under `droppages/`
   with its revision, and publishes parsed rows into a concurrent by-page index. `tableFor(pageName)`
   reads it without blocking (null until loaded). Refreshed weekly per page, with the revision check
   above. Concurrent requests coalesce; an update listener notifies when a page lands.
@@ -248,7 +259,7 @@ see the region tables at all (a Catacombs/Wilderness monster emits none of those
   a non-generic `<h2>` is itself a group. Flattening the levels merges like-named tables across
   locations, which makes the basement-only Dragon defender read as a drop from every Cyclops.
 - **`ItemIdService`** (singleton) — the bulk Bucket `item_id` name→id map (about 17,700 rows), cached
-  under `.runelite/better-monster-examine/item-ids.json` and refreshed weekly. Bridges the parsed
+  as `item-ids.json` and refreshed weekly. Bridges the parsed
   item **name** to the client **id**, so the RuneLite client supplies price / High Alch / **icon**,
   including untradeables `ItemManager.search` misses. `idFor(name)` returns null until it lands.
 - **`DropRow`** — one parsed row: item, quantity + rarity (as the wiki renders them), and the two
@@ -430,9 +441,9 @@ JUnit 4 under `src/test/java`. Pure-logic tests exercise the static helpers and 
   values and their midpoint), and `ValueTiersTest` (Ground Items' tiers: defaults, the strict
   comparison, a disabled tier).
 - **`wiki/`:** `WikiClientTest` (URL shape and the CDN parameters), `WikiCacheTest` (read/write,
-  revisions, and every case that must mean "download"), `BucketQueryTest`, `TitleResolverTest`
-  (normalise-then-redirect, loops, batching), `WikitextTemplatesTest` (nesting, bars inside links,
-  footnotes).
+  revisions, sidecar freshness against a local stub wiki, and every case that must mean
+  "download"), `BucketQueryTest`, `TitleResolverTest` (normalise-then-redirect, loops, batching),
+  `WikitextTemplatesTest` (nesting, bars inside links, footnotes).
 - `AttackableNpcTest` covers the Attack-action gate on which NPCs resolve.
 - `MonsterLookupMessageTest` covers the inbound cross-plugin contract: precedence, defaults, and
   above all that a wrongly-typed or empty payload is ignored rather than thrown.
