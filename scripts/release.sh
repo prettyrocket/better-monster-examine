@@ -6,8 +6,9 @@
 # default release is everything on main not yet released (plugin-hub reviewers asked for small
 # changes to come batched); naming commits holds the rest back.
 #
-# Everything up to the [y/N] prompt is local. After it: push the tag, create the GitHub release,
-# sync the plugin-hub fork, and open or update the hub PR from it.
+# Everything up to the [y/N] prompt is local. After it: sync the plugin-hub fork, push the tag,
+# create the GitHub release, and open or update the hub PR from it. If a step after the tag fails,
+# --hub-only finishes the job for the release already published.
 
 set -euo pipefail
 
@@ -33,8 +34,10 @@ Options:
   --version X.Y.Z    release as exactly this version
   --title TEXT       release subtitle: "Better Monster Examine vX.Y.Z — TEXT"
   --notes-file FILE  release notes (Markdown); default lists the released commits
-  --redo             replace the latest release (its tag and GitHub release are deleted) while
-                     its hub PR is still unmerged; keeps its version, title and notes by default
+  --redo             replace the latest release while its hub PR is still unmerged; keeps its
+                     version, title and notes by default
+  --hub-only         open or update the hub PR for the latest published release, building
+                     nothing; finishes a release whose hub step failed
   --dry-run          build and show the plan, then stop before pushing anything
   -h, --help         show this help
 EOF
@@ -48,6 +51,7 @@ explicit=""
 title=""
 notes_file=""
 redo=false
+hub_only=false
 dry_run=false
 picks=()
 
@@ -59,6 +63,7 @@ while [ $# -gt 0 ]; do
 		--title) title="${2:?--title needs text}"; shift ;;
 		--notes-file) notes_file="${2:?--notes-file needs a path}"; shift ;;
 		--redo) redo=true ;;
+		--hub-only) hub_only=true ;;
 		--dry-run) dry_run=true ;;
 		-h|--help) usage; exit 0 ;;
 		-*) die "unknown option $1 (see --help)" ;;
@@ -67,6 +72,10 @@ while [ $# -gt 0 ]; do
 	shift
 done
 
+((BASH_VERSINFO[0] >= 4)) || die "needs bash 4 or later"
+if $hub_only && { $redo || [ -n "$explicit" ] || [ -n "$title" ] || [ -n "$notes_file" ] || [ "$bump" != patch ] || [ ${#picks[@]} -gt 0 ]; }; then
+	die "--hub-only takes no other release options"
+fi
 if [ -n "$explicit" ] && ! [[ "$explicit" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 	die "--version must be X.Y.Z, got '$explicit'"
 fi
@@ -77,6 +86,10 @@ fi
 
 cd "$(git rev-parse --show-toplevel)"
 gh auth status >/dev/null 2>&1 || die "gh is not logged in"
+# Syncing the fork fast-forwards upstream workflow files, which needs the workflow scope. Checked
+# here so a missing scope can't surface after the tag is already public.
+gh api -i user 2>/dev/null | tr -d '\r' | grep -i '^x-oauth-scopes:' | grep -qw workflow \
+	|| die "the gh token lacks the workflow scope; run: gh auth refresh -s workflow"
 
 # A version as three space-separated numbers; v1.10 counts as 1.10.0.
 parse() {
@@ -114,6 +127,92 @@ fi
 
 # Which commit the hub serves today.
 hub_pinned="$(gh api "repos/$HUB/contents/$MANIFEST" --jq .content | base64 -d | sed -n 's/^commit=//p' | tr -d '\r')"
+
+wt=""
+notes=""
+pr_body=""
+tag=""
+published=false
+cleanup() {
+	if [ -n "$wt" ]; then
+		git worktree remove --force "$wt" >/dev/null 2>&1 || rm -rf "$wt"
+		git worktree prune
+	fi
+	rm -f "$notes" "$pr_body"
+}
+on_exit() {
+	local status=$?
+	cleanup
+	if [ $status -ne 0 ] && $published; then
+		echo "release: $tag is published but its hub PR may not be up to date; finish with scripts/release.sh --hub-only" >&2
+	fi
+}
+trap on_exit EXIT
+
+# Sync the fork, point its hub branch at a single commit on the synced master (via the API, so
+# there's no plugin-hub clone; any upstream commit the fork lacked would otherwise ride along), then
+# open or update the hub PR. Uses release_sha, tag, release_name, release_url and notes.
+update_hub() {
+	echo "Syncing $FORK..."
+	gh repo sync "$FORK" --branch master
+	local base base_tree manifest tree hub_commit pr_title pr_number
+	base="$(gh api "repos/$FORK/git/ref/heads/master" --jq .object.sha)"
+	base_tree="$(gh api "repos/$FORK/git/commits/$base" --jq .tree.sha)"
+	manifest="repository=https://github.com/$REPO.git\\ncommit=$release_sha\\n"
+	tree="$(printf '{"base_tree":"%s","tree":[{"path":"%s","mode":"100644","type":"blob","content":"%s"}]}' \
+		"$base_tree" "$MANIFEST" "$manifest" | gh api "repos/$FORK/git/trees" --input - --jq .sha)"
+	[ "$tree" != "$base_tree" ] || die "the hub already pins $release_sha"
+	hub_commit="$(printf '{"message":"better-monster-examine: update to %s","tree":"%s","parents":["%s"]}' \
+		"$release_sha" "$tree" "$base" | gh api "repos/$FORK/git/commits" --input - --jq .sha)"
+	if gh api "repos/$FORK/git/ref/heads/$HUB_BRANCH" >/dev/null 2>&1; then
+		gh api -X PATCH "repos/$FORK/git/refs/heads/$HUB_BRANCH" -f sha="$hub_commit" -F force=true >/dev/null
+	else
+		gh api "repos/$FORK/git/refs" -f ref="refs/heads/$HUB_BRANCH" -f sha="$hub_commit" >/dev/null
+	fi
+
+	pr_body="$(mktemp)"
+	{
+		echo "Updates **$NAME** to [\`$release_sha\`](https://github.com/$REPO/commit/$release_sha)."
+		echo
+		echo "Released as **$release_name** — $release_url"
+		echo
+		echo "---"
+		echo
+		cat "$notes"
+	} >"$pr_body"
+
+	pr_title="better-monster-examine: update to $tag"
+	pr_number="$(gh pr list -R "$HUB" --author "${FORK%%/*}" --head "$HUB_BRANCH" --state open --json number --jq '.[0].number // empty')"
+	if [ -n "$pr_number" ]; then
+		gh pr edit "$pr_number" -R "$HUB" --title "$pr_title" --body-file "$pr_body" >/dev/null
+		echo "Hub PR updated: https://github.com/$HUB/pull/$pr_number"
+	else
+		gh pr create -R "$HUB" --head "${FORK%%/*}:$HUB_BRANCH" --base master --title "$pr_title" --body-file "$pr_body"
+	fi
+}
+
+if $hub_only; then
+	tag="$(release_tags | sed -n 1p)"
+	[ -n "$tag" ] || die "no v* release tag"
+	release_sha="$(git rev-parse "$tag^{commit}")"
+	[ "$hub_pinned" != "$release_sha" ] || die "$tag is already live on the hub"
+	release_url="$(gh release view "$tag" -R "$REPO" --json url --jq .url 2>/dev/null)" || die "$tag has no GitHub release"
+	release_name="$(gh release view "$tag" -R "$REPO" --json name --jq .name)"
+	notes="$(mktemp)"
+	gh release view "$tag" -R "$REPO" --json body --jq .body >"$notes"
+	echo "Hub PR for $release_name ($release_sha)"
+	if $dry_run; then
+		echo "Dry run: nothing pushed."
+		exit 0
+	fi
+	read -r -p "Sync $FORK and open or update the hub PR? [y/N] " answer </dev/tty
+	case "$answer" in
+		y|Y|yes|YES) ;;
+		*) echo "Aborted; nothing pushed."; exit 1 ;;
+	esac
+	update_hub
+	exit 0
+fi
 
 if $redo; then
 	redo_sha="$(git rev-parse "$redo_tag^{commit}")"
@@ -169,12 +268,16 @@ held=$(( ${#unreleased[@]} - ${#commits[@]} ))
 
 # Build the release in a throwaway worktree, so this checkout is never touched.
 wt="$(mktemp -d)"
-cleanup() { git worktree remove --force "$wt" >/dev/null 2>&1 || rm -rf "$wt"; }
-trap cleanup EXIT
 git worktree add --quiet --detach "$wt" "$last"
 
 for sha in "${commits[@]}"; do
-	if ! git -C "$wt" cherry-pick "$sha" >/dev/null; then
+	if ! git -C "$wt" cherry-pick "$sha" >/dev/null 2>&1; then
+		# No conflicts and nothing staged: the change is already on the release line another way.
+		if [ -z "$(git -C "$wt" ls-files -u)" ] && git -C "$wt" diff --cached --quiet; then
+			git -C "$wt" cherry-pick --skip
+			warn "$(git log -1 --format='%h %s' "$sha") is already in $last; skipped"
+			continue
+		fi
 		git -C "$wt" cherry-pick --abort || true
 		die "$(git log -1 --format='%h %s' "$sha") does not apply on $last; nothing was pushed"
 	fi
@@ -202,7 +305,7 @@ fi
 
 echo "Building $tag ($release_sha)..."
 build_log="$(mktemp)"
-if (cd "$wt" && ./gradlew build --console=plain) >"$build_log" 2>&1; then
+if (cd "$wt" && ./gradlew build --no-daemon --console=plain) >"$build_log" 2>&1; then
 	build="passed"
 else
 	tail -n 40 "$build_log" >&2
@@ -212,7 +315,6 @@ rm -f "$build_log"
 
 # Notes. A redo keeps the replaced release's title and notes when the version is unchanged.
 notes="$(mktemp)"
-trap 'cleanup; rm -f "$notes"' EXIT
 release_name="$NAME $tag${title:+ — $title}"
 if [ -n "$notes_file" ]; then
 	tr -d '\r' <"$notes_file" >"$notes"
@@ -238,7 +340,11 @@ echo "================ Release plan ================"
 echo "Version:   $tag  (last release $last)"
 echo "Name:      $release_name"
 if $redo; then
-	echo "Replaces:  $redo_tag ($redo_sha); its tag and GitHub release get deleted"
+	if [ "$tag" = "$redo_tag" ]; then
+		echo "Replaces:  $redo_tag ($redo_sha); the tag moves and its GitHub release is edited"
+	else
+		echo "Replaces:  $redo_tag ($redo_sha); deleted once $tag and its hub PR are up"
+	fi
 fi
 echo "Commit:    $release_sha"
 echo "Commits:   ${#commits[@]} from origin/main$( [ "$held" -gt 0 ] && echo ", $held held back")"
@@ -268,55 +374,32 @@ case "$answer" in
 	*) echo "Aborted; nothing pushed."; exit 1 ;;
 esac
 
-if $redo; then
-	echo "Deleting $redo_tag..."
-	gh release delete "$redo_tag" -R "$REPO" --yes --cleanup-tag
-	git tag -d "$redo_tag" >/dev/null
-fi
-
-echo "Pushing $tag..."
-git tag "$tag" "$release_sha"
-git push --quiet origin "refs/tags/$tag"
-
-release_url="$(gh release create "$tag" -R "$REPO" --verify-tag --title "$release_name" --notes-file "$notes")"
-echo "Release: $release_url"
-
-# Build the hub branch as a single commit on the fork's freshly synced master, via the API, so
-# there's no plugin-hub clone. Any upstream commit the fork lacked would otherwise ride along.
+# The fork sync needs nothing from the release, so it runs before the tag is public: the likeliest
+# failure then leaves nothing half-published.
 echo "Syncing $FORK..."
 gh repo sync "$FORK" --branch master
 
-base="$(gh api "repos/$FORK/git/ref/heads/master" --jq .object.sha)"
-base_tree="$(gh api "repos/$FORK/git/commits/$base" --jq .tree.sha)"
-manifest="repository=https://github.com/$REPO.git\\ncommit=$release_sha\\n"
-tree="$(printf '{"base_tree":"%s","tree":[{"path":"%s","mode":"100644","type":"blob","content":"%s"}]}' \
-	"$base_tree" "$MANIFEST" "$manifest" | gh api "repos/$FORK/git/trees" --input - --jq .sha)"
-[ "$tree" != "$base_tree" ] || die "the hub already pins $release_sha"
-hub_commit="$(printf '{"message":"better-monster-examine: update to %s","tree":"%s","parents":["%s"]}' \
-	"$release_sha" "$tree" "$base" | gh api "repos/$FORK/git/commits" --input - --jq .sha)"
-if gh api "repos/$FORK/git/ref/heads/$HUB_BRANCH" >/dev/null 2>&1; then
-	gh api -X PATCH "repos/$FORK/git/refs/heads/$HUB_BRANCH" -f sha="$hub_commit" -F force=true >/dev/null
+if $redo && [ "$tag" = "$redo_tag" ]; then
+	echo "Moving $tag..."
+	git tag -f "$tag" "$release_sha" >/dev/null
+	git push --quiet --force origin "refs/tags/$tag"
+	published=true
+	release_url="$(gh release edit "$tag" -R "$REPO" --title "$release_name" --notes-file "$notes")"
 else
-	gh api "repos/$FORK/git/refs" -f ref="refs/heads/$HUB_BRANCH" -f sha="$hub_commit" >/dev/null
+	echo "Pushing $tag..."
+	git tag "$tag" "$release_sha"
+	git push --quiet origin "refs/tags/$tag"
+	published=true
+	release_url="$(gh release create "$tag" -R "$REPO" --verify-tag --title "$release_name" --notes-file "$notes")"
 fi
+echo "Release: $release_url"
 
-pr_body="$(mktemp)"
-trap 'cleanup; rm -f "$notes" "$pr_body"' EXIT
-{
-	echo "Updates **$NAME** to [\`$release_sha\`](https://github.com/$REPO/commit/$release_sha)."
-	echo
-	echo "Released as **$release_name** — $release_url"
-	echo
-	echo "---"
-	echo
-	cat "$notes"
-} >"$pr_body"
+update_hub
 
-pr_title="better-monster-examine: update to $tag"
-pr_number="$(gh pr list -R "$HUB" --author "${FORK%%/*}" --head "$HUB_BRANCH" --state open --json number --jq '.[0].number // empty')"
-if [ -n "$pr_number" ]; then
-	gh pr edit "$pr_number" -R "$HUB" --title "$pr_title" --body-file "$pr_body" >/dev/null
-	echo "Hub PR updated: https://github.com/$HUB/pull/$pr_number"
-else
-	gh pr create -R "$HUB" --head "${FORK%%/*}:$HUB_BRANCH" --base master --title "$pr_title" --body-file "$pr_body"
+# A redo under a new version drops the release it replaced only now, so there's never a moment
+# with neither.
+if $redo && [ "$tag" != "$redo_tag" ]; then
+	echo "Deleting $redo_tag..."
+	gh release delete "$redo_tag" -R "$REPO" --yes --cleanup-tag
+	git tag -d "$redo_tag" >/dev/null
 fi

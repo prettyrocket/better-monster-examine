@@ -37,14 +37,16 @@ scripts/release.sh --dry-run             # build and show the plan, push nothing
 scripts/release.sh --title "Short summary" --notes-file notes.md
 scripts/release.sh <commit>...           # release only these, holding the rest back
 scripts/release.sh --redo                # replace the latest release while its hub PR is unmerged
+scripts/release.sh --hub-only            # finish a published release whose hub step failed
 ```
 
 - **Releases are their own line of history.** Each is built on the previous `v*` tag, never on `main`, and never merges back. The script cherry-picks the main commits onto the last tag and adds a `Release X.Y.Z` commit, so each hub PR diffs cleanly against the last release.
 - **`main` never gets a `version=` line.** The release commit adds it to `runelite-plugin.properties`; the hub shows that to players. There is no version-bump PR.
 - **The default is everything unreleased.** "Unreleased" means `git cherry <last tag> origin/main`, which matches by patch id because cherry-picked hashes differ. Plugin-hub reviewers asked for small changes to come batched in one release, so name commits only to hold something back, not to split a release.
 - **Version:** a patch bump by default, `--minor` / `--major`, or `--version X.Y.Z`, which must be greater than the last tag. An existing tag is refused.
-- **Nothing leaves the machine before `[y/N]`.** The cherry-picks, the release commit and `./gradlew build` happen in a temporary worktree, so the checkout you run it from is untouched; a conflict or failed build stops there. After the prompt it pushes the tag, creates the GitHub release, runs `gh repo sync prettyrocket/plugin-hub`, and builds the hub branch as one commit on the synced master. The sync matters: a hub branch carrying upstream commits the fork lacked would drag them along.
-- **`--redo`** deletes the latest release and its tag and builds it again, keeping its version, title and notes unless told otherwise. It refuses once the hub serves that release.
+- **Nothing leaves the machine before `[y/N]`.** The cherry-picks, the release commit and `./gradlew build` happen in a temporary worktree, so the checkout you run it from is untouched; a conflict or failed build stops there. The `workflow` scope is checked before the prompt too. After the prompt it runs `gh repo sync prettyrocket/plugin-hub` first, since that needs nothing from the release, then pushes the tag, creates the GitHub release, and builds the hub branch as one commit on the synced master. The sync matters: a hub branch carrying upstream commits the fork lacked would drag them along.
+- **If a step after the tag fails**, the release is public without its hub PR, and a plain re-run finds nothing unreleased. `--hub-only` opens or updates the hub PR for the latest published release, and the script prints that hint when it fails there.
+- **`--redo`** rebuilds the latest release, keeping its version, title and notes unless told otherwise. At the same version it moves the tag and edits the release in place; under a new version it deletes the old release only after the new one and its hub PR are up, so there's never a moment with neither. It refuses once the hub serves that release.
 - Every PR to `main` already runs the real hub packager (`hub-verify.yml`, from `build.yml`).
 
 ## Commands
