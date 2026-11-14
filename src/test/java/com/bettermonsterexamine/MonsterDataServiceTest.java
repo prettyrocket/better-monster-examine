@@ -330,6 +330,26 @@ public class MonsterDataServiceTest
 	}
 
 	@Test
+	public void unusedAndBetaContentIsDroppedWhenALiveVariantRemains()
+	{
+		// Cockatrice (unused) shares the live Cockatrice's level, so keeping it would offer two
+		// identical-looking level 37 entries, one of which no player can meet.
+		MonsterData live = monster("{\"name\":\"Cockatrice\",\"page_name\":\"Cockatrice\","
+			+ "\"combat_level\":37,\"hitpoints\":37}");
+		MonsterData unused = monster("{\"name\":\"Cockatrice\",\"page_name\":\"Cockatrice (unused)\","
+			+ "\"combat_level\":37,\"hitpoints\":40}");
+		MonsterData beta = monster("{\"name\":\"Cockatrice\",\"page_name\":\"Cockatrice (RuneScape 2 Beta)\","
+			+ "\"combat_level\":37,\"hitpoints\":41}");
+		MonsterData unusedNpc = monster("{\"name\":\"Cockatrice\",\"page_name\":\"Cockatrice (unused NPC)\","
+			+ "\"combat_level\":37,\"hitpoints\":42}");
+
+		List<MonsterData> kept = MonsterDataService.relevantVariants(Arrays.asList(live, unused, beta, unusedNpc));
+
+		assertEquals(1, kept.size());
+		assertSame(live, kept.get(0));
+	}
+
+	@Test
 	public void questContentIsKeptEvenThoughItsPageLooksLikeAFlashback()
 	{
 		// Realm of Memories reads like removed content but is live and fightable: real hitpoints,
