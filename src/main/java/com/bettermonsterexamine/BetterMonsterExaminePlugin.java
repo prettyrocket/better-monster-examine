@@ -205,7 +205,7 @@ public class BetterMonsterExaminePlugin extends Plugin
 		log.debug("Adding side panel navigation button");
 		BufferedImage icon = titleIcon;
 		DropsCard dropsCard = new DropsCard(itemManager, clientThread, itemIdService, config, configManager, new NotEnoughRunesLink(eventBus, pluginManager, config));
-		monsterStatsPanel = new BetterMonsterExaminePanel(monsterIcons, dataService, superiorService, dropPageService, itemIdService, dropsCard, config, configManager, gson, () -> playerCombatLevel, () -> playerHpLevel, () -> playerSlayerLevel, icon);
+		monsterStatsPanel = new BetterMonsterExaminePanel(monsterIcons, dataService, superiorService, dropPageService, itemIdService, dropsCard, config, configManager, gson, () -> playerCombatLevel, () -> playerHpLevel, () -> playerSlayerLevel);
 		// Mirror whatever the panel is showing into the overlay (when the overlay is a target).
 		monsterStatsPanel.setSelectionListener(m ->
 		{

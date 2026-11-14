@@ -11,7 +11,6 @@ import java.awt.Insets;
 import java.awt.Rectangle;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.awt.image.BufferedImage;
 import java.util.List;
 import java.util.Locale;
 import java.util.function.Consumer;
@@ -105,7 +104,7 @@ public class BetterMonsterExaminePanel extends PluginPanel
 	 */
 	private Consumer<MonsterData> selectionListener;
 
-	public BetterMonsterExaminePanel(MonsterIcons icons, MonsterDataService data, SuperiorService superiors, DropPageService drops, ItemIdService itemIds, DropsCard dropsCard, BetterMonsterExamineConfig config, ConfigManager configManager, Gson gson, IntSupplier playerCombatLevel, IntSupplier playerHpLevel, IntSupplier playerSlayerLevel, BufferedImage titleIcon)
+	public BetterMonsterExaminePanel(MonsterIcons icons, MonsterDataService data, SuperiorService superiors, DropPageService drops, ItemIdService itemIds, DropsCard dropsCard, BetterMonsterExamineConfig config, ConfigManager configManager, Gson gson, IntSupplier playerCombatLevel, IntSupplier playerHpLevel, IntSupplier playerSlayerLevel)
 	{
 		super(false);
 		this.data = data;
