@@ -1,8 +1,9 @@
 package com.bettermonsterexamine.loot;
 
 import com.bettermonsterexamine.wiki.BucketQuery;
-import com.bettermonsterexamine.wiki.WikiApi;
 import com.bettermonsterexamine.wiki.CacheStore;
+import com.bettermonsterexamine.wiki.RefreshGate;
+import com.bettermonsterexamine.wiki.WikiApi;
 import com.bettermonsterexamine.wiki.WikiCache;
 import com.bettermonsterexamine.wiki.WikiClient;
 import com.google.gson.Gson;
@@ -27,7 +28,8 @@ import okhttp3.OkHttpClient;
  *
  * <p>Bulk-loaded once (like {@link com.bettermonsterexamine.MonsterDataService}) — the map changes
  * rarely, so it's fetched whole, cached as {@code item-ids.json} in the plugin data folder,
- * and refreshed in the background past {@link #MAX_AGE}. Loading happens off the client thread and EDT,
+ * and refreshed in the background past {@link #MAX_AGE}, or sooner when a drop's item misses
+ * ({@link #refreshOnMiss}). Loading happens off the client thread and EDT,
  * paginating past the 5000-row cap; accessors return null until it lands.
  */
 @Slf4j
@@ -40,6 +42,9 @@ public class ItemIdService
 	private final Gson gson;
 	private final WikiClient wiki;
 	private WikiCache cache;
+	private RefreshGate refreshGate;
+	// Set once startup has run, loaded or not; see MonsterDataService.
+	private volatile boolean initDone;
 	private final ScheduledExecutorService executor;
 
 	/** wiki item page name -> client item id; published atomically once the bulk load lands. */
@@ -62,6 +67,7 @@ public class ItemIdService
 			return;
 		}
 		cache = new WikiCache(store, "item-ids.json", MAX_AGE);
+		refreshGate = new RefreshGate(cache, WikiApi.SHARED_CACHE_AGE);
 		executor.execute(this::init);
 	}
 
@@ -83,7 +89,33 @@ public class ItemIdService
 		return itemName == null ? null : byName.get(itemName);
 	}
 
+	/**
+	 * A drop's item {@code key} resolved to no id, so the game may have items the cache predates:
+	 * refresh it now rather than at its weekly age. Throttled by {@link RefreshGate}, so it is safe to
+	 * call on every miss.
+	 */
+	public void refreshOnMiss(String key)
+	{
+		if (key != null && initDone && refreshGate.tryStart(key))
+		{
+			log.debug("Item lookup missed. Refreshing item-id map early.");
+			executor.execute(this::fetchGated);
+		}
+	}
+
 	private void init()
+	{
+		try
+		{
+			load();
+		}
+		finally
+		{
+			initDone = true;
+		}
+	}
+
+	private void load()
 	{
 		boolean haveCache = false;
 		try
@@ -105,15 +137,30 @@ public class ItemIdService
 		if (!haveCache || !cache.isFresh())
 		{
 			log.debug("{} Fetching item-id map.", haveCache ? "Cache stale." : "Cache miss.");
-			fetch();
+			refreshGate.start();
+			fetchGated();
+		}
+	}
+
+	private void fetchGated()
+	{
+		boolean landed = false;
+		try
+		{
+			landed = fetch();
+		}
+		finally
+		{
+			refreshGate.finish(landed);
 		}
 	}
 
 	/**
 	 * Fetch the whole {@code item_id} bucket (paginating past the 5000-row cap) synchronously on the
 	 * executor thread — never the client thread or EDT — then publish and cache the merged result.
+	 * True when a new map was published.
 	 */
-	private void fetch()
+	private boolean fetch()
 	{
 		try
 		{
@@ -123,16 +170,18 @@ public class ItemIdService
 			Map<String, Integer> map = index(gson.fromJson(json, BucketResponse.class));
 			if (map.isEmpty())
 			{
-				return;
+				return false;
 			}
 			// Parse (and publish) before caching so a corrupt download never poisons the cache.
 			publish(map);
 			cache.write(json);
 			log.info("Fetched and cached item-id map ({} entries)", map.size());
+			return true;
 		}
 		catch (Exception e)
 		{
 			log.debug("Item-id fetch/parse failed", e);
+			return false;
 		}
 	}
 

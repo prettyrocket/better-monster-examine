@@ -1,9 +1,10 @@
 package com.bettermonsterexamine;
 
 import com.bettermonsterexamine.wiki.BucketQuery;
+import com.bettermonsterexamine.wiki.CacheStore;
+import com.bettermonsterexamine.wiki.RefreshGate;
 import com.bettermonsterexamine.wiki.TitleResolver;
 import com.bettermonsterexamine.wiki.WikiApi;
-import com.bettermonsterexamine.wiki.CacheStore;
 import com.bettermonsterexamine.wiki.WikiCache;
 import com.bettermonsterexamine.wiki.WikiClient;
 import com.google.gson.Gson;
@@ -35,8 +36,8 @@ import okhttp3.OkHttpClient;
  * single uncapped query from the OSRS Wiki <b>Bucket</b> API ({@code infobox_monster}) — the wiki's
  * official structured-data store — and cached in the plugin data folder so
  * subsequent launches work offline; it refreshes in the background once the cache ages past
- * {@link #MAX_AGE}. All loading happens off the client thread, and accessors safely return empty
- * until it lands.
+ * {@link #MAX_AGE}, or sooner when a lookup misses ({@link #refreshOnMiss}). All loading happens off
+ * the client thread, and accessors safely return empty until it lands.
  */
 @Slf4j
 @Singleton
@@ -78,6 +79,11 @@ public class MonsterDataService
 	private WikiCache cache;
 	// Refreshed alongside the dataset rather than on its own clock, so it has no age of its own.
 	private WikiCache gapsCache;
+	private RefreshGate refreshGate;
+	// Set once startup has run, loaded or not: a first run that couldn't reach the wiki must still
+	// retry on a miss, but nothing may refresh while startup is still deciding whether to download.
+	private volatile boolean initDone;
+	private volatile Runnable updateListener;
 
 	private volatile Map<Integer, MonsterData> byId = Collections.emptyMap();
 	// lower-case base name -> variants, insertion-ordered
@@ -104,7 +110,28 @@ public class MonsterDataService
 		this.store = store;
 		cache = new WikiCache(store, "bucket-monsters.json", MAX_AGE);
 		gapsCache = new WikiCache(store, "infobox-gaps.json", MAX_AGE);
+		refreshGate = new RefreshGate(cache, WikiApi.SHARED_CACHE_AGE);
 		executor.execute(this::init);
+	}
+
+	/** Set the callback fired (on a background thread) once a downloaded dataset has been published. */
+	public void setUpdateListener(Runnable listener)
+	{
+		this.updateListener = listener;
+	}
+
+	/**
+	 * A lookup of {@code key} found nothing, so the game may have monsters the cache predates: refresh
+	 * it now rather than at its weekly age. Throttled by {@link RefreshGate}, so it is safe to call on
+	 * every miss.
+	 */
+	public void refreshOnMiss(String key)
+	{
+		if (key != null && initDone && refreshGate.tryStart(key))
+		{
+			log.debug("Lookup missed. Refreshing monster data early.");
+			executor.execute(this::fetchGated);
+		}
 	}
 
 	/** The wrapper the Bucket API returns: {@code {"bucketQuery": …, "bucket": [ rows ]}}. */
@@ -114,6 +141,18 @@ public class MonsterDataService
 	}
 
 	private void init()
+	{
+		try
+		{
+			load();
+		}
+		finally
+		{
+			initDone = true;
+		}
+	}
+
+	private void load()
 	{
 		deleteLegacyCache();
 		// Load the gap-filled levels first, so the very first index() already applies them.
@@ -159,7 +198,21 @@ public class MonsterDataService
 		else
 		{
 			log.debug("{} Fetching monster data.", haveCache ? "Cache stale." : "Cache miss.");
-			fetch();
+			refreshGate.start();
+			fetchGated();
+		}
+	}
+
+	private void fetchGated()
+	{
+		boolean landed = false;
+		try
+		{
+			landed = fetch();
+		}
+		finally
+		{
+			refreshGate.finish(landed);
 		}
 	}
 
@@ -193,9 +246,10 @@ public class MonsterDataService
 	/**
 	 * Fetch the whole bestiary a Bucket page at a time, synchronously on the executor (init's thread),
 	 * then publish and cache it. Bucket clamps a page to 5000 rows without saying so, so a single
-	 * query would silently lose every row past that once the bestiary outgrows it.
+	 * query would silently lose every row past that once the bestiary outgrows it. True when a new
+	 * dataset was published.
 	 */
-	private void fetch()
+	private boolean fetch()
 	{
 		try
 		{
@@ -208,7 +262,7 @@ public class MonsterDataService
 			if (parsed == null || parsed.bucket == null || parsed.bucket.isEmpty())
 			{
 				log.debug("Monster dataset response carried no rows");
-				return;
+				return false;
 			}
 			// Parse (and publish) before caching so a corrupt download never poisons the cache.
 			index(parsed.bucket);
@@ -217,10 +271,17 @@ public class MonsterDataService
 			// The dataset is usable now (the gaps read as a dash, as they always did); the
 			// handful of levels Bucket can't carry fill in behind it.
 			gapFill(parsed.bucket);
+			Runnable listener = updateListener;
+			if (listener != null)
+			{
+				listener.run();
+			}
+			return true;
 		}
 		catch (Exception e)
 		{
 			log.debug("Monster dataset fetch/parse failed", e);
+			return false;
 		}
 	}
 

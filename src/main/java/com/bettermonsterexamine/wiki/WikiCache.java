@@ -49,7 +49,7 @@ public final class WikiCache
 	public boolean isFresh()
 	{
 		long[] r = readRevision();
-		long checked = r != null ? r[2] : modified();
+		long checked = r != null ? r[2] : lastWritten();
 		return checked > 0 && System.currentTimeMillis() - checked < maxAge.toMillis();
 	}
 
@@ -126,7 +126,7 @@ public final class WikiCache
 	{
 		try
 		{
-			long modified = modified();
+			long modified = lastWritten();
 			String text = modified > 0 ? store.read(revisionName()) : null;
 			if (text == null)
 			{
@@ -147,7 +147,7 @@ public final class WikiCache
 	}
 
 	/** When the cached text was last written, or 0 when there is none. */
-	private long modified()
+	public long lastWritten()
 	{
 		try
 		{
