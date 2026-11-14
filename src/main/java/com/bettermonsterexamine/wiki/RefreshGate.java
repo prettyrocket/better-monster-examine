@@ -44,7 +44,7 @@ public final class RefreshGate
 		{
 			return false;
 		}
-		last = Math.max(last, cache.getFile().lastModified());
+		last = Math.max(last, cache.lastWritten());
 		if (now - last < intervalMillis)
 		{
 			return false;

@@ -20,7 +20,7 @@ public class RefreshGateTest
 
 	private WikiCache cache()
 	{
-		return new WikiCache(new File(dir.getRoot(), "data.json"), Duration.ofDays(7));
+		return new WikiCache(CacheStore.directory(dir.getRoot().toPath()), "data.json", Duration.ofDays(7));
 	}
 
 	private RefreshGate gate(WikiCache cache)
@@ -66,7 +66,7 @@ public class RefreshGateTest
 	{
 		WikiCache c = cache();
 		c.write("{}");
-		assertTrue(c.getFile().setLastModified(T0 - HOUR.toMillis() / 2));
+		assertTrue(new File(dir.getRoot(), "data.json").setLastModified(T0 - HOUR.toMillis() / 2));
 		RefreshGate g = gate(c);
 
 		assertFalse(g.tryStart());

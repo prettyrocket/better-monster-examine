@@ -79,7 +79,7 @@ public class MonsterDataService
 	private WikiCache cache;
 	// Refreshed alongside the dataset rather than on its own clock, so it has no age of its own.
 	private WikiCache gapsCache;
-	private volatile RefreshGate refreshGate;
+	private RefreshGate refreshGate;
 	// Set once startup has run, loaded or not: a first run that couldn't reach the wiki must still
 	// retry on a miss, but nothing may refresh while startup is still deciding whether to download.
 	private volatile boolean initDone;

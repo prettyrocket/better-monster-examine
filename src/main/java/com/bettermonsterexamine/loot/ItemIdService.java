@@ -42,7 +42,7 @@ public class ItemIdService
 	private final Gson gson;
 	private final WikiClient wiki;
 	private WikiCache cache;
-	private volatile RefreshGate refreshGate;
+	private RefreshGate refreshGate;
 	// Set once startup has run, loaded or not; see MonsterDataService.
 	private volatile boolean initDone;
 	private final ScheduledExecutorService executor;
