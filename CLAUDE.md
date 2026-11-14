@@ -149,8 +149,9 @@ section.
    - **`relevantVariants`** reduces each name to the variants a player can act on. The wiki carries
      a row per **sprite**, so about 25% of the bestiary differs in nothing rendered (Guard 124→26,
      Crystal impling 17→1, Hill Giant 14→2). Those collapse by `MonsterData.statKey()`, and the
-     survivor **absorbs the others' spawn ids**, so right-click still resolves by id. `(historical)`
-     rows are dropped as removed content, but only when a live sibling remains; a wholly historical
+     survivor **absorbs the others' spawn ids**, so right-click still resolves by id. `(historical)`,
+     `(unused)` and `(RuneScape 2 Beta)` rows are dropped as content no player can meet, but only
+     when a live sibling remains; a wholly historical
      name (Barbarian woman) would otherwise vanish from search. `Realm of Memories` is **live quest
      content** despite the name, and is kept.
    - **`variantForLevel`** (the right-click fallback when a spawn id isn't in the dataset) requires
