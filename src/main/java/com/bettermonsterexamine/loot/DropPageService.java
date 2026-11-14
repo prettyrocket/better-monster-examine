@@ -1,11 +1,11 @@
 package com.bettermonsterexamine.loot;
 
+import com.bettermonsterexamine.wiki.CacheStore;
 import com.bettermonsterexamine.wiki.WikiApi;
 import com.bettermonsterexamine.wiki.WikiCache;
 import com.bettermonsterexamine.wiki.WikiClient;
 import com.google.gson.Gson;
 import com.google.gson.annotations.SerializedName;
-import java.io.File;
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 import java.time.Duration;
@@ -22,7 +22,6 @@ import java.util.regex.Pattern;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
-import net.runelite.client.RuneLite;
 import okhttp3.OkHttpClient;
 
 /**
@@ -34,7 +33,7 @@ import okhttp3.OkHttpClient;
  * tables).
  *
  * <p>Fetched <b>per monster</b> the first time it's looked up and cached under
- * {@code .runelite/better-monster-examine/droppages/}, refreshed weekly ({@link #MAX_AGE}) — the same
+ * the plugin data folder's {@code droppages/}, refreshed weekly ({@link #MAX_AGE}) — the same
  * on-demand-per-page pattern the drops fetch always used, just from the page instead of the bucket.
  * All loading happens off the client thread and EDT; {@link #tableFor} reads the concurrent by-page
  * index without blocking and returns null until a page lands. Item icon / GE price / High Alch are
@@ -44,7 +43,6 @@ import okhttp3.OkHttpClient;
 @Singleton
 public class DropPageService
 {
-	private static final File CACHE_DIR = new File(RuneLite.RUNELITE_DIR, "better-monster-examine/droppages");
 	private static final Duration MAX_AGE = Duration.ofDays(7);
 
 	// Drop-table structure on a rendered monster page (see the Drops section):
@@ -78,6 +76,7 @@ public class DropPageService
 	private final Set<String> loading = ConcurrentHashMap.newKeySet();
 
 	private volatile Consumer<String> updateListener;
+	private volatile CacheStore store;
 
 	@Inject
 	DropPageService(Gson gson, OkHttpClient http, ScheduledExecutorService executor)
@@ -85,6 +84,12 @@ public class DropPageService
 		this.gson = gson;
 		this.wiki = WikiApi.client(http, gson);
 		this.executor = executor;
+	}
+
+	/** Cache pages in {@code store}. Called before the first {@link #request}. */
+	public void start(CacheStore store)
+	{
+		this.store = store;
 	}
 
 	/** Set the callback fired (on a background thread) with a page name once its drops are published. */
@@ -514,11 +519,11 @@ public class DropPageService
 		return sb.toString().replace('\u00A0', ' ').replaceAll("\\s+", " ").trim();
 	}
 
-	private static WikiCache cacheFor(String key)
+	private WikiCache cacheFor(String key)
 	{
 		// Slugify for a safe filename, disambiguated with a hash so distinct names never collide.
 		String slug = key.replaceAll("[^a-z0-9]+", "-");
-		return new WikiCache(new File(CACHE_DIR, slug + "-" + Integer.toHexString(key.hashCode()) + ".json"), MAX_AGE);
+		return new WikiCache(store, "droppages/" + slug + "-" + Integer.toHexString(key.hashCode()) + ".json", MAX_AGE);
 	}
 
 	/** An {@code <h2>} heading: where its content starts (just after {@code </h2>}) and its cleaned title. */

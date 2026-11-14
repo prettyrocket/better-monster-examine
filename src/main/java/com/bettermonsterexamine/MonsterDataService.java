@@ -3,15 +3,14 @@ package com.bettermonsterexamine;
 import com.bettermonsterexamine.wiki.BucketQuery;
 import com.bettermonsterexamine.wiki.TitleResolver;
 import com.bettermonsterexamine.wiki.WikiApi;
+import com.bettermonsterexamine.wiki.CacheStore;
 import com.bettermonsterexamine.wiki.WikiCache;
 import com.bettermonsterexamine.wiki.WikiClient;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.reflect.TypeToken;
-import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Type;
-import java.nio.file.Files;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -29,13 +28,12 @@ import java.util.stream.Collectors;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
-import net.runelite.client.RuneLite;
 import okhttp3.OkHttpClient;
 
 /**
  * Provides the monster dataset, indexed by NPC id and by name. The whole bestiary is fetched in a
  * single uncapped query from the OSRS Wiki <b>Bucket</b> API ({@code infobox_monster}) — the wiki's
- * official structured-data store — and cached under {@code .runelite/better-monster-examine/} so
+ * official structured-data store — and cached in the plugin data folder so
  * subsequent launches work offline; it refreshes in the background once the cache ages past
  * {@link #MAX_AGE}. All loading happens off the client thread, and accessors safely return empty
  * until it lands.
@@ -44,7 +42,6 @@ import okhttp3.OkHttpClient;
 @Singleton
 public class MonsterDataService
 {
-	private static final File CACHE_DIR = new File(RuneLite.RUNELITE_DIR, "better-monster-examine");
 	private static final Duration MAX_AGE = Duration.ofDays(7);
 	private static final Type LEVEL_RANGES_TYPE =
 		new TypeToken<Map<String, Map<String, InfoboxLevels.LevelText>>>()
@@ -76,9 +73,11 @@ public class MonsterDataService
 	/** Parses Bucket rows, cleaning every string as it goes; see WikiSanitizer. */
 	private final Gson bucketGson;
 	private final WikiClient wiki;
-	private final WikiCache cache = new WikiCache(new File(CACHE_DIR, "bucket-monsters.json"), MAX_AGE);
+	private final ScheduledExecutorService executor;
+	private CacheStore store;
+	private WikiCache cache;
 	// Refreshed alongside the dataset rather than on its own clock, so it has no age of its own.
-	private final WikiCache gapsCache = new WikiCache(new File(CACHE_DIR, "infobox-gaps.json"), MAX_AGE);
+	private WikiCache gapsCache;
 
 	private volatile Map<Integer, MonsterData> byId = Collections.emptyMap();
 	// lower-case base name -> variants, insertion-ordered
@@ -92,6 +91,19 @@ public class MonsterDataService
 		this.gson = gson;
 		this.bucketGson = WikiSanitizer.bucketGson(gson);
 		this.wiki = WikiApi.client(http, gson);
+		this.executor = executor;
+	}
+
+	/** Start loading the dataset from {@code store}, then the wiki. Later calls do nothing. */
+	public void start(CacheStore store)
+	{
+		if (this.store != null)
+		{
+			return;
+		}
+		this.store = store;
+		cache = new WikiCache(store, "bucket-monsters.json", MAX_AGE);
+		gapsCache = new WikiCache(store, "infobox-gaps.json", MAX_AGE);
 		executor.execute(this::init);
 	}
 
@@ -162,15 +174,15 @@ public class MonsterDataService
 	}
 
 	/** Remove the caches earlier builds left in every upgraded user's cache dir. */
-	private static void deleteLegacyCache()
+	private void deleteLegacyCache()
 	{
 		try
 		{
 			// The pre-Bucket Weirdgloop dataset.
-			Files.deleteIfExists(new File(CACHE_DIR, "monsters.json").toPath());
+			store.delete("monsters.json");
 			// Levels only, from before attack speed was gap-filled. A fresh dataset gap-fills
 			// only when nothing is cached, so the new file has a new name rather than reusing this.
-			Files.deleteIfExists(new File(CACHE_DIR, "level-ranges.json").toPath());
+			store.delete("level-ranges.json");
 		}
 		catch (IOException e)
 		{

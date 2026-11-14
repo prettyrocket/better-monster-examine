@@ -2,6 +2,7 @@ package com.bettermonsterexamine;
 
 import com.bettermonsterexamine.wiki.TitleResolver;
 import com.bettermonsterexamine.wiki.WikiApi;
+import com.bettermonsterexamine.wiki.CacheStore;
 import com.bettermonsterexamine.wiki.WikiCache;
 import com.bettermonsterexamine.wiki.WikiClient;
 import com.bettermonsterexamine.wiki.WikitextTemplates;
@@ -9,7 +10,6 @@ import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.reflect.TypeToken;
-import java.io.File;
 import java.lang.reflect.Type;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -25,7 +25,6 @@ import java.util.regex.Pattern;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
-import net.runelite.client.RuneLite;
 import okhttp3.OkHttpClient;
 
 /**
@@ -53,8 +52,8 @@ public class SuperiorService
 
 	private final Gson gson;
 	private final WikiClient wiki;
-	private final WikiCache cache = new WikiCache(
-		new File(new File(RuneLite.RUNELITE_DIR, "better-monster-examine"), "superiors.json"), Duration.ofDays(7));
+	private final ScheduledExecutorService executor;
+	private WikiCache cache;
 
 	/** Lower-case normal monster name (page title and link label both) → the superior's page title. */
 	private volatile Map<String, String> superiors = Collections.emptyMap();
@@ -65,6 +64,17 @@ public class SuperiorService
 	{
 		this.gson = gson;
 		this.wiki = WikiApi.client(http, gson);
+		this.executor = executor;
+	}
+
+	/** Start loading the table from {@code store}, then the wiki. Later calls do nothing. */
+	public void start(CacheStore store)
+	{
+		if (cache != null)
+		{
+			return;
+		}
+		cache = new WikiCache(store, "superiors.json", Duration.ofDays(7));
 		executor.execute(this::init);
 	}
 
