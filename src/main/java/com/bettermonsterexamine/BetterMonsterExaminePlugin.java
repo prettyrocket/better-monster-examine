@@ -261,6 +261,11 @@ public class BetterMonsterExaminePlugin extends Plugin
 		{
 			log.debug("Removing side panel navigation button");
 			clientToolbar.removeNavigation(navButton);
+			// The singleton services outlive the panel; their callbacks would otherwise keep it alive.
+			dataService.setUpdateListener(null);
+			superiorService.setUpdateListener(null);
+			dropPageService.setUpdateListener(null);
+			itemIdService.setUpdateListener(null);
 			navButton = null;
 			monsterStatsPanel = null;
 		}
