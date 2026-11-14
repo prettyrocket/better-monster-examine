@@ -49,6 +49,7 @@ public class DropPageService
 	//   <tr> [inventory-image] [item-col: <a href="/w/Item">] [qty] [table-bg-*: rarity] [ge] [alch]
 	// Rows inherit the <h3>/<h4> section heading above them; a drops <h2> region runs to the next <h2>.
 	private static final Pattern H2 = Pattern.compile("<h2[^>]*>(.*?)</h2>", Pattern.DOTALL);
+	private static final Set<String> REWARD_HEADINGS = Set.of("rewards", "loot table");
 	private static final Pattern HEADING = Pattern.compile("<h([34])[^>]*\\sid=\"[^\"]+\"[^>]*>(.*?)</h\\1>", Pattern.DOTALL);
 	private static final Pattern ROW = Pattern.compile("<tr[^>]*>(.*?)</tr>", Pattern.DOTALL);
 	private static final Pattern ITEM = Pattern.compile("class=\"item-col\"[^>]*>.*?<a href=\"/w/([^\"?#]+)\"", Pattern.DOTALL);
@@ -275,8 +276,9 @@ public class DropPageService
 	 * Parse a rendered wiki page's HTML into ordered drop rows, each tagged with the section heading it
 	 * sits under. Restricted to the page's <b>drops {@code <h2>} region(s)</b> — a single "Drops"
 	 * heading, or, for combat-level variants, several "Level <i>N</i> drops" headings each with their own
-	 * 100% / Tertiary / … subsections (e.g. Giant frog). Each region runs to the next {@code <h2>}. Null
-	 * when there's no HTML; empty when the page has no drops section. Pure, so it's unit-testable.
+	 * 100% / Tertiary / … subsections (e.g. Giant frog). A page with none reads its "Rewards" or "Loot
+	 * table" region instead. Each region runs to the next {@code <h2>}. Null when there's no HTML; empty
+	 * when the page has neither. Pure, so it's unit-testable.
 	 */
 	static List<DropRow> parse(String html)
 	{
@@ -291,17 +293,45 @@ public class DropPageService
 		// most pages, or per-level headings on combat-level variants. Anything else (store, spawns, …) is
 		// ignored, so unrelated tables never surface as bogus drops (we fail closed when there are none).
 		List<DropRow> out = new ArrayList<>();
+		boolean anyDrops = false;
 		for (int i = 0; i < h2s.size(); i++)
 		{
 			Heading2 h2 = h2s.get(i);
-			if (!h2.title.toLowerCase(Locale.ROOT).contains("drop"))
+			if (isDropsHeading(h2.title))
 			{
-				continue;
+				anyDrops = true;
+				parseRegion(region(html, h2s, i), h2.title, false, out);
 			}
-			int end = i + 1 < h2s.size() ? h2s.get(i + 1).start : html.length();
-			parseRegion(html.substring(h2.start, end), h2.title, out);
+		}
+		if (anyDrops)
+		{
+			return out;
+		}
+
+		// A page with no drops region may keep its loot under "Rewards" or "Loot table" instead (Gemstone
+		// Crab, and the raid and minigame reward chests). Only when there's no drops region, so a page with
+		// both still shows only its drops. The titles match exactly: "Reward mechanics" and "Rewards
+		// calculator" sit beside them on the chest pages.
+		for (int i = 0; i < h2s.size(); i++)
+		{
+			if (REWARD_HEADINGS.contains(h2s.get(i).title.toLowerCase(Locale.ROOT)))
+			{
+				parseRegion(region(html, h2s, i), h2s.get(i).title, true, out);
+			}
 		}
 		return out;
+	}
+
+	private static boolean isDropsHeading(String title)
+	{
+		return title.toLowerCase(Locale.ROOT).contains("drop");
+	}
+
+	/** The page from just after the {@code i}th {@code <h2>} up to the next one. */
+	private static String region(String html, List<Heading2> h2s, int i)
+	{
+		int end = i + 1 < h2s.size() ? h2s.get(i + 1).start : html.length();
+		return html.substring(h2s.get(i).start, end);
 	}
 
 	/**
@@ -317,10 +347,12 @@ public class DropPageService
 	 * the top floor's and basement's like-named tables — same names, different drops and rates — which
 	 * is what made the Dragon defender (basement "Pre-roll" only) look like a drop from every Cyclops.
 	 */
-	private static void parseRegion(String region, String h2Title, List<DropRow> out)
+	private static void parseRegion(String region, String h2Title, boolean rewards, List<DropRow> out)
 	{
-		// A generic "Drops" heading adds no grouping of its own — the headings under it carry it all.
-		boolean generic = h2Title.equalsIgnoreCase("Drops");
+		// A generic "Drops" heading adds no grouping of its own — the headings under it carry it all. A
+		// Rewards / Loot table heading adds no band either: it stands in for the page's drops, and a
+		// borrowed chest table is already banded under its page's name.
+		String band = h2Title.equalsIgnoreCase("Drops") || rewards ? null : h2Title;
 
 		// Merge headings and rows by position, so each row inherits the headings above it.
 		List<Event> events = new ArrayList<>();
@@ -366,15 +398,12 @@ public class DropPageService
 
 			// The deepest heading names the table; an <h3> is only a group once an <h4> sits under it.
 			String section = h4 != null ? h4 : h3;
-			String group = join(generic ? null : h2Title, h4 != null ? h3 : null);
+			String group = join(band, h4 != null ? h3 : null);
 			if (section == null)
 			{
-				// No subheading at all: a generic region has nothing to attribute the rows to (there
-				// should be none); a per-level region falls back to its own <h2> title as the section.
-				if (generic)
-				{
-					continue;
-				}
+				// No subheading at all: the region's own <h2> title is the section. Many pages put their
+				// whole table straight under Drops (Vampyre Juvinate, TzKal-Zuk, the raid bosses), and a
+				// single Rewards table (Security Guard) does the same.
 				section = h2Title;
 				group = "";
 			}
@@ -395,12 +424,11 @@ public class DropPageService
 		List<Heading2> h2s = headings2(html);
 		for (int i = 0; i < h2s.size(); i++)
 		{
-			if (!h2s.get(i).title.toLowerCase(Locale.ROOT).contains("drop"))
+			if (!isDropsHeading(h2s.get(i).title))
 			{
 				continue;
 			}
-			int end = i + 1 < h2s.size() ? h2s.get(i + 1).start : html.length();
-			Matcher m = DROPS_HATNOTE.matcher(html.substring(h2s.get(i).start, end));
+			Matcher m = DROPS_HATNOTE.matcher(region(html, h2s, i));
 			if (m.find())
 			{
 				return decodeSlug(m.group(1));
