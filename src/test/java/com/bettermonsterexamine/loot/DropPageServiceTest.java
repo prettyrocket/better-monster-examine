@@ -71,11 +71,17 @@ public class DropPageServiceTest
 	}
 
 	@Test
-	public void rowsBeforeAnySectionHeadingAreSkipped()
+	public void aTableStraightUnderDropsIsADropsSection()
 	{
+		// Vampyre Juvinate's shape, and about 70 other pages': no 100% or other subheading.
 		String html = "<h2 id=\"Drops\">Drops</h2>"
-			+ "<table>" + row("Orphan", "Orphan", "1", "table-bg", "1/1") + "</table>";
-		assertTrue(DropPageService.parse(html).isEmpty());
+			+ "<table>" + row("Vampyre_dust", "Vampyre dust", "1", "table-bg-blue", "Always") + "</table>";
+
+		List<DropRow> rows = DropPageService.parse(html);
+
+		assertEquals(1, rows.size());
+		assertEquals("", rows.get(0).getGroup());
+		assertEquals("Drops", rows.get(0).getSection());
 	}
 
 	@Test

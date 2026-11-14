@@ -349,11 +349,10 @@ public class DropPageService
 	 */
 	private static void parseRegion(String region, String h2Title, boolean rewards, List<DropRow> out)
 	{
-		// A generic "Drops" heading adds no grouping of its own — the headings under it carry it all.
-		boolean generic = h2Title.equalsIgnoreCase("Drops");
-		// A Rewards / Loot table heading adds no band either: it stands in for the page's drops, and a
+		// A generic "Drops" heading adds no grouping of its own — the headings under it carry it all. A
+		// Rewards / Loot table heading adds no band either: it stands in for the page's drops, and a
 		// borrowed chest table is already banded under its page's name.
-		String band = generic || rewards ? null : h2Title;
+		String band = h2Title.equalsIgnoreCase("Drops") || rewards ? null : h2Title;
 
 		// Merge headings and rows by position, so each row inherits the headings above it.
 		List<Event> events = new ArrayList<>();
@@ -402,13 +401,9 @@ public class DropPageService
 			String group = join(band, h4 != null ? h3 : null);
 			if (section == null)
 			{
-				// No subheading at all: a generic region has nothing to attribute the rows to (there
-				// should be none); any other region falls back to its own <h2> title as the section,
-				// which is how a single Rewards table (Pete Kayer, Security Guard) shows.
-				if (generic)
-				{
-					continue;
-				}
+				// No subheading at all: the region's own <h2> title is the section. Many pages put their
+				// whole table straight under Drops (Vampyre Juvinate, TzKal-Zuk, the raid bosses), and a
+				// single Rewards table (Security Guard) does the same.
 				section = h2Title;
 				group = "";
 			}
