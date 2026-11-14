@@ -180,6 +180,86 @@ public class DropPageServiceTest
 	}
 
 	@Test
+	public void aPageWithNoDropsReadsItsRewardsUnbanded()
+	{
+		// Gemstone Crab's shape: its only table sits under Rewards, beside a section with no rows.
+		String html =
+			"<h2 id=\"Rewards\">Rewards</h2>"
+			+ "<h3 id=\"Mining_info\">Mining info</h3>"
+			+ "<p>Mining it gives experience.</p>"
+			+ "<h3 id=\"Drops\">Drops</h3>"
+			+ "<table>" + row("Uncut_diamond", "Uncut diamond", "1", "table-bg-common", "Always") + "</table>"
+			+ "<h2 id=\"Dialogue\">Dialogue</h2>";
+
+		List<DropRow> rows = DropPageService.parse(html);
+
+		assertEquals(1, rows.size());
+		assertEquals("Uncut diamond", rows.get(0).getItem());
+		assertEquals("", rows.get(0).getGroup());
+		assertEquals("Drops", rows.get(0).getSection());
+	}
+
+	@Test
+	public void aLootTableKeepsItsSubheadingGroups()
+	{
+		// The Ancient chest's shape: an <h3> with <h4>s under it is still a group under Loot table.
+		String html =
+			"<h2 id=\"Loot_table\">Loot table</h2>"
+			+ "<h3 id=\"Unique_drop_table\">Unique drop table</h3>"
+			+ "<h4 id=\"Normal_mode\">Normal mode</h4>"
+			+ "<table>" + row("Twisted_bow", "Twisted bow", "1", "table-bg-rare", "1/34.5") + "</table>";
+
+		List<DropRow> rows = DropPageService.parse(html);
+
+		assertEquals(1, rows.size());
+		assertEquals("Unique drop table", rows.get(0).getGroup());
+		assertEquals("Normal mode", rows.get(0).getSection());
+	}
+
+	@Test
+	public void aRewardsTableWithNoSubheadingIsItsOwnSection()
+	{
+		// Security Guard's shape: one table straight under Rewards.
+		String html = "<h2 id=\"Rewards\">Rewards</h2>"
+			+ "<table>" + row("Security_book", "Security book", "1", "table-bg-always", "Always") + "</table>";
+
+		List<DropRow> rows = DropPageService.parse(html);
+
+		assertEquals(1, rows.size());
+		assertEquals("", rows.get(0).getGroup());
+		assertEquals("Rewards", rows.get(0).getSection());
+	}
+
+	@Test
+	public void aPageWithDropsIgnoresItsRewards()
+	{
+		String html = "<h2 id=\"Drops\">Drops</h2>"
+			+ "<h3 id=\"100%\">100%</h3>"
+			+ "<table>" + row("Vampyre_dust", "Vampyre dust", "1", "table-bg-always", "Always") + "</table>"
+			+ "<h2 id=\"Rewards\">Rewards</h2>"
+			+ "<h3 id=\"Weaponry\">Weaponry</h3>"
+			+ "<table>" + row("Staff_of_air", "Staff of air", "1", "table-bg-rare", "1/256") + "</table>";
+
+		List<DropRow> rows = DropPageService.parse(html);
+
+		assertEquals(1, rows.size());
+		assertEquals("Vampyre dust", rows.get(0).getItem());
+	}
+
+	@Test
+	public void onlyTheRewardsHeadingsThemselvesStandInForDrops()
+	{
+		// The chest pages also carry "Reward mechanics" and "Rewards calculator", which aren't tables.
+		String html = "<h2 id=\"Rewards_calculator\">Rewards calculator</h2>"
+			+ "<h3 id=\"Calc\">Calc</h3>"
+			+ "<table>" + row("Coins", "Coins", "1", "table-bg", "1/1") + "</table>"
+			+ "<h2 id=\"Reward_mechanics\">Reward mechanics</h2>"
+			+ "<table>" + row("Coins", "Coins", "1", "table-bg", "1/1") + "</table>";
+
+		assertTrue(DropPageService.parse(html).isEmpty());
+	}
+
+	@Test
 	public void rarityPrefersTheWikisOneOverFormOverTheRawSourceFraction()
 	{
 		// The live cell shape: the span's text is the raw source fraction, data-drop-oneover is what the
