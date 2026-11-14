@@ -3,6 +3,7 @@ package com.bettermonsterexamine.loot;
 import com.google.gson.Gson;
 import java.util.Map;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import org.junit.Test;
@@ -31,6 +32,49 @@ public class ItemIdServiceTest
 
 		assertEquals(Integer.valueOf(19677), map.get("Ancient shard"));
 		assertEquals(Integer.valueOf(995), map.get("Coins"));
+	}
+
+	@Test
+	public void aDoseAnswersToItsInGameName()
+	{
+		// Vespula's drop table links "Xeric's aid (+)(4)"; the bucket keys it as a sub-entry.
+		Map<String, Integer> map = ItemIdService.index(response(
+			"{\"bucket\":[{\"page_name\":\"Xeric's aid (+)\",\"page_name_sub\":\"Xeric's aid (+)#(3)\",\"id\":[\"20983\"]},"
+			+ "{\"page_name\":\"Xeric's aid (+)\",\"page_name_sub\":\"Xeric's aid (+)#(4)\",\"id\":[\"20984\"]}]}"));
+
+		assertEquals(Integer.valueOf(20984), map.get("Xeric's aid (+)(4)"));
+		assertEquals(Integer.valueOf(20983), map.get("Xeric's aid (+)(3)"));
+		assertEquals(Integer.valueOf(20983), map.get("Xeric's aid (+)"));
+	}
+
+	@Test
+	public void onlyDoseSubEntriesGetAName()
+	{
+		// "Iron dagger(p)" isn't how the wiki names that variant, so a non-dose sub-entry adds nothing.
+		Map<String, Integer> map = ItemIdService.index(response(
+			"{\"bucket\":[{\"page_name\":\"Iron dagger\",\"page_name_sub\":\"Iron dagger#(p)\",\"id\":[\"1219\"]},"
+			+ "{\"page_name\":\"Bronze defender\",\"page_name_sub\":\"Bronze defender#Broken\",\"id\":[\"20449\"]}]}"));
+
+		assertEquals(2, map.size());
+	}
+
+	@Test
+	public void aPageNameWinsOverADoseName()
+	{
+		Map<String, Integer> map = ItemIdService.index(response(
+			"{\"bucket\":[{\"page_name\":\"Potion\",\"page_name_sub\":\"Potion#(1)\",\"id\":[\"1\"]},"
+			+ "{\"page_name\":\"Potion(1)\",\"page_name_sub\":\"Potion(1)\",\"id\":[\"2\"]}]}"));
+
+		assertEquals(Integer.valueOf(2), map.get("Potion(1)"));
+	}
+
+	@Test
+	public void aCacheWithoutSubEntriesIsNotCurrent()
+	{
+		assertTrue(ItemIdService.hasCurrentFields(response(
+			"{\"bucket\":[{\"page_name\":\"Coins\",\"page_name_sub\":\"Coins\",\"id\":[\"995\"]}]}")));
+		assertFalse(ItemIdService.hasCurrentFields(response(
+			"{\"bucket\":[{\"page_name\":\"Coins\",\"id\":[\"995\"]}]}")));
 	}
 
 	@Test
