@@ -276,7 +276,7 @@ public class BetterMonsterExaminePanel extends PluginPanel
 		List<String> names = data.searchNames(query, 40);
 		if (names.isEmpty())
 		{
-			data.refreshOnMiss();
+			data.refreshOnMiss(query.trim());
 		}
 
 		for (String name : names)

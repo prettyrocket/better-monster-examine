@@ -758,12 +758,16 @@ public class BetterMonsterExaminePlugin extends Plugin
 		}
 
 		String name = npc.getName();
-		MonsterData byLevel = name == null ? null : dataService.variantForLevel(name, npc.getCombatLevel());
+		if (name == null)
+		{
+			return null;
+		}
+		MonsterData byLevel = dataService.variantForLevel(name, npc.getCombatLevel());
 		if (byLevel == null)
 		{
-			// A fightable NPC the dataset doesn't know is most likely new content. This runs on every
-			// menu build, so the next right-click picks up the refresh once it lands.
-			dataService.refreshOnMiss();
+			// A fightable NPC the dataset doesn't know may be new content. This runs on every menu
+			// build, so the next right-click picks up the refresh once it lands.
+			dataService.refreshOnMiss(npc.getId() + " " + name);
 		}
 		return byLevel;
 	}

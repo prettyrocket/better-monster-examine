@@ -90,12 +90,13 @@ public class ItemIdService
 	}
 
 	/**
-	 * A drop's item resolved to no id, so the game may have items the cache predates: refresh it now
-	 * rather than at its weekly age. Throttled by {@link RefreshGate}, so it is safe to call on every miss.
+	 * A drop's item {@code key} resolved to no id, so the game may have items the cache predates:
+	 * refresh it now rather than at its weekly age. Throttled by {@link RefreshGate}, so it is safe to
+	 * call on every miss.
 	 */
-	public void refreshOnMiss()
+	public void refreshOnMiss(String key)
 	{
-		if (initDone && refreshGate.tryStart())
+		if (key != null && initDone && refreshGate.tryStart(key))
 		{
 			log.debug("Item lookup missed. Refreshing item-id map early.");
 			executor.execute(this::fetchGated);
@@ -143,21 +144,23 @@ public class ItemIdService
 
 	private void fetchGated()
 	{
+		boolean landed = false;
 		try
 		{
-			fetch();
+			landed = fetch();
 		}
 		finally
 		{
-			refreshGate.finish();
+			refreshGate.finish(landed);
 		}
 	}
 
 	/**
 	 * Fetch the whole {@code item_id} bucket (paginating past the 5000-row cap) synchronously on the
 	 * executor thread — never the client thread or EDT — then publish and cache the merged result.
+	 * True when a new map was published.
 	 */
-	private void fetch()
+	private boolean fetch()
 	{
 		try
 		{
@@ -167,16 +170,18 @@ public class ItemIdService
 			Map<String, Integer> map = index(gson.fromJson(json, BucketResponse.class));
 			if (map.isEmpty())
 			{
-				return;
+				return false;
 			}
 			// Parse (and publish) before caching so a corrupt download never poisons the cache.
 			publish(map);
 			cache.write(json);
 			log.info("Fetched and cached item-id map ({} entries)", map.size());
+			return true;
 		}
 		catch (Exception e)
 		{
 			log.debug("Item-id fetch/parse failed", e);
+			return false;
 		}
 	}
 

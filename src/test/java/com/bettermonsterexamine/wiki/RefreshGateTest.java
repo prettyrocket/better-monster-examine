@@ -31,34 +31,34 @@ public class RefreshGateTest
 	@Test
 	public void aMissingCacheMayRefreshAtOnce()
 	{
-		assertTrue(gate(cache()).tryStart());
+		assertTrue(gate(cache()).tryStart("a"));
 	}
 
 	@Test
 	public void onlyOneRefreshRunsAtATime()
 	{
 		RefreshGate g = gate(cache());
-		assertTrue(g.tryStart());
+		assertTrue(g.tryStart("a"));
 
 		now += HOUR.toMillis() * 2;
-		assertFalse(g.tryStart());
+		assertFalse(g.tryStart("a"));
 
-		g.finish();
-		assertTrue(g.tryStart());
+		g.finish(false);
+		assertTrue(g.tryStart("a"));
 	}
 
 	@Test
 	public void anAttemptHoldsOffTheNextForTheInterval()
 	{
 		RefreshGate g = gate(cache());
-		assertTrue(g.tryStart());
-		g.finish();
+		assertTrue(g.tryStart("a"));
+		g.finish(false);
 
 		now += HOUR.toMillis() - 1;
-		assertFalse(g.tryStart());
+		assertFalse(g.tryStart("a"));
 
 		now += 1;
-		assertTrue(g.tryStart());
+		assertTrue(g.tryStart("a"));
 	}
 
 	@Test
@@ -69,10 +69,10 @@ public class RefreshGateTest
 		assertTrue(new File(dir.getRoot(), "data.json").setLastModified(T0 - HOUR.toMillis() / 2));
 		RefreshGate g = gate(c);
 
-		assertFalse(g.tryStart());
+		assertFalse(g.tryStart("a"));
 
 		now = T0 + HOUR.toMillis() / 2;
-		assertTrue(g.tryStart());
+		assertTrue(g.tryStart("a"));
 	}
 
 	@Test
@@ -80,12 +80,52 @@ public class RefreshGateTest
 	{
 		RefreshGate g = gate(cache());
 		g.start();
-		assertFalse(g.tryStart());
+		assertFalse(g.tryStart("a"));
 
-		g.finish();
-		assertFalse(g.tryStart());
+		g.finish(false);
+		assertFalse(g.tryStart("a"));
 
 		now += HOUR.toMillis();
-		assertTrue(g.tryStart());
+		assertTrue(g.tryStart("a"));
+	}
+
+	@Test
+	public void aKeyStillMissingAfterALandedDownloadNeverAsksAgain()
+	{
+		RefreshGate g = gate(cache());
+		assertTrue(g.tryStart("a"));
+		g.finish(true);
+
+		now += HOUR.toMillis() * 2;
+		assertFalse(g.tryStart("a"));
+		assertTrue(g.tryStart("b"));
+	}
+
+	@Test
+	public void aFailedDownloadLeavesItsKeysFreeToRetry()
+	{
+		RefreshGate g = gate(cache());
+		assertTrue(g.tryStart("a"));
+		g.finish(false);
+
+		now += HOUR.toMillis();
+		assertTrue(g.tryStart("a"));
+	}
+
+	@Test
+	public void aKeyThatMissedWhileThrottledIsSettledByTheNextRefresh()
+	{
+		RefreshGate g = gate(cache());
+		assertTrue(g.tryStart("a"));
+		g.finish(true);
+
+		assertFalse(g.tryStart("b"));
+		now += HOUR.toMillis();
+		assertTrue(g.tryStart("c"));
+		g.finish(true);
+
+		now += HOUR.toMillis();
+		assertFalse(g.tryStart("b"));
+		assertFalse(g.tryStart("c"));
 	}
 }

@@ -123,7 +123,8 @@ plugin's own classes out of it.
 - **`RefreshGate`**: lets a cache refresh before its maximum age when a lookup misses, since a
   miss is how new game content shows up. One refresh at a time, and none within the CDN age
   (`WikiApi.SHARED_CACHE_AGE`, an hour) of the last download or attempt, because a repeat inside
-  it gets the same answer. A lookup that never succeeds (a typo) costs one refresh an hour.
+  it gets the same answer. A key that still misses after a download lands is settled and never asks
+  again, so a lookup that never succeeds (a typo, an NPC with no infobox) costs at most one refresh.
 - **`BucketQuery`**: a Bucket `select`, fetched a page at a time. Bucket clamps a query to 5000
   rows **silently**, with no error or continuation, so only a full page means there's more.
 - **`TitleResolver`**: 50-title batches, which page answered each title after normalisation and

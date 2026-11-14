@@ -121,12 +121,13 @@ public class MonsterDataService
 	}
 
 	/**
-	 * A lookup found nothing, so the game may have monsters the cache predates: refresh it now rather
-	 * than at its weekly age. Throttled by {@link RefreshGate}, so it is safe to call on every miss.
+	 * A lookup of {@code key} found nothing, so the game may have monsters the cache predates: refresh
+	 * it now rather than at its weekly age. Throttled by {@link RefreshGate}, so it is safe to call on
+	 * every miss.
 	 */
-	public void refreshOnMiss()
+	public void refreshOnMiss(String key)
 	{
-		if (initDone && refreshGate.tryStart())
+		if (key != null && initDone && refreshGate.tryStart(key))
 		{
 			log.debug("Lookup missed. Refreshing monster data early.");
 			executor.execute(this::fetchGated);
@@ -204,13 +205,14 @@ public class MonsterDataService
 
 	private void fetchGated()
 	{
+		boolean landed = false;
 		try
 		{
-			fetch();
+			landed = fetch();
 		}
 		finally
 		{
-			refreshGate.finish();
+			refreshGate.finish(landed);
 		}
 	}
 
@@ -244,9 +246,10 @@ public class MonsterDataService
 	/**
 	 * Fetch the whole bestiary a Bucket page at a time, synchronously on the executor (init's thread),
 	 * then publish and cache it. Bucket clamps a page to 5000 rows without saying so, so a single
-	 * query would silently lose every row past that once the bestiary outgrows it.
+	 * query would silently lose every row past that once the bestiary outgrows it. True when a new
+	 * dataset was published.
 	 */
-	private void fetch()
+	private boolean fetch()
 	{
 		try
 		{
@@ -259,7 +262,7 @@ public class MonsterDataService
 			if (parsed == null || parsed.bucket == null || parsed.bucket.isEmpty())
 			{
 				log.debug("Monster dataset response carried no rows");
-				return;
+				return false;
 			}
 			// Parse (and publish) before caching so a corrupt download never poisons the cache.
 			index(parsed.bucket);
@@ -273,10 +276,12 @@ public class MonsterDataService
 			{
 				listener.run();
 			}
+			return true;
 		}
 		catch (Exception e)
 		{
 			log.debug("Monster dataset fetch/parse failed", e);
+			return false;
 		}
 	}
 
