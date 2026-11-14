@@ -1,14 +1,11 @@
 package com.bettermonsterexamine.wiki;
 
-import java.io.File;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.time.Duration;
 import java.util.Collections;
 
 /**
- * One text file cached on disk with a maximum age: the offline-first rule every wiki fetch follows.
+ * One text file cached in a {@link CacheStore} with a maximum age: the offline-first rule every wiki fetch follows.
  *
  * <ul>
  * <li>A file younger than the maximum age is used as-is, with no request.</li>
@@ -21,38 +18,46 @@ import java.util.Collections;
  * <p>A file cached from one wiki page can also remember that page's <b>revision id</b>
  * ({@link #write(String, long)}). Then, once it ages out, {@link #revalidate} asks the wiki for the
  * page's current revision, about 1.5 KB, and if nobody has edited the page it just resets the age
- * instead of downloading again. A revision id only changes when the page itself is edited,
+ * instead of downloading again. The revision, the time of the last full download and the time of the
+ * last check live in a {@code .rev} file beside the cache, so freshness never relies on setting a
+ * file's modified time, which not every store can. A revision id only changes when the page itself is edited,
  * not when a template it uses is, so a file is still downloaded in full once it is older than
  * a backstop.
  */
 public final class WikiCache
 {
-	private final File file;
+	private final CacheStore store;
+	private final String name;
 	private final Duration maxAge;
 
-	public WikiCache(File file, Duration maxAge)
+	public WikiCache(CacheStore store, String name, Duration maxAge)
 	{
-		this.file = file;
+		this.store = store;
+		this.name = name;
 		this.maxAge = maxAge;
 	}
 
-	/** The cached text, or null when there is no file. */
+	/** The cached text, or null when there is none. */
 	public String read() throws IOException
 	{
-		return file.isFile() ? new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8) : null;
+		return store.read(name);
 	}
 
-	/** True when the file exists and is younger than the maximum age. */
+	/**
+	 * True when the file exists and was last downloaded, or last revalidated, within the maximum age.
+	 */
 	public boolean isFresh()
 	{
-		return file.isFile() && System.currentTimeMillis() - file.lastModified() < maxAge.toMillis();
+		long[] r = readRevision();
+		long checked = r != null ? r[2] : modified();
+		return checked > 0 && System.currentTimeMillis() - checked < maxAge.toMillis();
 	}
 
 	/** Replace the cached text, creating the folder if needed. Forgets any remembered revision. */
 	public void write(String text) throws IOException
 	{
-		writeText(text);
-		Files.deleteIfExists(revisionFile().toPath());
+		store.write(name, text);
+		store.delete(revisionName());
 	}
 
 	/**
@@ -66,9 +71,9 @@ public final class WikiCache
 			write(text);
 			return;
 		}
-		writeText(text);
-		Files.write(revisionFile().toPath(),
-			(revision + " " + System.currentTimeMillis()).getBytes(StandardCharsets.UTF_8));
+		store.write(name, text);
+		long now = System.currentTimeMillis();
+		writeRevision(revision, now, now);
 	}
 
 	/** The revision of the page the cached text came from, or 0 when unknown. */
@@ -98,7 +103,8 @@ public final class WikiCache
 			{
 				return false;
 			}
-			return file.setLastModified(System.currentTimeMillis());
+			writeRevision(r[0], r[1], System.currentTimeMillis());
+			return true;
 		}
 		catch (IOException e)
 		{
@@ -106,28 +112,32 @@ public final class WikiCache
 		}
 	}
 
-	private void writeText(String text) throws IOException
+	private void writeRevision(long revision, long downloaded, long checked) throws IOException
 	{
-		File dir = file.getAbsoluteFile().getParentFile();
-		if (dir != null)
-		{
-			Files.createDirectories(dir.toPath());
-		}
-		Files.write(file.toPath(), text.getBytes(StandardCharsets.UTF_8));
+		store.write(revisionName(), revision + " " + downloaded + " " + checked);
 	}
 
-	/** {revision, time of the last full download}, or null when there is none to trust. */
+	/**
+	 * {revision, time of the last full download, time of the last check}, or null when there is none
+	 * to trust. A sidecar written before the check time was kept has only two fields; its check time
+	 * is the file's modified time, which is where it used to live.
+	 */
 	private long[] readRevision()
 	{
-		File rev = revisionFile();
-		if (!rev.isFile() || !file.isFile())
-		{
-			return null;
-		}
 		try
 		{
-			String[] parts = new String(Files.readAllBytes(rev.toPath()), StandardCharsets.UTF_8).trim().split(" ");
-			long[] out = {Long.parseLong(parts[0]), Long.parseLong(parts[1])};
+			long modified = modified();
+			String text = modified > 0 ? store.read(revisionName()) : null;
+			if (text == null)
+			{
+				return null;
+			}
+			String[] parts = text.trim().split(" ");
+			long[] out = {
+				Long.parseLong(parts[0]),
+				Long.parseLong(parts[1]),
+				parts.length > 2 ? Long.parseLong(parts[2]) : modified,
+			};
 			return out[0] > 0 ? out : null;
 		}
 		catch (IOException | RuntimeException e)
@@ -136,13 +146,21 @@ public final class WikiCache
 		}
 	}
 
-	private File revisionFile()
+	/** When the cached text was last written, or 0 when there is none. */
+	private long modified()
 	{
-		return new File(file.getPath() + ".rev");
+		try
+		{
+			return store.lastModified(name);
+		}
+		catch (IOException e)
+		{
+			return 0;
+		}
 	}
 
-	public File getFile()
+	private String revisionName()
 	{
-		return file;
+		return name + ".rev";
 	}
 }

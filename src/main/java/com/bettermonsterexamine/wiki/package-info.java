@@ -7,6 +7,8 @@
  * and a User-Agent with contact details.</li>
  * <li>{@link com.bettermonsterexamine.wiki.WikiCache}: one cached file with a maximum age, which
  * can remember the page revision it came from and skip re-downloading an unedited page.</li>
+ * <li>{@link com.bettermonsterexamine.wiki.CacheStore}: where a cache keeps its files, supplied by
+ * the application; {@link com.bettermonsterexamine.wiki.CacheStore#directory} is a plain folder.</li>
  * <li>{@link com.bettermonsterexamine.wiki.BucketQuery}: a Bucket {@code select}, paged past the
  * silent 5000-row cap.</li>
  * <li>{@link com.bettermonsterexamine.wiki.TitleResolver}: 50-title batches, and which page
