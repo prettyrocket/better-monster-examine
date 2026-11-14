@@ -15,6 +15,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
@@ -37,7 +39,9 @@ import okhttp3.OkHttpClient;
 public class ItemIdService
 {
 	private static final Duration MAX_AGE = Duration.ofDays(7);
-	private static final BucketQuery QUERY = new BucketQuery("item_id", "page_name", "id");
+	private static final BucketQuery QUERY = new BucketQuery("item_id", "page_name", "page_name_sub", "id");
+	/** A dose sub-entry, {@code "Xeric's aid (+)#(4)"}: the part after {@code #} is a dose count. */
+	private static final Pattern DOSE_SUB = Pattern.compile("(.+)#(\\(\\d+\\))");
 
 	private final Gson gson;
 	private final WikiClient wiki;
@@ -118,6 +122,7 @@ public class ItemIdService
 	private void load()
 	{
 		boolean haveCache = false;
+		boolean current = false;
 		try
 		{
 			String text = cache.read();
@@ -126,6 +131,7 @@ public class ItemIdService
 			{
 				publish(index(cached));
 				haveCache = true;
+				current = hasCurrentFields(cached);
 				log.info("Loaded item-id map from cache ({} entries)", byName.size());
 			}
 		}
@@ -134,7 +140,8 @@ public class ItemIdService
 			log.debug("Failed to read cached item-id map", e);
 		}
 
-		if (!haveCache || !cache.isFresh())
+		// A cache written before page_name_sub was selected has no dose names, whatever its age.
+		if (!haveCache || !current || !cache.isFresh())
 		{
 			log.debug("{} Fetching item-id map.", haveCache ? "Cache stale." : "Cache miss.");
 			refreshGate.start();
@@ -199,6 +206,12 @@ public class ItemIdService
 	 * Build the name → id map from a parsed Bucket response (first row wins for a repeated name). Pure
 	 * over its argument, so the {@code id}-array shape stays unit-testable. Empty when the response
 	 * carried no {@code bucket}.
+	 *
+	 * <p>Each dose also answers to its in-game name. A drop table links a dose as
+	 * {@code "Xeric's aid (+)(4)"}, a redirect, while the bucket keys it by page
+	 * {@code "Xeric's aid (+)"} with sub-entry {@code "Xeric's aid (+)#(4)"}. Untradeable doses (the
+	 * Chambers of Xeric potions) are missing from the client's own search, so without this key they
+	 * get no id and no icon. Page names win over these keys.
 	 */
 	static Map<String, Integer> index(BucketResponse response)
 	{
@@ -207,6 +220,7 @@ public class ItemIdService
 		{
 			return map;
 		}
+		Map<String, Integer> doses = new HashMap<>();
 		for (Row r : response.bucket)
 		{
 			if (r == null || r.pageName == null || r.id == null || r.id.isEmpty())
@@ -214,12 +228,29 @@ public class ItemIdService
 				continue;
 			}
 			Integer id = parseId(r.id.get(0));
-			if (id != null)
+			if (id == null)
 			{
-				map.putIfAbsent(r.pageName, id);
+				continue;
+			}
+			map.putIfAbsent(r.pageName, id);
+			Matcher dose = r.pageNameSub == null ? null : DOSE_SUB.matcher(r.pageNameSub);
+			if (dose != null && dose.matches())
+			{
+				doses.putIfAbsent(dose.group(1) + dose.group(2), id);
 			}
 		}
+		doses.forEach(map::putIfAbsent);
 		return map;
+	}
+
+	/**
+	 * True when a cached response carries the fields this build selects. Every row has a
+	 * {@code page_name_sub}, so its total absence means the cache predates selecting it.
+	 */
+	static boolean hasCurrentFields(BucketResponse response)
+	{
+		return response != null && response.bucket != null
+			&& response.bucket.stream().anyMatch(r -> r != null && r.pageNameSub != null);
 	}
 
 	/** Parse a Bucket id string (repeated fields arrive as string arrays, e.g. {@code ["383"]}). */
@@ -259,6 +290,8 @@ public class ItemIdService
 	{
 		@SerializedName("page_name")
 		private String pageName;
+		@SerializedName("page_name_sub")
+		private String pageNameSub;
 		@SerializedName("id")
 		private List<String> id;
 	}
